@@ -1,0 +1,33 @@
+{
+  "name": "reva-base",
+  "context": "services/reva-base",
+  "dockerfile": "services/reva-base/Dockerfile",
+  "version_strategy": "component",
+  "version_component": "reva_branch",
+  "version_binding": "image_tag",
+  "base_images": {
+    "build": "golang:1.25-trixie",
+    "runtime": "debian:trixie-slim"
+  },
+  "repos": {
+    "reva_repo": "https://github.com/cs3org/reva",
+    "reva_branch": "v3.3.2",
+    "nu_repo": "https://github.com/nushell/nushell",
+    "nu_ref": "0.108.0",
+    "upx_repo": "https://github.com/upx/upx",
+    "upx_version": "v5.0.2"
+  },
+  "build_args": {
+    "PACK_WITH_UPX": "true"
+  },
+  "labels": {
+    "org.opencloudmesh.service": "reva-base",
+    "org.opencontainers.image.title": "Open Cloud Mesh Reva Base Image",
+    "org.opencontainers.image.description": "Base image for Open Cloud Mesh Reva services",
+    "org.opencontainers.image.url": "https://cs3org.github.io/OCM-API",
+    "org.opencontainers.image.source": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  }
+}

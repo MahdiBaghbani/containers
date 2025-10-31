@@ -1,0 +1,29 @@
+{
+  "name": "cernbox-reva",
+  "context": "services/cernbox-reva",
+  "dockerfile": "services/cernbox-reva/Dockerfile",
+  "version_strategy": "component",
+  "version_component": "cernbox_reva_version",
+  "version_binding": "image_tag",
+  "base_images": {},
+  "dependencies": {
+    "reva-base": {
+      "service": "reva-base",
+      "build_arg": "REVA_BASE_IMAGE"
+    }
+  },
+  "repos": {
+    "cernbox_reva_version": "v3.3.2"
+  },
+  "build_args": {},
+  "labels": {
+    "org.opencloudmesh.service": "cernbox-reva",
+    "org.opencontainers.image.title": "Open Cloud Mesh CERNBox Reva Image",
+    "org.opencontainers.image.description": "Reva backend for CERNBox",
+    "org.opencontainers.image.url": "https://cs3org.github.io/OCM-API",
+    "org.opencontainers.image.source": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  }
+}
