@@ -2,18 +2,11 @@
   "name": "cernbox-reva",
   "context": "services/cernbox-reva",
   "dockerfile": "services/cernbox-reva/Dockerfile",
-  "version_strategy": "component",
-  "version_component": "cernbox_reva_version",
-  "version_binding": "image_tag",
-  "base_images": {},
   "dependencies": {
     "reva-base": {
-      "service": "reva-base",
+      "version": "v3.3.2",
       "build_arg": "REVA_BASE_IMAGE"
     }
-  },
-  "repos": {
-    "cernbox_reva_version": "v3.3.2"
   },
   "build_args": {},
   "labels": {

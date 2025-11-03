@@ -1,6 +1,6 @@
 {
   "files.associations": {
-    "*.nuon": "json",
+    "*.nuon": "jsonc",
   },
   "makefile.configureOnOpen": false
 }

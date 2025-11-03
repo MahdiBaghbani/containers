@@ -154,12 +154,10 @@ COPY ./tls/certificate-authority/ /tls/
 RUN ln -sf /tls/*.crt /usr/local/share/ca-certificates; \
     update-ca-certificates || true
 
-
 RUN mkdir -p /reva-git/cmd
 COPY --chmod=755 --from=compress /tmp/binaries/nu /usr/local/bin/nu
 COPY --chmod=755 --from=compress /tmp/binaries/reva /reva-git/cmd/reva
 COPY --chmod=755 --from=compress /tmp/binaries/revad /reva-git/cmd/revad
-RUN nu --version
 
 ENV PATH="${PATH}:/reva-git/cmd"
 

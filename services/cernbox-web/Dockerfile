@@ -53,11 +53,12 @@ RUN curl -fsSL -o /tmp/nu.tar.gz ${NU_REPO}/releases/download/${NU_REF}/nu-${NU_
 # Enable corepack for pnpm support
 RUN corepack enable
 
-# Copy host‑provided trust anchors
-# COPY tls/certificates/cernbox* tls/certificate-authority/* /usr/local/share/ca-certificates/
+# Copy TLS certificates from the host and trust them.
+COPY ./tls/certificates/ /usr/local/share/ca-certificates/
+COPY ./tls/certificate-authority/* /usr/local/share/ca-certificates/
 
-# Update CA trust store
-# RUN update-ca-certificates
+# Trust the CA bundle
+RUN update-ca-certificates || true
 
 WORKDIR /build
 
@@ -82,9 +83,6 @@ ENV DOCUMENTATION_URL="https://cernbox.docs.cern.ch/web/#desktop-requirements"
 
 RUN pnpm install
 RUN make dist
-
-# Mesh directory hostname replacement moved to runtime (see scripts/cernbox.sh)
-
 
 WORKDIR /build
 
@@ -111,10 +109,10 @@ RUN nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_R
 #############################
 FROM ${BASE_RUNTIME_IMAGE}
 
-#COPY --chown=nginx:nginx ./tls/certificates/cernbox* /tls/
-#COPY --chown=nginx:nginx ./tls/certificate-authority/* /tls/
-
-#COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# Copy TLS certificates
+COPY --chown=nginx:nginx ./tls/certificates/* /tls/
+COPY --chown=nginx:nginx ./tls/certificate-authority/* /tls/
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 # Static assets from the built web frontend
 COPY --from=builder --chown=nginx:nginx /build/web/dist /var/www/web

@@ -1,0 +1,18 @@
+{
+  "default": "v3.3.2",
+  
+  "versions": [
+    {
+      "name": "v3.3.2",
+      "latest": true,
+      "tags": ["v3.3.2", "latest"],
+      "overrides": {
+        "sources": {
+          "reva": {
+            "ref": "v3.3.2"
+          }
+        }
+      }
+    }
+  ]
+}
