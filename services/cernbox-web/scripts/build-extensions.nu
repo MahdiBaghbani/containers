@@ -17,9 +17,34 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Build all web extensions with retry logic for pnpm install 
+# Safe field access with default value
+def safe-get [field: string, default: any = ""] {
+  try {
+    $in | get $field | default $default
+  } catch {
+    $default
+  }
+}
+
+# Get last N lines from multi-line text
+def last-lines [n: int] {
+  $in | lines | last $n | str join "\n"
+}
+
+# Check if string contains EAGAIN error (case-insensitive)
+def has-eagain-error [] {
+  let text = ($in | str downcase)
+  ($text | str contains "eagain") or ($text | str contains "err_pnpm_eagain")
+}
+
+# Build all web extensions with retry logic for pnpm install
 # (since my Iranian internet is super good and pnpm doesn't crash 6 times in a row :-) )
 def retry-pnpm-install [package_dir: string, max_retries: int] {
+  # Ensure pnpm uses the shared store (BuildKit cache mount will persist this)
+  try {
+    pnpm config set store-dir /root/.local/share/pnpm/store | ignore
+  }
+  
   mut attempt = 0
   mut success = false
   mut encountered_eagain = false
@@ -32,11 +57,7 @@ def retry-pnpm-install [package_dir: string, max_retries: int] {
     }
     
     cd $package_dir
-    
-    # Run pnpm install and capture all output
-    # The 'complete' command automatically captures both stdout and stderr
     let pnpm_result = (pnpm install | complete)
-    
     cd ..
     
     if $pnpm_result.exit_code == 0 {
@@ -45,44 +66,35 @@ def retry-pnpm-install [package_dir: string, max_retries: int] {
         print $"Successfully installed after ($attempt) attempts"
       }
     } else {
-      # Combine stdout and stderr into single text
-      # Note: stdout and stderr from 'complete' are already strings, not lists
-      let stdout_text = (try {
-        $pnpm_result.stdout | default ""
-      } catch {
-        ""
-      })
-      let stderr_text = (try {
-        $pnpm_result.stderr | default ""
-      } catch {
-        ""
-      })
-      
+      # Combine stdout and stderr
+      let stdout_text = ($pnpm_result | safe-get stdout)
+      let stderr_text = ($pnpm_result | safe-get stderr)
       let output_text = $"($stdout_text)\n($stderr_text)"
       
-      # Check for EAGAIN errors in the output (case-insensitive)
-      let lower_output = ($output_text | str downcase)
-      let has_eagain = ($lower_output | str contains "eagain")
-      let has_err_pnpm_eagain = ($lower_output | str contains "err_pnpm_eagain")
-      let is_eagain = ($has_eagain or $has_err_pnpm_eagain)
+      # Check for EAGAIN errors
+      let is_eagain = ($output_text | has-eagain-error)
       
       if $is_eagain {
         $encountered_eagain = true
         print $"EAGAIN error detected on attempt ($attempt)/($max_retries)"
-        let error_lines = ($output_text | lines | where {|l| ($l | str downcase | str contains "eagain")} | last 3)
-        if ($error_lines | length) > 0 {
-          print ($error_lines | str join "\n")
+        
+        # Show error context
+        let error_preview = ($output_text | lines | where {|l| ($l | str downcase | str contains "eagain")} | last 3 | str join "\n")
+        if ($error_preview | str length) > 0 {
+          print $error_preview
         }
+        
         if $attempt < $max_retries {
-          print $"Retrying in 1 second..."
+          print "Retrying in 1 second..."
           sleep 1sec
         } else {
-          print $"Max retries reached, giving up"
+          print "Max retries reached, giving up"
         }
       } else {
-        # Non-retryable error - show last few lines of output
+        # Non-retryable error
         print $"Non-retryable error on attempt ($attempt)"
-        let error_preview = ($output_text | lines | last 5 | str join "\n")
+        let error_preview = ($output_text | last-lines 5)
+        
         if ($error_preview | str length) > 0 {
           print $error_preview
         } else {
@@ -93,37 +105,45 @@ def retry-pnpm-install [package_dir: string, max_retries: int] {
     }
   }
   
-  { success: $success, attempts: $attempt, was_eagain: $encountered_eagain }
+  {
+    success: $success,
+    attempts: $attempt,
+    was_eagain: $encountered_eagain
+  }
 }
 
+# Check if directory has Makefile with release target
+def has-release-target [package_path: string] {
+  let makefile_path = $"($package_path)/Makefile"
+  
+  if not ($makefile_path | path exists) {
+    return false
+  }
+  
+  try {
+    let makefile_content = (open $makefile_path)
+    let release_lines = ($makefile_content | lines | where {|line| $line | str contains "release:"})
+    ($release_lines | length) > 0
+  } catch {
+    false
+  }
+}
+
+# Build a single package
 def build-package [package_name: string, output_dir: string, retry_count: int] {
   print $"Building package: ($package_name)"
   
   let package_path = $package_name
-  let makefile_path = $"($package_path)/Makefile"
-  let package_json_path = $"($package_path)/package.json"
   
-  # Check if Makefile exists and has release target
-  let has_makefile = (try {
-    if ($makefile_path | path exists) {
-      let makefile_content = (open $makefile_path | lines)
-      let matching_lines = ($makefile_content | each {|line| if ($line | str contains "release:") { $line } else { null }} | compact)
-      ($matching_lines | length) > 0
-    } else {
-      false
-    }
-  } catch {
-    false
-  })
-  
-  if not $has_makefile {
+  # Check if package has release target
+  if not (has-release-target $package_path) {
     print $"Skipping ($package_name): No release target in Makefile"
     return
   }
   
   # Install dependencies with retry logic if package.json exists
-  let has_package_json = ($package_json_path | path exists)
-  if $has_package_json {
+  let package_json_path = $"($package_path)/package.json"
+  if ($package_json_path | path exists) {
     let install_result = (retry-pnpm-install $package_path $retry_count)
     
     if not $install_result.success {
@@ -131,7 +151,8 @@ def build-package [package_name: string, output_dir: string, retry_count: int] {
       if $install_result.was_eagain {
         print $"Warning: Failed to install dependencies for ($package_name) after ($attempts_made) attempts due to EAGAIN errors, skipping..."
       } else {
-        print "Warning: Failed to install dependencies for " + $package_name + " (non-retryable error), skipping..."
+        # ✅ Fixed: Using string interpolation instead of concatenation
+        print $"Warning: Failed to install dependencies for ($package_name) \(non-retryable error\), skipping..."
       }
       return
     }
@@ -174,24 +195,22 @@ def main [
   --retry-count: int = 10
 ] {
   mkdir $output_dir
-  
   cd $extensions_dir
   
-  # Find all directories, excluding .git, .github, and current dir
+  # Find all directories, excluding special directories
   let exclude_dirs = [".", "..", ".git", ".github"]
-  let packages = (ls -a 
-    | where type == "dir" 
-    | each {|dir| 
-        let is_excluded = ($exclude_dirs | each {|ex| if $ex == $dir.name { true } else { false }} | any {|v| $v == true})
-        if not $is_excluded { $dir.name } else { null }
-      }
-    | compact)
+  let packages = (
+    ls -a
+    | where type == "dir"
+    | where name not-in $exclude_dirs
+    | get name
+  )
   
+  # Build each package
   for package in $packages {
     build-package $package $output_dir $retry_count
   }
   
   cd ..
-  
   print "Finished building all packages"
 }

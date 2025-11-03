@@ -76,12 +76,22 @@ WORKDIR /build/web
 
 RUN corepack prepare pnpm@9 --activate
 
+# Configure pnpm for better network reliability and caching
+RUN pnpm config set store-dir /root/.local/share/pnpm/store && \
+    pnpm config set network-timeout 300000 && \
+    pnpm config set fetch-retries 5 && \
+    pnpm config set fetch-retry-mintimeout 10000 && \
+    pnpm config set fetch-retry-maxtimeout 60000
+
 ENV TITLE=CERNBox
 ENV SOURCE_MAP=true
 ENV REQUIRE_TIMEOUT=20
 ENV DOCUMENTATION_URL="https://cernbox.docs.cern.ch/web/#desktop-requirements"
 
-RUN pnpm install
+# Install dependencies with BuildKit cache mount for persistence across builds
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm \
+    pnpm install
 RUN make dist
 
 WORKDIR /build
@@ -97,12 +107,14 @@ RUN git clone \
 
 WORKDIR /build/web-extensions
 
-# Copy the build script
+
 COPY --chmod=755 ./scripts/build-extensions.nu /usr/local/bin/build-extensions.nu
 
-# Build all packages with retry logic
+# Build all packages with retry logic and BuildKit cache mount
 ARG PNPM_RETRY_COUNT="10"
-RUN nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_RETRY_COUNT
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm \
+    nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_RETRY_COUNT
 
 #############################
 ###  Nginx runtime image  ###
@@ -127,5 +139,5 @@ COPY --chown=nginx:nginx ./configs/mime.types /etc/nginx/mime.types
 COPY --chown=nginx:nginx ./configs/nginx-http.conf.template /etc/nginx/templates-available/cernbox-http.conf.template
 COPY --chown=nginx:nginx ./configs/nginx-https.conf.template /etc/nginx/templates-available/cernbox-https.conf.template
 
-# Entrypoint script to replace the hostname in the config.json file
+# Entrypoint script to replace lots of placeolders in frontend
 COPY --chown=nginx:nginx ./scripts/cernbox.sh /docker-entrypoint.d/cernbox.sh
