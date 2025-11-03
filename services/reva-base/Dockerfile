@@ -148,8 +148,8 @@ RUN apt-get update; \
 
 ENV TZ=Etc/UTC
 
-COPY ./tls/certificates/* /tls/
-COPY ./tls/certificate-authority/* /tls/
+COPY ./tls/certificates/ /tls/
+COPY ./tls/certificate-authority/ /tls/
 
 RUN ln -sf /tls/*.crt /usr/local/share/ca-certificates; \
     update-ca-certificates || true

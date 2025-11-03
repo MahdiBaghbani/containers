@@ -23,8 +23,11 @@ def write_nsswitch [] {
 }
 
 def ensure_hosts [] {
-  let host = (env HOST | default "localhost")
-  let line = $"127.0.0.1 ($host).docker\n"
+  let domain = (env DOMAIN | default "")
+  if ($domain | str length) == 0 {
+    error make { msg: "Environment variable DOMAIN is required" }
+  }
+  let line = $"127.0.0.1 ($domain)\n"
   open /etc/hosts | append $line | save -f /etc/hosts
 }
 

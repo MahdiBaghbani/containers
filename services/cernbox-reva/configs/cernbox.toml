@@ -5,7 +5,8 @@
 [vars]
 internal_gateway = "your.revad.org"
 provider_domain = "your.revad.org"
-external_reva_endpoint = "https://your.nginx.org"   # append here any route if applicable
+# append here any route if applicable
+external_reva_endpoint = "https://your.nginx.org"
 ocmshares_json_file = "/var/tmp/reva/shares_cernbox.json"
 machine_api_key = "machine-api-key"
 
@@ -240,7 +241,7 @@ driver = "ocmreceived"
 [http.services.sciencemesh]
 address = ":443"
 provider_domain = "{{ vars.provider_domain }}"
-mesh_directory_url = "https:/meshdir.docker/meshdir"
+mesh_directory_url = "{{ vars.mesh_directory_url }}"
 ocm_mount_point = "/sciencemesh"
 
 [http.services.sciencemesh.smtp_credentials]

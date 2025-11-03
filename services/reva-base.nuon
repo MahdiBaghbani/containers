@@ -29,5 +29,29 @@
     "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
     "org.opencontainers.image.vendor": "Open Cloud Mesh",
     "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": true,
+    "cert_name": "reva",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:revad1.docker",
+      "DNS:revad2.docker",
+      "DNS:revad3.docker",
+      "DNS:revad4.docker",
+      "DNS:revacernbox1.docker",
+      "DNS:revacernbox2.docker",
+      "DNS:revacernbox3.docker",
+      "DNS:revacernbox4.docker",
+      "DNS:revanextcloud1.docker",
+      "DNS:revanextcloud2.docker",
+      "DNS:revanextcloud3.docker",
+      "DNS:revanextcloud4.docker",
+      "DNS:revaowncloud1.docker",
+      "DNS:revaowncloud2.docker",
+      "DNS:revaowncloud3.docker",
+      "DNS:revaowncloud4.docker"
+    ]
   }
 }

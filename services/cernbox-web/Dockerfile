@@ -83,9 +83,7 @@ ENV DOCUMENTATION_URL="https://cernbox.docs.cern.ch/web/#desktop-requirements"
 RUN pnpm install
 RUN make dist
 
-RUN cd dist/js \
- && find . -name "web-app-science*.mjs" -type f -exec sed -i 's|sciencemesh\.cesnet\.cz/iop|meshdir.docker|' {} \; \
- || true
+# Mesh directory hostname replacement moved to runtime (see scripts/cernbox.sh)
 
 
 WORKDIR /build
@@ -126,9 +124,10 @@ COPY --from=builder --chown=nginx:nginx /build/cernbox /var/www/cernbox
 # Web UI runtime configuration
 COPY --chown=nginx:nginx ./configs/config.json /var/www/web/config.json
 
-# nginx config template
+# nginx config templates
 COPY --chown=nginx:nginx ./configs/mime.types /etc/nginx/mime.types
-COPY --chown=nginx:nginx ./configs/nginx.conf /etc/nginx/templates/cernbox.conf.template
+COPY --chown=nginx:nginx ./configs/nginx-http.conf.template /etc/nginx/templates-available/cernbox-http.conf.template
+COPY --chown=nginx:nginx ./configs/nginx-https.conf.template /etc/nginx/templates-available/cernbox-https.conf.template
 
 # Entrypoint script to replace the hostname in the config.json file
 COPY --chown=nginx:nginx ./scripts/cernbox.sh /docker-entrypoint.d/cernbox.sh
