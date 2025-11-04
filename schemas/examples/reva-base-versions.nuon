@@ -1,0 +1,49 @@
+// Example: Reva Base Multi-Version Manifest
+// This demonstrates building multiple versions of reva-base with different Reva versions
+
+{
+  // Default version to build when no version is specified
+  "default": "v1.29.0",
+
+  // List of all supported Reva versions
+  "versions": [
+    {
+      "name": "v1.29.0",
+      "latest": true,
+      "tags": ["v1.29.0", "v1.29", "v1", "latest"],
+      "overrides": {
+        "sources": {
+          "reva": {
+            "ref": "v1.29.0"
+          }
+        }
+      }
+    },
+    {
+      "name": "v1.28.0",
+      "tags": ["v1.28.0", "v1.28"],
+      "overrides": {
+        "sources": {
+          "reva": {
+            "ref": "v1.28.0"
+          }
+        }
+      }
+    },
+    {
+      "name": "edge",
+      "tags": ["edge", "main", "dev"],
+      "overrides": {
+        "sources": {
+          "reva": {
+            "ref": "main"
+          }
+        },
+        "build_args": {
+          // Don't pack edge builds
+          "PACK_WITH_UPX": "false"
+        }
+      }
+    }
+  ]
+}

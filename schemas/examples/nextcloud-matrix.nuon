@@ -1,0 +1,56 @@
+// Example: Nextcloud Multi-Version Matrix with Dependency Versions
+// This demonstrates complex version matrices where different Nextcloud versions
+// require different versions of dependent apps (like contacts)
+
+{
+  "default": "v31.0.5",
+
+  "versions": [
+    {
+      "name": "v31.0.5",
+      "latest": true,
+      "tags": ["v31.0.5", "v31", "latest"],
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "ref": "v31.0.5"
+          },
+          "contacts": {
+            "url": "https://github.com/nextcloud-releases/contacts/releases/download/v7.0.6/contacts-v7.0.6.tar.gz",
+            "ref": "v7.0.6"
+          }
+        }
+      }
+    },
+    {
+      "name": "v30.0.11",
+      "tags": ["v30.0.11", "v30"],
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "ref": "v30.0.11"
+          },
+          "contacts": {
+            "url": "https://github.com/nextcloud-releases/contacts/releases/download/v7.0.6/contacts-v7.0.6.tar.gz",
+            "ref": "v7.0.6"
+          }
+        }
+      }
+    },
+    {
+      "name": "master",
+      "tags": ["master", "dev"],
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "ref": "master"
+          },
+          "contacts": {
+            "url": "https://github.com/nextcloud-releases/contacts/releases/download/v7.0.6/contacts-v7.0.6.tar.gz",
+            "ref": "v7.0.6"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+// Version Manifest Schema
+// This file documents the expected structure of a version manifest file
+// Location: services/{service-name}/versions.nuon
+
+{
+  // Default version to build when no --version flag is specified
+  "default": "v1.0.0",  // string (required)
+  
+  // List of all supported versions
+  "versions": [  // list<record> (required)
+    {
+      // Version name/identifier
+      "name": "v1.0.0",  // string (required)
+      
+      // Whether this version should be tagged as "latest"
+      "latest": true,  // bool (optional, default: false)
+      
+      // Image tags to apply (will be prefixed with service name)
+      "tags": [  // list<string> (optional)
+        "v1.0.0",
+        "v1.0",
+        "v1",
+        "latest"
+      ],
+      
+      // Overrides for this specific version
+      "overrides": {  // record (optional)
+        // Override source refs
+        "sources": {  // record (optional)
+          "reva": {
+            "ref": "v1.0.0"  // string (optional, overrides default)
+          }
+        },
+        
+        // Override external images
+        "external_images": {  // record (optional)
+          "build": {
+            "image": "golang:1.25-alpine"  // string (optional)
+          }
+        },
+        
+        // Override build args
+        "build_args": {  // record (optional)
+          "PACK_WITH_UPX": "false"
+        }
+        
+        // Override any other config field
+        // Fields are deep-merged with base config
+      }
+    }
+  ]
+}

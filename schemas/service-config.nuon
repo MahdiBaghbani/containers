@@ -1,0 +1,79 @@
+// Service Configuration Schema
+// This file documents the expected structure of a service config file
+// Location: services/{service-name}.nuon
+
+{
+  // Service metadata
+  "name": "reva-base", // string (required)
+  "context": "services/reva-base", // string (required)
+  "dockerfile": "services/reva-base/Dockerfile", // string (required)
+
+  // Source repositories to clone/download during build
+  "sources": {
+    // record (optional)
+    "reva": {
+      // Source identifier (used in overrides)
+      "url": "https://github.com/cs3org/reva", // string (required)
+      "ref": "v3.3.2", // string (required) - branch/tag/commit
+      "build_arg": "REVA_BRANCH" // string (required) - ARG name in Dockerfile
+    },
+    "nushell": {
+      "url": "https://github.com/nushell/nushell",
+      "ref": "0.108.0",
+      "build_arg": "NU_REF"
+    }
+  },
+
+  // External Docker images (not built by our system)
+  "external_images": {
+    // record (optional)
+    "build": {
+      // Build stage base image
+      "image": "golang:1.25-trixie", // string (required)
+      "build_arg": "BASE_BUILD_IMAGE" // string (required)
+    },
+    "runtime": {
+      // Runtime stage base image
+      "image": "debian:trixie-slim", // string (required)
+      "build_arg": "BASE_RUNTIME_IMAGE" // string (required)
+    }
+  },
+
+  // Internal service dependencies (built by our system)
+  "dependencies": {
+    // record (optional)
+    "reva-base": {
+      // Dependency identifier
+      "version": "v3.3.2", // string (optional) - explicit version pin
+      "build_arg": "REVA_BASE_IMAGE" // string (required)
+    }
+  },
+
+  // Additional build arguments
+  "build_args": {
+    // record (optional)
+    "PACK_WITH_UPX": "true",
+    "CUSTOM_VAR": "value"
+  },
+
+  // OCI image labels
+  "labels": {
+    // record (optional)
+    "org.opencloudmesh.service": "reva-base",
+    "org.opencontainers.image.title": "Reva Base Image",
+    "org.opencontainers.image.description": "Base image for Reva services"
+  },
+
+  // TLS configuration (for local development)
+  "tls": {
+    // record (optional)
+    "enabled": true, // bool (required)
+    "cert_name": "reva", // string (optional)
+    "instances": 1, // int (optional)
+    "domain_suffix": "docker", // string (optional)
+    "sans": [
+      // list<string> (optional)
+      "DNS:service.docker"
+    ]
+  }
+}
