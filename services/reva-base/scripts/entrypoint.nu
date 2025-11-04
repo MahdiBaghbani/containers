@@ -40,5 +40,3 @@ def main [] {
   nu /usr/bin/init.nu
   if ($in | is-empty) { }
 }
-
-main

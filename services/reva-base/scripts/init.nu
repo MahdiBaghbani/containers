@@ -94,11 +94,12 @@ def prepare_configuration [] {
   if not ($CONFIG_DIR | path exists) { error make {msg: $"Config dir not found: ($CONFIG_DIR)"} }
   rm -rf $REVA_CONFIG_DIR
   cp -r $CONFIG_DIR $REVA_CONFIG_DIR
-  
-  # Validation: DOMAIN required
+
   if ($DOMAIN | str length) == 0 { error make { msg: "Environment variable DOMAIN is required" } }
   
-  # Validation: REVA_PORT must be 443 for HTTPS or 80 for HTTP
+  # REVA_PORT must be 443 for HTTPS or 80 for HTTP
+  # @MahdiBaghbani: I think this is important to validate, but it's not a bug.
+  # Anyway, If you can open PR to improve this, please do.
   if $REVA_TLS_ENABLED == "true" and $REVA_PORT != "443" {
     error make { msg: $"REVA_TLS_ENABLED=true requires REVA_PORT=443, but got ($REVA_PORT)" }
   }
@@ -107,7 +108,7 @@ def prepare_configuration [] {
   }
   
   for f in (ls $REVA_CONFIG_DIR | where {|row| $row.name =~ ".*\\.toml$"} | get name) {
-    # Domain replacements (different domains for different purposes)
+    # Domain replacements, different domains for different purposes
     # your.revad.org -> Reva backend domain (DOMAIN, e.g., revacernbox1.docker)
     replace_in_file $f "your.revad.org" $DOMAIN
     # localhost -> Reva backend domain (DOMAIN)
@@ -117,10 +118,12 @@ def prepare_configuration [] {
     # your.nginx.org -> Web frontend domain (WEB_DOMAIN, e.g., cernbox1.docker)
     replace_in_file $f "your.nginx.org" $WEB_DOMAIN
     
-    # External Reva endpoint with protocol (uses web frontend domain)
+    # External Reva endpoint with protocol, uses web frontend domain
     replace_in_file $f 'external_reva_endpoint = "https://your.nginx.org"' $"external_reva_endpoint = \"($EXTERNAL_REVA_ENDPOINT)\""
     
     # Service endpoints
+    # These default values are a remnant of ocm-test-suite.
+    # @MahdiBaghbani: I think it's important to keep them.
     let IDP_DOMAIN = (env IDP_DOMAIN | default "idp.docker")
     let IDP_URL = (env IDP_URL | default $"https://($IDP_DOMAIN)")
     let RCLONE_ENDPOINT = (env RCLONE_ENDPOINT | default "http://rclone.docker")
@@ -130,28 +133,24 @@ def prepare_configuration [] {
     replace_in_file $f "idp.docker" $IDP_DOMAIN
     replace_in_file $f "http://rclone.docker" $RCLONE_ENDPOINT
     replace_in_file $f "rclone.docker" $RCLONE_ENDPOINT
+
     # Replace mesh_directory_url template variable with actual URL
+    # @MahdiBaghbani: with the introduction of Directory service, I believe this option shoulde be obsoleted.
     replace_in_file $f 'mesh_directory_url = "{{ vars.mesh_directory_url }}"' $"mesh_directory_url = \"($MESHDIR_URL)\""
     replace_in_file $f "meshdir.docker" $MESHDIR_DOMAIN
 
     # Replace hardcoded HTTPS protocols with REVA_PROTOCOL
-    # TODO: probably bug
-    replace_in_file $f $"https://($DOMAIN)" $EXTERNAL_REVA_ENDPOINT
     replace_in_file $f $"https://localhost" $"($REVA_PROTOCOL)://($DOMAIN)"
     replace_in_file $f 'datagateway = "https://{{' $"datagateway = \"($REVA_PROTOCOL)://{{"
     
     # Replace hardcoded port 443 with REVA_PORT in all [http.services.*].address fields
     replace_in_file $f 'address = ":443"' $"address = \":($REVA_PORT)\""
     
-    # Replace data_server_url patterns with protocol-aware versions
+    # Replace data_server_url patterns with protocol scheme
     # Pattern: https://localhost:{{ ... }}
     replace_in_file $f $"https://localhost:" $"($REVA_PROTOCOL)://($DOMAIN):"
     # Pattern: https://your.revad.org:{{ ... }}
     replace_in_file $f $"https://($DOMAIN):" $"($REVA_PROTOCOL)://($DOMAIN):"
-    
-    # Replace host = "https://localhost" with protocol-aware version
-    # TODO: probably bug
-    replace_in_file $f 'host = "https://localhost"' $"host = \"($EXTERNAL_REVA_ENDPOINT)\""
 
     # TLS toggle: comment out cert lines in HTTP mode
     if $REVA_TLS_ENABLED == "false" {
@@ -168,7 +167,7 @@ def prepare_tls_certificates [] {
     return
   }
   
-  # Validation: If TLS is enabled, certs must exist
+  # If TLS is enabled, certs must exist
   if ($DOMAIN | str length) == 0 { error make { msg: "Environment variable DOMAIN is required when REVA_TLS_ENABLED=true" } }
   
   create_directory $TLS_DIR
@@ -181,11 +180,15 @@ def prepare_tls_certificates [] {
   (ls $TLS_DIR | where {|row| $row.name =~ ".*\\.crt$"} | get name | each {|n| cp -f $"($TLS_DIR)/($n)" "/usr/local/share/ca-certificates/" } ) | ignore
   ^update-ca-certificates | ignore
   
-  # Try to find cert using REVA_HOST hostname first, then DOMAIN hostname, then reva.crt (for SAN-based certs), then generic
+  # Find certificate using REVA_HOST hostname first, then DOMAIN hostname,
+  # then reva.crt (for SAN-based certs), then generic.
+  # @MahdiBaghbani: In most cases, REVA_HOST is the same as DOMAIN. 
+  # but maybe some people want to use different hostnames for different purposes.
+  # reva.crt is a generic certificate for ocm-test-suite tests.
   let reva_hostpart = (if ($REVA_HOST | str length) > 0 { ($REVA_HOST | split row "." | get 0) } else { "" })
   let domain_hostpart = ($DOMAIN | split row "." | get 0)
   
-  # Priority: REVA_HOST hostname > DOMAIN hostname > reva.crt (for SAN-based certs) > server.crt
+  # Priority: REVA_HOST hostname > DOMAIN hostname > reva.crt > server.crt
   let cert_src = (if ($reva_hostpart | str length) > 0 and ($"($TLS_DIR)/($reva_hostpart).crt" | path exists) {
     $"($TLS_DIR)/($reva_hostpart).crt"
   } else if ($"($TLS_DIR)/($domain_hostpart).crt" | path exists) {
@@ -208,8 +211,17 @@ def prepare_tls_certificates [] {
   
   if not ($cert_src | path exists) { error make { msg: "REVA_TLS_ENABLED=true but certificate not found in /tls" } }
   if not ($key_src | path exists) { error make { msg: "REVA_TLS_ENABLED=true but key not found in /tls" } }
-  ln -sf $cert_src $"($TLS_DIR)/server.crt"
-  ln -sf $key_src $"($TLS_DIR)/server.key"
+
+  # Only create symlinks if the selected cert/key are not already server.crt/server.key
+  let server_crt_path = $"($TLS_DIR)/server.crt"
+  let server_key_path = $"($TLS_DIR)/server.key"
+  
+  if $cert_src != $server_crt_path {
+    ln -sf $cert_src $server_crt_path
+  }
+  if $key_src != $server_key_path {
+    ln -sf $key_src $server_key_path
+  }
 }
 
 def start_reva_daemon [] {
@@ -226,5 +238,3 @@ def main [] {
   prepare_tls_certificates
   start_reva_daemon
 }
-
-main
