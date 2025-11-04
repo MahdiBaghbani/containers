@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-ARG REVA_BASE_IMAGE="reva-base:latest"
+ARG REVA_BASE_IMAGE="reva-base:v3.3.2"
 
 FROM ${REVA_BASE_IMAGE}
 

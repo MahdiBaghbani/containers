@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-ARG BASE_BUILD_IMAGE="node:20"
+ARG BASE_BUILD_IMAGE="node:20-trixie-slim"
 ARG BASE_RUNTIME_IMAGE="nginx:1.29-alpine3.22-slim"
 
 ###############################

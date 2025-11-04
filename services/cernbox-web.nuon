@@ -21,7 +21,7 @@
   },
   "external_images": {
     "build": {
-      "image": "node:20",
+      "image": "node:20-trixie-slim",
       "build_arg": "BASE_BUILD_IMAGE"
     },
     "runtime": {
