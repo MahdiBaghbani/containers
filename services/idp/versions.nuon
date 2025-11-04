@@ -1,0 +1,18 @@
+{
+  "default": "v26.4.2",
+  
+  "versions": [
+    {
+      "name": "v26.4.2",
+      "latest": true,
+      "tags": ["v26.4.2", "latest"],
+      "overrides": {
+        "external_images": {
+          "runtime": {
+            "image": "quay.io/keycloak/keycloak:26.4.2"
+          }
+        }
+      }
+    }
+  ]
+}
