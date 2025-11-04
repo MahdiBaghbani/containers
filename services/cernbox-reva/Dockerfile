@@ -34,3 +34,4 @@ RUN mkdir /revashares
 
 RUN mkdir -p /revalocalstorage/data/marie/marie
 RUN mkdir -p /revalocalstorage/data/einstein/einstein
+RUN mkdir -p /revalocalstorage/data/richard/richard
