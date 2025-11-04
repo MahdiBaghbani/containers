@@ -41,5 +41,17 @@
     "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
     "org.opencontainers.image.vendor": "Open Cloud Mesh",
     "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": true,
+    "cert_name": "cernbox",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:cernbox1.docker",
+      "DNS:cernbox2.docker",
+      "DNS:cernbox3.docker",
+      "DNS:cernbox4.docker"
+    ]
   }
 }

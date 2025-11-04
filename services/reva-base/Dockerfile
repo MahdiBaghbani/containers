@@ -148,10 +148,13 @@ RUN apt-get update; \
 
 ENV TZ=Etc/UTC
 
+# Copy TLS certificates from the host and trust them.
 COPY ./tls/certificates/ /tls/
 COPY ./tls/certificate-authority/ /tls/
 
-RUN ln -sf /tls/*.crt /usr/local/share/ca-certificates; \
+# Link certificates to the system trust store
+RUN mkdir -p /usr/local/share/ca-certificates && \
+    ln -sf /tls/*.crt /usr/local/share/ca-certificates/ 2>/dev/null || true && \
     update-ca-certificates || true
 
 RUN mkdir -p /reva-git/cmd
