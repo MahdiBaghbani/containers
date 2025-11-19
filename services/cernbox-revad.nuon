@@ -1,0 +1,17 @@
+{
+  "name": "cernbox-revad",
+  "context": "services/cernbox-revad",
+  "labels": {
+    "org.opencloudmesh.service": "cernbox-revad",
+    "org.opencontainers.image.title": "Open Cloud Mesh CERNBox Revad Image",
+    "org.opencontainers.image.description": "Revad backend for CERNBox",
+    "org.opencontainers.image.url": "https://cs3org.github.io/OCM-API",
+    "org.opencontainers.image.source": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": false
+  }
+}

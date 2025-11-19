@@ -1,0 +1,46 @@
+## Localhome dataprovider configuration for multi-container CERNBox deployment
+## This config runs localhome storage provider only
+
+[http]
+certfile = "/tls/server.crt"
+keyfile = "/tls/server.key"
+address = "{{placeholder:http-address}}"
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+### STORAGE PROVIDER ###
+
+[[grpc.services.storageprovider]]
+driver = "localhome"
+mount_path = "/"
+mount_id = "localhome"
+expose_data_server = true
+data_server_url = "{{placeholder:data-server-url-internal.localhome}}"
+enable_home_creation = true
+provides_space_type = "personal"
+
+[grpc.services.storageprovider.drivers.localhome]
+user_layout = "{{.Username}}"
+virtual_home_template = "/home/{{.Username}}"
+root = "/revalocalstorage"
+share_folder = "MyShares"
+
+### HTTP DATAPROVIDER ###
+
+[[http.services.dataprovider]]
+driver = "localhome"
+
+[http.services.dataprovider.drivers.localhome]
+user_layout = "{{.Username}}"
+virtual_home_template = "/home/{{.Username}}"
+root = "/revalocalstorage"
+share_folder = "MyShares"

@@ -1,0 +1,35 @@
+{
+  "default": "debian",
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/common-tools/Dockerfile.debian",
+      "external_images": {
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "alpine",
+      "dockerfile": "services/common-tools/Dockerfile.alpine",
+      "external_images": {
+        "runtime": {
+          "name": "alpine",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "rhel",
+      "dockerfile": "services/common-tools/Dockerfile.rhel",
+      "external_images": {
+        "runtime": {
+          "name": "redhat/ubi9-minimal",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    }
+  ]
+}

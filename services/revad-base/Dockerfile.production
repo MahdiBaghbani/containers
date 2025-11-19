@@ -1,0 +1,111 @@
+# syntax=docker/dockerfile:1.7
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Open Cloud Mesh Containers: container build scripts and images
+# Copyright (C) 2025 Open Cloud Mesh Contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
+ARG BASE_RUNTIME_IMAGE="gcr.io/distroless/static-debian12:nonroot"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+
+################################
+###  Build Reva from source  ###
+################################
+FROM ${BASE_BUILD_IMAGE} AS build
+
+ENV CGO_ENABLED=1
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    git \
+    bash \
+    make \
+    build-essential \
+    libsqlite3-dev;
+
+WORKDIR /
+
+ARG REVAD_URL="https://github.com/cs3org/reva"
+ARG REVAD_REF="v3.3.2"
+ARG CACHEBUST="default"
+
+RUN --mount=type=cache,id=revad-base-revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
+    mkdir -p /src/reva-git-cache && \
+    if [ ! -d /src/reva-git-cache/.git ]; then \
+    git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_REF}" ${REVAD_URL} /src/reva-git-cache; \
+    fi && \
+    cp -a /src/reva-git-cache/. /revad-git
+
+WORKDIR /revad-git
+RUN --mount=type=cache,id=revad-base-go-mod-${CACHEBUST:-${REVAD_REF}},target=/go/pkg/mod,sharing=locked \
+    go mod download
+RUN --mount=type=cache,id=revad-base-go-mod-${CACHEBUST:-${REVAD_REF}},target=/go/pkg/mod,sharing=locked \
+    make revad-static
+
+####################################
+###  Compress binaries with UPX  ###
+####################################
+FROM ${COMMON_TOOLS_IMAGE} AS compress
+
+RUN mkdir -p /tmp/binaries
+
+COPY --from=build /revad-git/cmd/revad/revad /tmp/binaries/revad
+
+ARG PACK_WITH_UPX="true"
+RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
+    strip -s /tmp/binaries/revad || true; \
+    upx -qq --best --lzma /tmp/binaries/revad && upx -t /tmp/binaries/revad; \
+    fi
+
+################################
+###     Directory builder    ###
+################################
+FROM ${BASE_BUILD_IMAGE} AS directory
+
+# Create directory structure with proper permissions for nonroot user (65532:65532)
+# It will be used in the runtime image.
+RUN mkdir -p /etc/revad /revad/cmd /var/run /var/tmp/reva && \
+    chown -R 65532:65532 /etc/revad /revad/cmd /var/run /var/tmp/reva && \
+    chmod 755 /etc/revad /revad/cmd /var/run /var/tmp/reva
+
+# Create nsswitch.conf for nonroot user.
+RUN echo "hosts: files dns" > /etc/nsswitch.conf && \
+    chown 65532:65532 /etc/nsswitch.conf && \
+    chmod 644 /etc/nsswitch.conf
+
+###################################
+###   Production Runtime        ###
+###################################
+FROM ${BASE_RUNTIME_IMAGE}
+
+COPY --from=directory --chown=65532:65532 /etc/revad /etc/revad
+COPY --from=directory --chown=65532:65532 /revad/cmd /revad/cmd
+COPY --from=directory --chown=65532:65532 /var/run /var/run
+COPY --from=directory --chown=65532:65532 /var/tmp/reva /var/tmp/reva
+COPY --from=directory --chown=65532:65532 /etc/nsswitch.conf /etc/nsswitch.conf
+
+COPY --from=compress --chmod=755 /tmp/binaries/revad /revad/cmd/revad
+
+ENV PATH="/revad/cmd:${PATH}"
+
+ENTRYPOINT [ "/revad/cmd/revad" ]
+CMD [ "--dev-dir", "/etc/revad", "-p", "/var/run/revad.pid" ]

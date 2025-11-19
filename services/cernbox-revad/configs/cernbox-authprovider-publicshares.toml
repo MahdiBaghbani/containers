@@ -1,0 +1,20 @@
+## Public Shares auth provider configuration for multi-container CERNBox deployment
+## This config runs Public Shares auth provider only
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.authprovider]
+auth_manager = "publicshares"
+
+[grpc.services.authprovider.auth_managers.publicshares]
+gateway_addr = "{{placeholder:gateway-svc}}"
+

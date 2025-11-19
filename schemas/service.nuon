@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Open Cloud Mesh Containers: container build scripts and images
+// Copyright (C) 2025 Open Cloud Mesh Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// Service Configuration Schema
+// Location: services/{service-name}.nuon
+// Docs: docs/concepts/service-configuration.md, docs/reference/config-schema.md
+
+{
+  // Service metadata
+  "name": "revad-base", // string (required)
+  "context": "services/revad-base", // string (required)
+  "dockerfile": "services/revad-base/Dockerfile", // string (required if no platforms.nuon, FORBIDDEN if platforms.nuon exists)
+  // CRITICAL: If platforms.nuon exists, base config can ONLY contain: name, context, tls, labels (all metadata)
+  //           Labels are metadata like TLS (Docker image labels), not infrastructure or version control
+  //           All other fields (dockerfile, sources, external_images, dependencies, build_args) are FORBIDDEN
+  //           ERROR: "Service 'X': external_images.build: Field forbidden when platforms.nuon exists. Move to platforms.nuon (infrastructure) or versions.nuon (versions)."
+
+  // Source repositories - build args auto-generated: {SOURCE_KEY}_REF and {SOURCE_KEY}_URL
+  // See docs/source-build-args.md for complete convention
+  // VALIDATION: Source keys must match ^[a-z0-9_]+$ (lowercase alphanumeric with underscores only)
+  // VALIDATION: build_arg field is FORBIDDEN (auto-generated, will cause validation error)
+  // NOTE: For single-platform services, sources are REQUIRED in base config (versions.nuon can override, but base must have as fallback).
+  //       For multi-platform services, sources are FORBIDDEN in base config (must be in versions.nuon overrides only).
+  "sources": {
+    "revad": {
+      // Generates: REVAD_REF and REVAD_URL
+      "url": "https://github.com/cs3org/reva", // string (required) - repository URL
+      "ref": "v3.3.2" // string (required) - branch/tag/commit
+    },
+    "nushell": {
+      // Generates: NUSHELL_REF and NUSHELL_URL
+      "url": "https://github.com/nushell/nushell",
+      "ref": "0.108.0"
+    }
+  },
+
+  // External Docker images (not built by our system)
+  // VALIDATION: Each entry MUST include both 'name' and 'build_arg' fields
+  // FORBIDDEN: 'tag' field (version control - must be in versions.nuon overrides)
+  // FORBIDDEN: 'image' field (legacy - use 'name' instead)
+  // ERROR: "External image 'X' missing required field 'name'/'build_arg'"
+  // NOTE: For single-platform services, 'name' is required in base config.
+  //       For multi-platform services, 'name' is defined in platforms.nuon.
+  //       'tag' is ALWAYS defined in versions.nuon overrides (never in base config).
+  "external_images": {
+    "build": {
+      "name": "golang", // string (required) - Docker image name (without tag)
+      "build_arg": "BASE_BUILD_IMAGE" // string (required) - Build arg name
+    },
+    "runtime": {
+      "name": "debian", // string (required) - Docker image name (without tag)
+      "build_arg": "BASE_RUNTIME_IMAGE" // string (required) - Build arg name
+    }
+  },
+
+  // Internal service dependencies (built by our system)
+  // VALIDATION: Each dependency MUST include 'build_arg' field
+  // FORBIDDEN: 'version' field (version control - must be in versions.nuon overrides)
+  // ERROR: "Dependency 'X' missing required field: 'build_arg'"
+  // Dependency keys are identifiers (can be any name) and map to build arguments
+  // Multiple dependencies can reference the same service with different versions
+  // NOTE: For single-platform services, dependencies are defined here with service and build_arg.
+  //       For multi-platform services, dependencies are defined in platforms.nuon with service and build_arg.
+  //       Version is ALWAYS defined in versions.nuon overrides (never in base config or platforms.nuon).
+  "dependencies": {
+    // Simple case: dependency key matches service name
+    "revad-base": {
+      "build_arg": "REVAD_BASE_IMAGE" // string (required) - must be unique across all dependencies
+    },
+    
+    // Advanced case: multiple dependencies from same service with different versions
+    // Useful for different platform variants (e.g., debian vs alpine) of the same service
+    "common-tools-builder": {
+      "service": "common-tools", // string (optional) - service name (defaults to dependency key if omitted)
+      "build_arg": "COMMON_TOOLS_BUILDER_IMAGE" // string (required) - must be unique
+    },
+    "common-tools-runtime": {
+      "service": "common-tools", // Same service, different version/platform
+      "build_arg": "COMMON_TOOLS_RUNTIME_IMAGE" // string (required) - must be unique
+    }
+  },
+
+  // Additional build arguments
+  "build_args": {
+    "PACK_WITH_UPX": "true",
+    "CUSTOM_VAR": "value"
+  },
+
+  // OCI image labels (metadata - allowed in base config even when platforms.nuon exists, like TLS)
+  // Labels are Docker image metadata, not infrastructure or version control
+  // Can also be in platforms.nuon (platform-specific labels, deep-merged) or versions.nuon (version-specific overrides, deep-merged)
+  "labels": {
+    "org.opencloudmesh.service": "revad-base",
+    "org.opencontainers.image.title": "Revad Base Image",
+    "org.opencontainers.image.description": "Base image for Revad services"
+  },
+
+  // TLS configuration
+  // CRITICAL RESTRICTIONS:
+  // - TLS config in platforms.nuon is FORBIDDEN (validation error)
+  // - TLS config in version overrides (versions.nuon) is FORBIDDEN (validation error)
+  // - TLS must be configured in base service config ONLY (never in platforms.nuon or versions.nuon)
+  // - Services with TLS enabled MUST have common-tools dependency (validation error if missing)
+  // - TLS config is allowed in base config even when platforms.nuon exists (it's metadata, not infrastructure)
+  "tls": {
+    "enabled": true, // bool (required)
+    "mode": "ca-and-cert", // string (required if enabled=true) - "ca-only" | "ca-and-cert" | "cert-only"
+    "cert_name": "reva", // string (optional if mode="ca-only", required if mode="ca-and-cert" or "cert-only")
+    "instances": 1, // int (optional) - used by certificate generation scripts
+    "domain_suffix": "docker", // string (optional) - used by certificate generation scripts
+    "sans": [ // list<string> (optional) - used by certificate generation scripts
+      "DNS:service.docker"
+    ]
+  }
+}

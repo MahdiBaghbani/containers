@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Open Cloud Mesh Containers: container build scripts and images
+// Copyright (C) 2025 Open Cloud Mesh Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// Version Manifest Schema
+// Location: services/{service-name}/versions.nuon
+// Docs: docs/guides/multi-version-builds.md, docs/reference/version-manifest-schema.md
+
+{
+  // Default version to build when no --version flag is specified
+  // VALIDATION: Must match a version 'name' in the versions array
+  // ERROR: "Default version 'v1.0.0' not found in versions list"
+  "default": "v1.0.0", // string (required)
+  
+  // List of all supported versions
+  "versions": [ // list<record> (required)
+    {
+      // Version name/identifier - automatically added as a tag
+      // IMPORTANT: Version names should NOT include platform suffixes (e.g., "v1.0.0-debian")
+      // Platform suffixes are added automatically during expansion when platforms.nuon exists
+      // NOTE: CLI accepts version names with platform suffixes (e.g., --version v1.0.0-debian)
+      //       The suffix is automatically stripped and used for platform filtering
+      // ERROR: "Version name 'v1.0.0-debian' ends with platform suffix '-debian'..."
+      "name": "v1.0.0", // string (required, unique, must not end with platform suffix)
+      
+      // Whether this version should be tagged as "latest" - automatically added when true
+      // Only ONE version can have latest: true
+      "latest": true, // bool (optional, default: false)
+      
+      // Additional image tags (aliases only - name and "latest" are auto-generated)
+      // Tags are auto-generated as: [name, (latest?), ...tags]
+      // Example: name="v1.0.0", latest=true, tags=["v1.0","v1"] -> ["v1.0.0", "latest", "v1.0", "v1"]
+      // RULES: Cannot contain "latest" or version name, must be unique within version and across ALL versions
+      // ERROR examples:
+      //   - tags: ["latest"] -> "tag 'latest' is forbidden... (auto-generated from 'latest' field)"
+      //   - tags: ["v1.0.0"] -> "tag 'v1.0.0' is forbidden... (auto-generated from 'name' field)"
+      //   - tags: ["v1", "v1"] -> "duplicate tags found: v1"
+      //   - tags: ["v1"] (if another version also has "v1") -> "Tag collision: 'v1' is used by multiple versions"
+      "tags": [
+        "v1.0",
+        "v1"
+      ],
+      
+      // Overrides for this specific version - deep-merged with base config
+      "overrides": {
+        // Override source refs
+        "sources": {
+          "revad": {
+            "ref": "v1.0.0" // string (optional, overrides default)
+          }
+        },
+        
+        // Override external image tags (version control)
+        // FORBIDDEN: 'name' field (infrastructure - define in base config or platforms.nuon)
+        // FORBIDDEN: 'build_arg' field (infrastructure - define in base config or platforms.nuon)
+        // FORBIDDEN: 'image' field (legacy - use 'tag' field instead)
+        // NOTE: Only 'tag' field is allowed in version overrides. 'name' and 'build_arg' come from base config or platforms.nuon.
+        //       Tag can include digest: "1.25-trixie@sha256:abc123..." (digest is optional suffix to tag)
+        "external_images": {
+          "build": {
+            "tag": "1.25-alpine" // string (required) - Docker image tag (can include digest: "tag@sha256:digest")
+          },
+          "runtime": {
+            "tag": "3.22" // string (optional) - Override tag for runtime image
+          }
+        },
+        
+        // Override build args
+        "build_args": {
+          "PACK_WITH_UPX": "false"
+        },
+        
+        // Platform-specific overrides (only used when platforms.nuon exists)
+        // Platform-specific overrides win over global overrides for the same field
+        "platforms": {
+          "debian": { // Platform name must match a platform in platforms.nuon
+            "build_args": {
+              "DEBIAN_SPECIFIC": "value"
+            },
+            "sources": {
+              "revad": {
+                "ref": "v1.0.0-debian"
+              }
+            }
+            // Can override any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+            // Fields are deep-merged with base config + platform config + global overrides
+          },
+          "alpine": { // Platform name must match a platform in platforms.nuon
+            "build_args": {
+              "ALPINE_SPECIFIC": "value"
+            },
+            "external_images": {
+              "build": {
+                "tag": "1.26-alpine" // Platform-specific tag override (overrides global tag for this platform)
+              }
+            }
+            // Can override any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+            // Fields are deep-merged with base config + platform config + global overrides
+            // NOTE: For external_images, only 'tag' field is allowed (name and build_arg come from platforms.nuon)
+          }
+        }
+      }
+    }
+  ]
+}

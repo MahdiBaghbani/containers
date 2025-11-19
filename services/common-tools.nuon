@@ -1,0 +1,12 @@
+{
+  "name": "common-tools",
+  "context": "services/common-tools",
+  "labels": {
+    "org.opencontainers.image.title": "Docky Pody Common Tools",
+    "org.opencontainers.image.description": "Multi-platform image with nushell, UPX, and common build tools for Docky Pody"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-only"
+  }
+}

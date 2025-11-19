@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Open Cloud Mesh Containers: container build scripts and images
+// Copyright (C) 2025 Open Cloud Mesh Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// Example: Revad Base Multi-Version Manifest
+// Demonstrates building multiple versions of revad-base with different Reva versions
+// Location: services/revad-base/versions.nuon
+
+{
+  "default": "v1.29.0",
+
+  "versions": [
+    {
+      "name": "v1.29.0",
+      "latest": true,
+      // "v1.29.0" and "latest" are auto-generated - only specify additional aliases
+      // Result: ["v1.29.0", "latest", "v1.29", "v1"]
+      "tags": ["v1.29", "v1"],
+      "overrides": {
+        "sources": {
+          "revad": {
+            "ref": "v1.29.0"
+          }
+        }
+      }
+    },
+    {
+      "name": "v1.28.0",
+      // "v1.28.0" is auto-generated - only specify additional aliases
+      // Result: ["v1.28.0", "v1.28"]
+      "tags": ["v1.28"],
+      "overrides": {
+        "sources": {
+          "revad": {
+            "ref": "v1.28.0"
+          }
+        }
+      }
+    },
+    {
+      "name": "edge",
+      // "edge" is auto-generated - only specify additional aliases
+      // Result: ["edge", "main", "dev"]
+      "tags": ["main", "dev"],
+      "overrides": {
+        "sources": {
+          "revad": {
+            "ref": "main"
+          }
+        },
+        "build_args": {
+          "PACK_WITH_UPX": "false"
+        }
+      }
+    }
+  ]
+}

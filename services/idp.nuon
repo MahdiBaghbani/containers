@@ -1,0 +1,37 @@
+{
+  "name": "idp",
+  "context": "services/idp",
+  "dockerfile": "services/idp/Dockerfile",
+  "external_images": {
+    "runtime": {
+      "name": "quay.io/keycloak/keycloak",
+      "build_arg": "KEYCLOAK_BASE_IMAGE"
+    }
+  },
+  "dependencies": {
+    "common-tools": {
+      "service": "common-tools",
+      "build_arg": "COMMON_TOOLS_IMAGE"
+    }
+  },
+  "labels": {
+    "org.opencloudmesh.service": "idp",
+    "org.opencontainers.image.title": "Open Cloud Mesh Keycloak IdP Image",
+    "org.opencontainers.image.description": "Keycloak Identity Provider for Open Cloud Mesh",
+    "org.opencontainers.image.url": "https://cs3org.github.io/OCM-API",
+    "org.opencontainers.image.source": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "idp",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:idp.docker"
+    ]
+  }
+}

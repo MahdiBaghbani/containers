@@ -1,0 +1,307 @@
+## Gateway configuration for multi-container CERNBox deployment
+## This config runs gateway services only (ocdav, ocs, appprovider, etc.)
+## Storage providers run in separate dataprovider containers
+
+[vars]
+internal_gateway = "{{placeholder:internal-gateway}}"
+provider_domain = "{{placeholder:provider-domain}}"
+external_reva_endpoint = "{{placeholder:external-reva-endpoint}}"
+machine_api_key = "{{placeholder:machine-api-key}}"
+ocmshares_json_file = "{{placeholder:ocmshares-json-file}}"
+mesh_directory_url = "{{placeholder:mesh-directory-url}}"
+
+[http]
+address = "{{placeholder:http-address}}"
+certfile = "/tls/server.crt"
+keyfile = "/tls/server.key"
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+skip_user_groups_in_token = true
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.gateway]
+authregistrysvc = "{{ grpc.services.authregistry.address }}"
+appregistrysvc = "{{ grpc.services.appregistry.address }}"
+storageregistrysvc = "{{ grpc.services.storageregistry.address }}"
+preferencessvc = "{{ grpc.services.preferences.address }}"
+userprovidersvc = "{{placeholder:groupuserproviders.address}}"
+usershareprovidersvc = "{{placeholder:shareproviders.address}}"
+publicshareprovidersvc = "{{placeholder:shareproviders.address}}"
+groupprovidersvc = "{{placeholder:groupuserproviders.address}}"
+ocmshareprovidersvc = "{{placeholder:shareproviders.address}}"
+ocminvitemanagersvc = "{{ grpc.services.ocminvitemanager.address }}"
+ocmproviderauthorizersvc = "{{ grpc.services.ocmproviderauthorizer.address }}"
+spacessvc = "{{ grpc.services.spacesregistry.address }}"
+datagateway = "{{placeholder:external-reva-endpoint}}/data"
+
+transfer_expires = 6
+commit_share_to_storage_grant = true
+commit_share_to_storage_ref = true
+
+### APPS ###
+
+[grpc.services.appregistry]
+driver = "static"
+
+[grpc.services.appregistry.drivers.static]
+mime_types = [
+    {"mime_type" = "text/plain", "extension" = "txt", "name" = "Text file", "description" = "Text file", "allow_creation" = true},
+    {"mime_type" = "text/markdown", "extension" = "md", "name" = "Markdown file", "description" = "Markdown file", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.text", "extension" = "odt", "name" = "OpenDocument", "description" = "OpenDocument text document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.spreadsheet", "extension" = "ods", "name" = "OpenSpreadsheet", "description" = "OpenDocument spreadsheet document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.oasis.opendocument.presentation", "extension" = "odp", "name" = "OpenPresentation", "description" = "OpenDocument presentation document", "default_app" = "Collabora", "allow_creation" = true},
+    {"mime_type" = "application/vnd.jupyter", "extension" = "ipynb", "name" = "Jupyter Notebook", "description" = "Jupyter Notebook"}
+]
+
+### AUTH ###
+
+[grpc.services.authregistry]
+driver = "static"
+
+[grpc.services.authregistry.drivers.static.rules]
+basic = "{{placeholder:authprovider.oidc.address}}"
+bearer = "{{placeholder:authprovider.oidc.address}}"
+machine = "{{placeholder:authprovider.machine.address}}"
+ocmshares = "{{placeholder:authprovider.ocmshares.address}}"
+publicshares = "{{placeholder:authprovider.publicshares.address}}"
+
+### STORAGE REGISTRY ###
+# Points to dataprovider containers via GRPC
+
+[grpc.services.storageregistry]
+driver = "static"
+
+[grpc.services.storageregistry.drivers.static]
+home_provider = "/"
+
+[grpc.services.storageregistry.drivers.static.rules]
+"/" = {"address" = "{{placeholder:storageprovider.localhome}}"}
+"localhome" = {"address" = "{{placeholder:storageprovider.localhome}}"}
+"/ocm" = {"address" = "{{placeholder:storageprovider.ocm}}"}
+"ocm" = {"address" = "{{placeholder:storageprovider.ocm}}"}
+"/sciencemesh" = { address = "{{placeholder:storageprovider.sciencemesh}}" }
+"sciencemesh" = { address = "{{placeholder:storageprovider.sciencemesh}}" }
+
+### OTHER PROVIDERS ###
+
+[grpc.services.spacesregistry]
+driver = "memory"
+user_space = "/home"
+machine_secret = "{{ vars.machine_api_key }}"
+
+[grpc.services.preferences]
+driver = "memory"
+
+[grpc.services.ocminvitemanager]
+driver = "json"
+provider_domain = "{{ vars.provider_domain }}"
+
+[grpc.services.ocmproviderauthorizer]
+driver = "open"
+
+[grpc.services.ocmproviderauthorizer.drivers.json]
+providers = "{{placeholder:config-dir}}/providers.testnet.json"
+verify_request_hostname = true
+
+[grpc.services.datatx]
+txdriver = "rclone"
+storagedriver = "json"
+remove_transfer_on_cancel = true
+
+[grpc.services.datatx.txdrivers.rclone]
+endpoint = "{{placeholder:rclone-endpoint}}"
+auth_user = "rcloneuser"
+auth_pass = "eilohtho9oTahsuongeeTh7reedahPo1Ohwi3aek"
+auth_header = "x-access-token"
+job_status_check_interval = 2000
+job_timeout = 120000
+storagedriver = "json"
+remove_transfer_job_on_cancel = true
+
+[grpc.services.datatx.storagedrivers.json]
+file = ""
+
+[grpc.services.datatx.txdrivers.rclone.storagedrivers.json]
+file = ""
+
+### HTTP ENDPOINTS ###
+
+[http.middlewares.auth]
+credential_chain = ["publicshares", "basic", "bearer"]
+token_strategy_chain = ["bearer", "header"]
+
+[http.middlewares.auth.credentials_by_user_agent]
+"mirall" = "basic"
+
+[http.services.appprovider]
+transfer_shared_secret = "{{placeholder:jwt-secret:reva-secret}}"
+timeout = 86400
+insecure = true
+
+[http.services.datagateway]
+transfer_shared_secret = "{{placeholder:jwt-secret:reva-secret}}"
+timeout = 86400
+insecure = true
+prefix = "data"
+
+[http.services.sciencemesh]
+provider_domain = "{{ vars.provider_domain }}"
+mesh_directory_url = "{{ vars.mesh_directory_url }}"
+ocm_mount_point = "/sciencemesh"
+
+[http.services.sciencemesh.smtp_credentials]
+disable_auth = true
+sender_mail = "sciencemesh@{{ vars.provider_domain }}"
+smtp_server = "smtp.{{ vars.provider_domain }}"
+smtp_port = 25
+
+[http.services.wellknown]
+
+[http.services.wellknown.ocmprovider]
+ocm_prefix = "ocm"
+provider = "Reva for CERNBox"
+endpoint = "{{ vars.external_reva_endpoint }}"
+enable_webapp = true
+enable_datatx = true
+
+[http.services.ocm]
+prefix = "ocm"
+
+[http.services.ocm.config]
+host = "{{ vars.provider_domain }}"
+
+# OCS
+[http.services.ocs]
+prefix = "ocs"
+share_prefix = "/"
+home_namespace = "/"
+additional_info_attribute = "{{.Username}} ({{.Mail}})"
+cache_warmup_driver = "first-request"
+resource_info_cache_ttl = 60
+resource_info_cache_type = "memory"
+
+[http.services.ocs.config]
+version = "1.8"
+website = "reva"
+host = "{{ vars.external_reva_endpoint }}"
+contact = "cernbox@cernbox.org"
+ssl = "false"
+
+[http.services.ocs.capabilities.capabilities.core]
+poll_interval = 60
+webdav_root = "remote.php/webdav"
+status = { installed = true, maintenance = false, nwwsaDbUpgrade = false, version = "10.0.11.5", versionstring = "10.0.11", edition = "community", productname = "reva", hostname = "" }
+support_url_signing = false
+
+[http.services.ocs.capabilities.capabilities.checksums]
+supported_types = ["sha1", "md5", "adler32"]
+
+[http.services.ocs.capabilities.capabilities.files]
+private_links = false
+bigfilechunking = false
+blacklisted_files = []
+undelete = true
+versioning = true
+archivers = [
+  { enabled = true, version = "2.0.0", formats = [
+    "tar",
+    "zip",
+  ], archiver_url = "/archiver", max_num_files = "10000", max_size = "1073741824" },
+]
+favorites = true
+
+[http.services.ocs.capabilities.capabilities.dav]
+
+[http.services.ocs.capabilities.capabilities.files_sharing]
+api_enabled = true
+resharing = true
+deny_access = true
+resharing_default = false
+group_sharing = true
+auto_accept_share = true
+share_with_group_members_only = true
+share_with_membership_groups_only = true
+default_permissions = 22
+search_min_length = 3
+
+[http.services.ocs.capabilities.capabilities.files_sharing.public]
+enabled = true
+send_mail = true
+social_share = true
+upload = true
+multiple = true
+supports_upload_only = true
+password = { enforced = false, enforced_for = { read_only = false, read_write = false, upload_only = false } }
+expire_date = { enabled = true }
+can_edit = true
+can_contribute = false
+
+[http.services.ocs.capabilities.capabilities.files_sharing.user]
+send_mail = true
+profile_picture = false
+settings = [{ enabled = true, version = "1.0.0" }]
+
+[http.services.ocs.capabilities.capabilities.files_sharing.user_enumeration]
+enabled = true
+group_members_only = true
+
+[http.services.ocs.capabilities.capabilities.files_sharing.federation]
+outgoing = true
+incoming = true
+
+[http.services.ocs.capabilities.capabilities.spaces]
+enabled = true
+projects = true
+
+[http.services.ocs.capabilities.version]
+edition = "reva"
+major = 10
+minor = 0
+micro = 11
+string = "10.0.11"
+
+[http.services.ocdav]
+spaces_enabled = true
+timeout = 86400
+insecure = true
+
+[http.services.ocgraph]
+base_url = "{{ vars.external_reva_endpoint }}"
+gatewaysvc = "{{placeholder:gateway-svc}}"
+
+[http.services.ocapi]
+
+[http.services.prometheus]
+
+[http.services.archiver]
+prefix = "archiver"
+timeout = 86400
+insecure = true
+max_num_files = 10000
+max_size = 10737418240
+
+[http.services.preferences]
+prefix = "preferences"
+
+[http.services.metrics]
+
+[http.middlewares.cors]
+allowed_origins = ["*"]
+allowed_methods = ["OPTIONS", "LOCK", "GET", "HEAD", "POST", "DELETE", "PROPPATCH", "COPY", "MOVE", "UNLOCK", "PROPFIND", "MKCOL", "REPORT", "SEARCH", "PUT"]
+allowed_headers = ["Accept", "Accept-Language", "Authorization", "Content-Language", "Content-Type", "Depth", "OCS-APIREQUEST", "Referer", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "User-Agent", "X-Requested-With"]
+debug = true
+exposed_headers = []
+
+[http.middlewares.log]
+level = "{{placeholder:log-level:debug}}"
+
+[http.interceptors.log]
+level = "{{placeholder:log-level:debug}}"

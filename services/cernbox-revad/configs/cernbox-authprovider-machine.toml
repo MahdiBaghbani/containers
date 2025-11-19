@@ -1,0 +1,20 @@
+## Machine auth provider configuration for multi-container CERNBox deployment
+## This config runs Machine auth provider only
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.authprovider]
+auth_manager = "machine"
+
+[grpc.services.authprovider.auth_managers.machine]
+api_key = "{{placeholder:machine-api-key}}"
+gateway_addr = "{{placeholder:gateway-svc}}"

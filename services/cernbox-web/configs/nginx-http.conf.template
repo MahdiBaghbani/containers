@@ -1,0 +1,235 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Open Cloud Mesh Containers: container build scripts and images
+# Copyright (C) 2025 Open Cloud Mesh Contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+upstream revad {
+    server $REVAD_HOST:$REVAD_PORT;
+}
+
+server {
+    listen 80;
+    server_name $CERNBOX;
+    
+    proxy_connect_timeout 1200;
+    proxy_send_timeout 1200;
+    proxy_read_timeout 1200;
+    send_timeout 1200;
+    proxy_buffering off;
+    proxy_request_buffering off;
+
+    location ^~ /ocm {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /graph {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /webdav/ {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /remote.php/ {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /preferences {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /otg {
+        return 204;
+    }
+
+    location ~ ^/sciencemesh {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /archiver {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /app/ {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /.well-known {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /ocm-provider {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /api/v0/settings/values-list {
+        default_type application/json;
+        return 200 '{}';
+    }
+
+    location ^~ /api/v0/settings/roles-list {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
+    }
+
+    location ^~ /api/v0/settings/assignments-list {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
+    }
+
+    location ^~ /api/v0/projects {
+        proxy_pass $REVAD_PROTOCOL://revad/projects;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /api {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /data {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ~ /s/[^/]*/download {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /ocs/ {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /dav/ {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /status.php {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ^~ /metrics {
+        proxy_pass $REVAD_PROTOCOL://revad;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Proxy "";
+    }
+
+    location ~ ^/(js|css|icons|fonts|assets)/ {
+        root /var/www/web;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        etag off;
+        gzip_static on;
+    }
+
+    location ^~ /cernbox {
+        root /var/www;
+        add_header Cache-Control "no-cache";
+        add_header Access-Control-Allow-Origin "$IDP_URL" always;
+        etag off;
+        gzip_static on;
+    }
+
+    location / {
+        root /var/www/web;
+        add_header Cache-Control "no-cache";
+        add_header Access-Control-Allow-Origin "$IDP_URL" always;
+        etag off;
+        gzip_static on;
+        try_files $uri /index.html;
+    }
+}

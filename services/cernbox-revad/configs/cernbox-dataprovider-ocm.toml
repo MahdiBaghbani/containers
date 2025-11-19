@@ -1,0 +1,42 @@
+## OCM dataprovider configuration for multi-container CERNBox deployment
+## This config runs OCM outgoing storage provider only
+
+[vars]
+machine_api_key = "{{placeholder:machine-api-key}}"
+
+[http]
+certfile = "/tls/server.crt"
+keyfile = "/tls/server.key"
+address = "{{placeholder:http-address}}"
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+### STORAGE PROVIDER ###
+
+[[grpc.services.storageprovider]]
+driver = "ocmoutcoming"
+mount_id = "ocm"
+mount_path = "/ocm"
+expose_data_server = true
+enable_home_creation = false
+data_server_url = "{{placeholder:data-server-url-internal.ocm}}"
+
+[grpc.services.storageprovider.drivers.ocmoutcoming]
+machine_secret = "{{ vars.machine_api_key }}"
+
+### HTTP DATAPROVIDER ###
+
+[[http.services.dataprovider]]
+driver = "ocmoutcoming"
+
+[http.services.dataprovider.drivers.ocmoutcoming]
+machine_secret = "{{ vars.machine_api_key }}"

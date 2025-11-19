@@ -1,0 +1,124 @@
+# syntax=docker/dockerfile:1.7
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Open Cloud Mesh Containers: container build scripts and images
+# Copyright (C) 2025 Open Cloud Mesh Contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ARG BASE_RUNTIME_IMAGE="redhat/ubi9-minimal:latest"
+ARG NUSHELL_REF="0.108.0"
+ARG NUSHELL_URL="https://github.com/nushell/nushell"
+ARG UPX_REF="v5.0.2"
+ARG UPX_URL="https://github.com/upx/upx"
+ARG TLS_ENABLED="false"
+ARG TLS_CA_NAME=""
+
+FROM ${BASE_RUNTIME_IMAGE} AS upx-build
+
+ARG UPX_REF
+ARG UPX_URL
+ARG CACHEBUST="default"
+
+RUN --mount=type=cache,id=common-tools-rhel-dnf-cache,target=/var/cache/dnf,sharing=locked \
+    microdnf install \
+    --assumeyes \
+    gcc \
+    gcc-c++ \
+    cmake \
+    make \
+    git \
+    ca-certificates \
+    zlib-devel;
+
+WORKDIR /src/upx
+# Cache git clone: shared cache across all platforms, since it's the same UPX_REF
+# Cache ID includes UPX_REF, so cache invalidates when version changes.
+RUN --mount=type=cache,id=upx-git-${CACHEBUST:-${UPX_REF}},target=/src/upx-git-cache,sharing=shared \
+    mkdir -p /src/upx-git-cache && \
+    if [ ! -d /src/upx-git-cache/.git ]; then \
+    git clone --branch "${UPX_REF}" --depth 1 --recurse-submodules ${UPX_URL} /src/upx-git-cache; \
+    fi && \
+    cp -a /src/upx-git-cache/. . && \
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build -j"$(nproc)" || (echo "UPX build failed" && exit 1)
+
+# Tools stage
+FROM ${BASE_RUNTIME_IMAGE} AS tools
+
+ARG NUSHELL_REF
+ARG NUSHELL_URL
+ARG TLS_ENABLED
+ARG TLS_CA_NAME
+ARG CACHEBUST="default"
+
+# Note: curl-minimal is pre-installed in UBI9, use it instead of curl to avoid conflicts
+RUN --mount=type=cache,id=common-tools-rhel-dnf-cache,target=/var/cache/dnf,sharing=locked \
+    microdnf install \
+    --assumeyes \
+    ca-certificates \
+    git \
+    make \
+    bash \
+    binutils \
+    curl-minimal \
+    tar;
+
+# Copy UPX and verify
+COPY --from=upx-build /src/upx/build/upx /usr/local/bin/upx
+RUN upx --version || (echo "UPX verification failed" && exit 1)
+
+# Download and minify nushell
+# Use musl build (statically linked) for all platforms, works everywhere, enables shared cache
+# Cache ID includes NUSHELL_REF so cache invalidates when version changes
+RUN --mount=type=cache,id=nushell-${CACHEBUST:-${NUSHELL_REF}},target=/tmp/cache,sharing=shared \
+    curl -fsSL --retry 3 --retry-delay 2 -o /tmp/cache/nu.tar.gz \
+    ${NUSHELL_URL}/releases/download/${NUSHELL_REF}/nu-${NUSHELL_REF}-x86_64-unknown-linux-musl.tar.gz \
+    || (echo "Nushell download failed" && exit 1) \
+    && tar -xzf /tmp/cache/nu.tar.gz -C /tmp --strip-components=1 \
+    || (echo "Nushell extraction failed" && exit 1) \
+    && strip -s /tmp/nu \
+    && upx -qq --best --lzma /tmp/nu \
+    || (echo "UPX compression failed" && exit 1) \
+    && upx -t /tmp/nu \
+    || (echo "UPX verification failed" && exit 1) \
+    && mv /tmp/nu /usr/local/bin/nu \
+    && chmod +x /usr/local/bin/nu
+
+# Verify all tools
+RUN nu --version || (echo "Nushell verification failed" && exit 1) \
+    && upx --version || (echo "UPX verification failed" && exit 1) \
+    && curl --version || (echo "curl verification failed" && exit 1) \
+    && git --version || (echo "git verification failed" && exit 1) \
+    && make --version || (echo "make verification failed" && exit 1) \
+    && bash --version || (echo "bash verification failed" && exit 1)
+
+ARG TLS_ENABLED="false"
+ARG TLS_CA_NAME=""
+
+COPY ./tls/certificate-authority/ /tmp/tls-ca-source/
+RUN if [ "$TLS_ENABLED" = "true" ]; then \
+    if [ -z "$TLS_CA_NAME" ]; then \
+        echo "Error: TLS_CA_NAME must be provided when TLS_ENABLED=true" && exit 1; \
+    fi && \
+    mkdir -p /etc/pki/ca-trust/source/anchors && \
+    cp /tmp/tls-ca-source/${TLS_CA_NAME}.crt /etc/pki/ca-trust/source/anchors/ 2>/dev/null || \
+    (echo "Error: CA file ${TLS_CA_NAME}.crt not found" && exit 1) && \
+    update-ca-trust extract && \
+    rm -rf /tmp/tls-ca-source; \
+    else \
+    rm -rf /tmp/tls-ca-source; \
+    fi
+
+FROM tools

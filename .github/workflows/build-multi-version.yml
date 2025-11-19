@@ -1,0 +1,103 @@
+name: Build Multi-Version Images
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  # Generate build matrices for all services with version manifests
+  generate-matrices:
+    runs-on: ubuntu-latest
+    outputs:
+      revad-base: ${{ steps.revad-base.outputs.matrix }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Nushell
+        run: |
+          curl -sSL https://install.nu | sh -s -- --yes
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Generate revad-base matrix
+        id: revad-base
+        run: |
+          matrix=$(nu scripts/build.nu --service revad-base --matrix-json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "Generated matrix for revad-base:"
+          echo "$matrix" | jq '.'
+
+  # Build all revad-base versions in parallel
+  build-revad-base:
+    needs: generate-matrices
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrices.outputs.revad-base) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install Nushell
+        run: |
+          curl -sSL https://install.nu | sh -s -- --yes
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Build revad-base:${{ matrix.version }}
+        run: |
+          nu scripts/build.nu \
+            --service revad-base \
+            --version ${{ matrix.version }} \
+            --push \
+            --progress plain
+      
+      - name: Tag as latest (if applicable)
+        if: matrix.latest == true
+        run: |
+          echo "✓ This version (${{ matrix.version }}) is tagged as 'latest'"
+
+  # Example: Build dependent service after base image is ready
+  build-cernbox-revad:
+    needs: build-revad-base
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Install Nushell
+        run: |
+          curl -sSL https://install.nu | sh -s -- --yes
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      
+      - name: Build cernbox-revad
+        run: |
+          nu scripts/build.nu \
+            --service cernbox-revad \
+            --push \
+            --progress plain
+

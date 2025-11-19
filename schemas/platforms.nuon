@@ -1,0 +1,121 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Open Cloud Mesh Containers: container build scripts and images
+// Copyright (C) 2025 Open Cloud Mesh Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// Platforms Manifest Schema
+// Location: services/{service-name}/platforms.nuon
+// Docs: docs/guides/multi-platform-builds.md, docs/reference/platform-manifest-schema.md
+
+{
+  // Default platform (gets unprefixed "latest" tag)
+  // VALIDATION: Must match a platform 'name' in the platforms array
+  // ERROR: "Default platform 'debian' not found in platforms list"
+  "default": "debian", // string (required, must exist in platforms list)
+  
+  // List of all supported platforms for this service
+  "platforms": [ // list<record> (required, must have at least one entry)
+    {
+      // Platform name/identifier - used as suffix for tags: {version}-{platform}, latest-{platform}
+      // VALIDATION: Must match ^[a-z0-9]+(?:-[a-z0-9]+)*$ (lowercase alphanumeric with optional dashes)
+      // ERROR examples: "Debian" -> "must be lowercase...", "alpine_3.19" -> "contains invalid character '_'",
+      //                 "ubuntu--lts" -> "contains double dash", "debian-" -> "ends with dash"
+      "name": "debian", // string (required, unique)
+      
+      // Dockerfile path - REPLACES base config dockerfile (not merged)
+      "dockerfile": "services/revad-base/Dockerfile.debian", // string (required)
+      
+      // Platform-specific build arguments - deep-merged with base config build_args
+      "build_args": {
+        "BASE_IMAGE": "debian:trixie-slim",
+        "BUILD_VARIANT": "debian"
+      },
+      
+      // Platform-specific external images - infrastructure only (name and build_arg)
+      // Individual image configs are deep-merged (platform values override base for same keys)
+      // IMPORTANT: Each entry MUST include both 'name' and 'build_arg' fields
+      // FORBIDDEN: 'tag' field (version control - must be in versions.nuon overrides)
+      // FORBIDDEN: 'image' field (legacy - use 'name' instead)
+      "external_images": {
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      
+      // Platform-specific dependencies - infrastructure only (service and build_arg)
+      // Individual dependency configs are deep-merged (platform values override base for same keys)
+      // FORBIDDEN: 'version' field (version control - must be in versions.nuon overrides)
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      },
+      
+      // Platform-specific labels - deep-merged with base config labels
+      "labels": {
+        "org.opencloudmesh.platform": "debian",
+        "org.opencontainers.image.base.name": "debian:trixie-slim"
+      }
+    },
+    {
+      "name": "alpine",
+      "dockerfile": "services/revad-base/Dockerfile.alpine",
+      "build_args": {
+        "BASE_IMAGE": "alpine:3.21",
+        "BUILD_VARIANT": "alpine"
+      },
+      "external_images": {
+        "runtime": {
+          "name": "alpine",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "labels": {
+        "org.opencloudmesh.platform": "alpine",
+        "org.opencontainers.image.base.name": "alpine:3.21"
+      }
+    }
+  ]
+}
+
+// MERGE PRECEDENCE (applied in order):
+// 1. Base config (service.nuon)
+// 2. Platform config (platforms.nuon - this file)
+// 3. Global version overrides (versions.nuon - version_spec.overrides excluding 'platforms' key)
+// 4. Platform-specific version overrides (versions.nuon - version_spec.overrides.platforms.{platform_name})
+//
+// MERGE RULES:
+// - dockerfile: REPLACED at each level (not merged)
+// - All other fields: DEEP-MERGED (platform-specific wins over global for same field)
+//   - external_images: Deep-merged at container level (external_images.runtime merges with base)
+//     and field level (name and build_arg fields merge individually)
+//
+// TAG GENERATION:
+// - Default platform: {name}-{platform} + {name} (unprefixed) + latest-{platform} + latest (unprefixed) + {custom-tag}-{platform} + {custom-tag} (unprefixed for each)
+// - Other platforms: {name}-{platform} + latest-{platform} + {custom-tag}-{platform} (no unprefixed tags)
+// - Unprefixed tags always point to the default platform
+//
+// VALIDATION RULES:
+// - Default platform must exist in platforms list
+// - Platform names must be unique
+// - Platform names must match pattern ^[a-z0-9]+(?:-[a-z0-9]+)*$
+// - No double dashes (--), no trailing dashes, no empty platform names
+// - FORBIDDEN in platforms.nuon:
+//   * dependencies.{name}.version (version control - define in versions.nuon overrides)
+//   * sources section (version control - define in versions.nuon overrides only)
+//   * external_images.{stage}.tag (version control - define in versions.nuon overrides)
+//   * external_images.{stage}.image (legacy - use 'name' field instead)

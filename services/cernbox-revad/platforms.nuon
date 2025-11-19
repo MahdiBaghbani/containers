@@ -1,0 +1,31 @@
+{
+  "default": "production",
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "services/cernbox-revad/Dockerfile.production",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        }
+      },
+      "dependencies": {
+        "revad-base": {
+          "service": "revad-base",
+          "build_arg": "REVAD_BASE_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "development",
+      "dockerfile": "services/cernbox-revad/Dockerfile.development",
+      "dependencies": {
+        "revad-base": {
+          "service": "revad-base",
+          "build_arg": "REVAD_BASE_IMAGE"
+        }
+      }
+    }
+  ]
+}

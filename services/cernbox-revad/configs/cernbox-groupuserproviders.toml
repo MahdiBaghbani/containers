@@ -1,0 +1,29 @@
+# User/Group providers configuration for multi-container CERNBox deployment
+# This config runs user and group providers (userprovider, groupprovider)
+# Share providers run in separate shareproviders container
+
+[log]
+output = "{{placeholder:log-output}}"
+level = "{{placeholder:log-level:debug}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+skip_user_groups_in_token = true
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.userprovider]
+driver = "json"
+
+[grpc.services.userprovider.drivers.json]
+users = "{{placeholder:config-dir}}/users.demo.json"
+
+[grpc.services.groupprovider]
+driver = "json"
+
+[grpc.services.groupprovider.drivers.json]
+groups = "{{placeholder:config-dir}}/groups.demo.json"
+
+[tracing]

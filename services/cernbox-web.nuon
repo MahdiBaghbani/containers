@@ -1,0 +1,51 @@
+{
+  "name": "cernbox-web",
+  "context": "services/cernbox-web",
+  "dockerfile": "services/cernbox-web/Dockerfile",
+  "external_images": {
+    "build": {
+      "name": "node",
+      "build_arg": "BASE_BUILD_IMAGE"
+    },
+    "runtime": {
+      "name": "nginx",
+      "build_arg": "BASE_RUNTIME_IMAGE"
+    }
+  },
+  "dependencies": {
+    "common-tools-builder": {
+      "service": "common-tools",
+      "build_arg": "COMMON_TOOLS_BUILDER_IMAGE"
+    },
+    "common-tools-runtime": {
+      "service": "common-tools",
+      "build_arg": "COMMON_TOOLS_RUNTIME_IMAGE"
+    }
+  },
+  "build_args": {
+    "PNPM_RETRY_COUNT": "10"
+  },
+  "labels": {
+    "org.opencloudmesh.service": "cernbox-web",
+    "org.opencontainers.image.title": "Open Cloud Mesh CERNBox Web Image",
+    "org.opencontainers.image.description": "Web frontend for CERNBox with nginx",
+    "org.opencontainers.image.url": "https://cs3org.github.io/OCM-API",
+    "org.opencontainers.image.source": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "cernbox",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:cernbox1.docker",
+      "DNS:cernbox2.docker",
+      "DNS:cernbox3.docker",
+      "DNS:cernbox4.docker"
+    ]
+  }
+}

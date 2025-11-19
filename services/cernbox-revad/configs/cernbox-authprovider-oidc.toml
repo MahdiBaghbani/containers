@@ -1,0 +1,25 @@
+## OIDC auth provider configuration for multi-container CERNBox deployment
+## This config runs OIDC auth provider only
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.authprovider]
+auth_manager = "oidc"
+
+[grpc.services.authprovider.auth_managers.json]
+users = "{{placeholder:config-dir}}/users.demo.json"
+
+[grpc.services.authprovider.auth_managers.oidc]
+issuer = "{{placeholder:idp-url}}/realms/cernbox"
+uid_claim = "cern_uid"
+gid_claim = "cern_gid"
+gatewaysvc = "{{placeholder:gateway-svc}}"

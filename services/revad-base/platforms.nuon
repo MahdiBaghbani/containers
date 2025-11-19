@@ -1,0 +1,45 @@
+{
+  "default": "production",
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "services/revad-base/Dockerfile.production",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "gcr.io/distroless/static-debian12",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "development",
+      "dockerfile": "services/revad-base/Dockerfile.development",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    }
+  ]
+}

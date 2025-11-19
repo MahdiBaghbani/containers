@@ -1,0 +1,39 @@
+{
+  "name": "revad-base",
+  "context": "services/revad-base",
+  "labels": {
+    "org.opencloudmesh.service": "revad-base",
+    "org.opencontainers.image.title": "Open Cloud Mesh Revad Base Image",
+    "org.opencontainers.image.description": "Base image for Open Cloud Mesh Revad services",
+    "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.source": "https://github.com/cs3org/reva",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "reva",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:revad1.docker",
+      "DNS:revad2.docker",
+      "DNS:revad3.docker",
+      "DNS:revad4.docker",
+      "DNS:revacernbox1.docker",
+      "DNS:revacernbox2.docker",
+      "DNS:revacernbox3.docker",
+      "DNS:revacernbox4.docker",
+      "DNS:revanextcloud1.docker",
+      "DNS:revanextcloud2.docker",
+      "DNS:revanextcloud3.docker",
+      "DNS:revanextcloud4.docker",
+      "DNS:revaowncloud1.docker",
+      "DNS:revaowncloud2.docker",
+      "DNS:revaowncloud3.docker",
+      "DNS:revaowncloud4.docker"
+    ]
+  }
+}

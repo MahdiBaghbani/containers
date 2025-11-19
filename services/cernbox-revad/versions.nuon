@@ -1,0 +1,60 @@
+{
+  "default": "v3.3.2",
+
+  "versions": [
+    {
+      "name": "master",
+      "latest": false,
+      "overrides": {
+        "platforms": {
+          "production": {
+            "external_images": {
+              "build": {
+                "tag": "1.25-trixie"
+              }
+            },
+            "dependencies": {
+              "revad-base": {
+                "version": "master-production"
+              }
+            }
+          },
+          "development": {
+            "dependencies": {
+              "revad-base": {
+                "version": "master-development"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "v3.3.2",
+      "latest": true,
+      "overrides": {
+        "platforms": {
+          "production": {
+            "external_images": {
+              "build": {
+                "tag": "1.25-trixie"
+              }
+            },
+            "dependencies": {
+              "revad-base": {
+                "version": "v3.3.2-production"
+              }
+            }
+          },
+          "development": {
+            "dependencies": {
+              "revad-base": {
+                "version": "v3.3.2-development"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

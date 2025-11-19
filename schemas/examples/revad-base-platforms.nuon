@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Open Cloud Mesh Containers: container build scripts and images
+// Copyright (C) 2025 Open Cloud Mesh Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// Example: Revad Base Multi-Platform Configuration
+// Demonstrates a service built for multiple platforms (Debian, Alpine, RedHat)
+// with platform-specific runtime images and build configurations
+// Location: services/revad-base/platforms.nuon
+
+{
+  // Default platform (gets unprefixed "latest" tag)
+  "default": "debian",
+  
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/revad-base/Dockerfile.debian",
+      
+      "build_args": {
+        "BUILD_VARIANT": "debian"
+      },
+      
+      // IMPORTANT: Each external_images entry MUST include both 'image' and 'build_arg'
+      "external_images": {
+        "runtime": {
+          "image": "debian:trixie-slim",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      
+      "labels": {
+        "org.opencloudmesh.platform": "debian",
+        "org.opencontainers.image.base.name": "debian:trixie-slim"
+      }
+    },
+    {
+      "name": "alpine",
+      "dockerfile": "services/revad-base/Dockerfile.alpine",
+      
+      "build_args": {
+        "BUILD_VARIANT": "alpine"
+      },
+      
+      "external_images": {
+        "runtime": {
+          "image": "alpine:3.21",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      
+      "labels": {
+        "org.opencloudmesh.platform": "alpine",
+        "org.opencontainers.image.base.name": "alpine:3.21"
+      }
+    },
+    {
+      "name": "redhat",
+      "dockerfile": "services/revad-base/Dockerfile.redhat",
+      
+      "build_args": {
+        "BUILD_VARIANT": "redhat"
+      },
+      
+      "external_images": {
+        "runtime": {
+          "image": "registry.access.redhat.com/ubi9/ubi-micro:9.5",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      
+      "labels": {
+        "org.opencloudmesh.platform": "redhat",
+        "org.opencontainers.image.base.name": "registry.access.redhat.com/ubi9/ubi-micro:9.5"
+      }
+    }
+  ]
+}
+
+// MERGE BEHAVIOR EXAMPLE:
+// Base config (services/revad-base.nuon):
+//   external_images: { build: { image: "golang:1.25-bookworm", build_arg: "BASE_BUILD_IMAGE" },
+//                      runtime: { image: "debian:bookworm-slim", build_arg: "BASE_RUNTIME_IMAGE" } }
+//
+// Platform config (debian from above):
+//   external_images: { runtime: { image: "debian:trixie-slim", build_arg: "BASE_RUNTIME_IMAGE" } }
+//
+// Merged result for debian platform:
+//   external_images: { build: { image: "golang:1.25-bookworm", build_arg: "BASE_BUILD_IMAGE" },      // From base
+//                      runtime: { image: "debian:trixie-slim", build_arg: "BASE_RUNTIME_IMAGE" } }    // From platform (overrides base)
+//
+// TAG GENERATION (with version v1.0.0, latest: true, tags: ["v1.0", "v1"]):
+// - debian (default): ["latest", "latest-debian", "v1.0.0", "v1.0.0-debian", "v1.0-debian", "v1-debian"]
+// - alpine: ["latest-alpine", "v1.0.0-alpine", "v1.0-alpine", "v1-alpine"]
+// - redhat: ["latest-redhat", "v1.0.0-redhat", "v1.0-redhat", "v1-redhat"]

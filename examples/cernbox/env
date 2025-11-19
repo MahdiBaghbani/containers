@@ -1,0 +1,118 @@
+# Image versions (platform suffixes may be required - edit manually)
+IMAGE_CERNBOX_REVAD=mahdi_fix_localhome-development
+IMAGE_CERNBOX_WEB=testing
+IMAGE_IDP=v26.4.2
+
+# CERNBox Settings
+# External domains (Traefik routing + browser access)
+CERNBOX_DOMAIN=1.cernbox.cloud.test.azadehafzar.io
+IDP_DOMAIN=1.idp.cloud.test.azadehafzar.io
+
+# Internal service names (Docker networking)
+REVAD_DOMAIN=cernbox-1-test-revad
+IDP_HOST=cernbox-1-test-idp
+
+# Container mode (REQUIRED) - determines which services run in container
+# Valid modes: gateway, dataprovider-localhome, dataprovider-ocm, dataprovider-sciencemesh, authprovider-oidc, authprovider-machine, authprovider-ocmshares, authprovider-publicshares, shareproviders, groupuserproviders
+REVAD_CONTAINER_MODE=gateway
+
+# TLS configuration (HTTP internally, Traefik terminates SSL)
+REVAD_TLS_ENABLED=false
+REVAD_PORT=80
+REVAD_PROTOCOL=http
+WEB_TLS_ENABLED=false
+WEB_PROTOCOL=https
+
+# Gateway container configuration
+# Ports match CERN production pattern for easier debugging
+REVAD_GATEWAY_HOST=cernbox-1-test-revad-gateway
+REVAD_GATEWAY_PORT=80
+REVAD_GATEWAY_PROTOCOL=http
+REVAD_GATEWAY_GRPC_PORT=9142
+
+# Dataprovider LOCALHOME configuration
+# Using ports close to gateway (9142) following CERN production pattern
+REVAD_DATAPROVIDER_LOCALHOME_HOST=cernbox-1-test-revad-dataprovider-localhome
+REVAD_DATAPROVIDER_LOCALHOME_PORT=80
+REVAD_DATAPROVIDER_LOCALHOME_PROTOCOL=http
+REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT=9143
+
+# Dataprovider OCM configuration
+# Using ports close to gateway (9142) following CERN production pattern
+# Note: Port 9144 is used by shareproviders, so using 9146 for OCM dataprovider
+REVAD_DATAPROVIDER_OCM_HOST=cernbox-1-test-revad-dataprovider-ocm
+REVAD_DATAPROVIDER_OCM_PORT=80
+REVAD_DATAPROVIDER_OCM_PROTOCOL=http
+REVAD_DATAPROVIDER_OCM_GRPC_PORT=9146
+
+# Dataprovider SCIENCEMESH configuration
+# Using ports close to gateway (9142) following CERN production pattern
+# Note: Port 9145 is used by groupuserproviders, so using 9147 for ScienceMesh dataprovider
+REVAD_DATAPROVIDER_SCIENCEMESH_HOST=cernbox-1-test-revad-dataprovider-sciencemesh
+REVAD_DATAPROVIDER_SCIENCEMESH_PORT=80
+REVAD_DATAPROVIDER_SCIENCEMESH_PROTOCOL=http
+REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT=9147
+
+# Auth Provider OIDC configuration
+# Port matches CERN production (9158)
+REVAD_AUTHPROVIDER_OIDC_HOST=cernbox-1-test-revad-authprovider-oidc
+REVAD_AUTHPROVIDER_OIDC_GRPC_PORT=9158
+
+# Auth Provider Machine configuration
+# Port matches CERN production (9166)
+REVAD_AUTHPROVIDER_MACHINE_HOST=cernbox-1-test-revad-authprovider-machine
+REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT=9166
+
+# Auth Provider OCM Shares configuration
+# Port matches CERN production (9278)
+REVAD_AUTHPROVIDER_OCMSHARES_HOST=cernbox-1-test-revad-authprovider-ocmshares
+REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT=9278
+
+# Auth Provider Public Shares configuration
+# Port matches CERN production pattern (9160)
+REVAD_AUTHPROVIDER_PUBLICSHARES_HOST=cernbox-1-test-revad-authprovider-publicshares
+REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT=9160
+
+# Share Providers configuration
+# Port matches CERN production (9144)
+REVAD_SHAREPROVIDERS_HOST=cernbox-1-test-revad-shareproviders
+REVAD_SHAREPROVIDERS_GRPC_PORT=9144
+
+# User/Group Providers configuration
+# Port matches CERN production (9145)
+REVAD_GROUPUSERPROVIDERS_HOST=cernbox-1-test-revad-groupuserproviders
+REVAD_GROUPUSERPROVIDERS_GRPC_PORT=9145
+
+# Data provider path prefixes - NO LONGER USED
+# All dataproviders now use default "/data" prefix (production pattern)
+# Gateway's datagateway service routes /data requests to appropriate dataprovider
+# REVAD_DATA_PREFIX_LOCALHOME=data-localhome
+# REVAD_DATA_PREFIX_OCM=data-ocm
+# REVAD_DATA_PREFIX_SCIENCEMESH=data-sciencemesh
+
+# IdP configuration
+IDP_PORT=8080
+IDP_PROTOCOL=https
+IDP_URL=https://1.idp.cloud.test.azadehafzar.io
+
+# Shared configuration (used by all containers)
+REVAD_LOG_LEVEL=debug
+REVAD_LOG_OUTPUT=/var/log/revad.log
+REVAD_JWT_SECRET=reva-secret
+
+# Optional: OCM shares JSON file path (default: /var/tmp/reva/shares.json)
+# REVAD_OCMSHARES_JSON_FILE=/var/tmp/reva/shares.json
+
+# Optional: Mesh Directory configuration (for ScienceMesh)
+# MESHDIR_DOMAIN=meshdir.docker
+# MESHDIR_URL=https://meshdir.docker/meshdir
+
+# Optional: Rclone endpoint (for DataTX transfers)
+# RCLONE_ENDPOINT=http://rclone.docker
+
+# Optional: Reva config directory (default: /etc/revad)
+# REVAD_CONFIG_DIR=/etc/revad
+
+# Logging
+LOG_LEVEL=debug
+LOG_PRETTY=true

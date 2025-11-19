@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1.7
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Open Cloud Mesh Containers: container build scripts and images
+# Copyright (C) 2025 Open Cloud Mesh Contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
+ARG REVAD_BASE_IMAGE="revad-base:v3.3.2-production"
+
+################################
+###     Directory builder    ###
+################################
+FROM ${BASE_BUILD_IMAGE} AS directory
+
+# Create directories for localhome storage
+# With virtual_home_template="/home/{{.Username}}", localhome exposes paths under
+# /home/{username}/ (via gateway mount_path="/") while storing files in
+# /revalocalstorage/data/{username}/
+RUN mkdir -p /revalocalstorage/data/marie && \
+    mkdir -p /revalocalstorage/data/einstein && \
+    mkdir -p /revalocalstorage/data/richard && \
+    mkdir -p /revalocalstorage/.shadow/recycle_bin/marie && \
+    mkdir -p /revalocalstorage/.shadow/versions/marie && \
+    mkdir -p /revalocalstorage/.shadow/references/marie && \
+    mkdir -p /revalocalstorage/.shadow/recycle_bin/einstein && \
+    mkdir -p /revalocalstorage/.shadow/versions/einstein && \
+    mkdir -p /revalocalstorage/.shadow/references/einstein && \
+    mkdir -p /revalocalstorage/.shadow/recycle_bin/richard && \
+    mkdir -p /revalocalstorage/.shadow/versions/richard && \
+    mkdir -p /revalocalstorage/.shadow/references/richard && \
+    chown -R 65532:65532 /revalocalstorage && \
+    chmod 755 /revalocalstorage
+
+###################################
+###   Production Runtime        ###
+###################################
+FROM ${REVAD_BASE_IMAGE}
+
+# Copy directories from builder with proper ownership
+COPY --from=directory --chown=65532:65532 /revalocalstorage /revalocalstorage
