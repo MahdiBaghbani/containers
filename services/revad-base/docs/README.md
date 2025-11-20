@@ -7,6 +7,7 @@ This directory contains generic Reva service documentation that applies to all p
 - **[Architecture](architecture.md)** - Reva service architecture and multi-container patterns
 - **[Services](services.md)** - Generic Reva service descriptions (gateway, dataprovider, authprovider, etc.)
 - **[Configuration](configuration.md)** - Configuration system, placeholder processing, and config structure
+- **[Partial Config Schema](partial-config-schema.md)** - Partial configuration file schema and reference
 - **[Container Modes](container-modes.md)** - Container mode system (`REVAD_CONTAINER_MODE`)
 - **[Initialization](initialization.md)** - Initialization scripts and runtime configuration processing
 - **[Development Workflow](development-workflow.md)** - Development → production workflow and volume strategy
@@ -64,6 +65,12 @@ See [Configuration](configuration.md) for details.
 
 ## Related Documentation
 
+### DockyPody Build System
+
+For generic build system documentation (applies to all services):
+
 - [Build System](../../../docs/concepts/build-system.md) - Build system architecture
-- [Service Configuration](../../../docs/concepts/service-configuration.md) - Service configuration schema
+- [Service Configuration](../../../docs/concepts/service-configuration.md) - Generic service configuration schema
 - [Nushell Development Guide](../../../docs/guides/nushell-development.md) - Nushell scripting guide
+
+**Note**: This is Reva-specific documentation. DockyPody build system documentation is in [`docs/`](../../../docs/).

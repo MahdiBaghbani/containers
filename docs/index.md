@@ -44,3 +44,10 @@
 - [Version Manifest Schema](reference/version-manifest-schema.md) - Version manifest schema
 - [Platform Manifest Schema](reference/platform-manifest-schema.md) - Platform manifest schema
 - [Makefile Reference](reference/makefile-reference.md) - Makefile documentation (pending)
+
+## Service Documentation
+
+Service-specific documentation is located in each service's `docs/` directory:
+
+- **Reva Base**: [`services/revad-base/docs/`](../services/revad-base/docs/) - Reva service documentation
+- **CERNBox Reva**: [`services/cernbox-revad/docs/`](../services/cernbox-revad/docs/) - CERNBox-specific Reva documentation

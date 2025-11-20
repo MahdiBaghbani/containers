@@ -251,6 +251,10 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
       "dependencies": {
         "common-tools": {
           "version": "v1.0.0-debian"
+        },
+        "gaia": {
+          "version": "master",
+          "single_platform": true  // Optional: Dependency is single-platform, use same version for all parent platforms
         }
       }
     }
@@ -258,10 +262,36 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 }
 ```
 
+### The `single_platform` Field
+
+**`single_platform`** - Optional boolean field in dependency configs (version control only):
+
+- **Location**: `versions.nuon` overrides only (forbidden in base config and `platforms.nuon`)
+- **Purpose**: Explicitly mark that a dependency is single-platform and should use the same version across all parent platforms
+- **Behavior**:
+  - `single_platform: true` - Suppresses informational message when using single-platform dependency
+  - `single_platform: false` - Treated as not set (only `true` has meaning)
+- **Precedence**: Platform suffix in version always takes precedence over `single_platform` flag
+
+**Example:**
+
+```nuon
+{
+  "dependencies": {
+    "gaia": {
+      "version": "master",
+      "single_platform": true  // Suppresses "Info:" message
+    }
+  }
+}
+```
+
 ### Validation Rules
 
 - Each dependency MUST include `build_arg` field
 - `version` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)
+- `single_platform` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)
+- `single_platform` must be boolean if present
 - For single-platform: dependencies defined in base config with `service` and `build_arg`
 - For multi-platform: dependencies defined in `platforms.nuon` with `service` and `build_arg`
 - Version is **ALWAYS** defined in `versions.nuon` overrides (never in base config or platforms.nuon)

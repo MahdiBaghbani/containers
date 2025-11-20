@@ -11,6 +11,14 @@
         }
       },
       "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        },
+        "gaia": {
+          "service": "gaia",
+          "build_arg": "GAIA_IMAGE"
+        },
         "revad-base": {
           "service": "revad-base",
           "build_arg": "REVAD_BASE_IMAGE"
@@ -20,7 +28,21 @@
     {
       "name": "development",
       "dockerfile": "services/cernbox-revad/Dockerfile.development",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        }
+      },
       "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        },
+        "gaia": {
+          "service": "gaia",
+          "build_arg": "GAIA_IMAGE"
+        },
         "revad-base": {
           "service": "revad-base",
           "build_arg": "REVAD_BASE_IMAGE"

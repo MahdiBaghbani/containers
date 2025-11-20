@@ -117,7 +117,7 @@ def main [--verbose] {
     # filter-versions now returns record with {versions, detected_platforms}
     let result = (filter-versions $manifest null --all=true)
     let all_versions = $result.versions
-    if $verbose_flag { print $"    Found ($all_versions | length) version(s)" }
+    if $verbose_flag { print $"    Found ($all_versions | length) version\(s\)" }
   } $verbose_flag)
   $results = ($results | append $test7)
   

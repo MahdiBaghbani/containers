@@ -375,7 +375,7 @@ export def main [
         return
       }
       
-      print $"\n=== Building ($expanded_versions | length) version(s) of ($service) ==="
+      print $"\n=== Building ($expanded_versions | length) version\(s\) of ($service) ==="
       print ""
       
       mut successes = []
@@ -417,7 +417,7 @@ export def main [
       
       return
     } else {
-      print $"\n=== Building ($versions_to_build | length) version(s) of ($service) ==="
+      print $"\n=== Building ($versions_to_build | length) version\(s\) of ($service) ==="
       print ""
       
       mut successes = []

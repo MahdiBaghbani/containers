@@ -65,5 +65,4 @@ See [Architecture](architecture.md) for detailed diagrams and explanations.
 
 ## Related Documentation
 
-- [Plan Document](../../../plan-2.md) - Migration plan for separating providers
 - [Reva Base Scripts Tests](../../../services/revad-base/tests/README.md) - Test suite documentation

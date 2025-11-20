@@ -171,6 +171,108 @@ volumes:
   - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 ```
 
+## Partial Configuration System
+
+Partial configs allow you to extend base configurations without duplicating entire files. This is useful for adding services or modifying specific sections while keeping base configs intact.
+
+### Overview
+
+Partial configs are TOML files that contain:
+
+- A `[target]` section defining which config file to merge into
+- Configuration content that is appended to the target file
+
+### Build-Time vs Runtime
+
+**Build-Time Partials**:
+
+- Location: `services/{service}/configs/partial/*.toml`
+- Merged during Dockerfile build
+- Baked into image at `/configs/revad/`
+- No markers (content directly merged)
+- Use case: Maintainer adds features to base service
+
+**Runtime Partials**:
+
+- Location: `/etc/revad/partial/*.toml` (volume) or `/configs/partial/*.toml` (image)
+- Merged during container initialization
+- Wrapped with comment markers for restart prevention
+- Use case: End user adds custom services without rebuilding images
+
+### Partial File Format
+
+```toml
+[target]
+file = "gateway.toml"  # Target config file name
+order = 10             # Optional: merge order (explicit numbers first, then alphabetical)
+
+# Content below [target] is merged into target file
+[http.services.thumbnails]
+cache = "lru"
+output_type = "jpg"
+quality = 80
+```
+
+### Merge Process
+
+Partials are merged **after** config copy but **before** placeholder processing:
+
+1. Copy config from image to volume (if not exists)
+2. **Merge partials** into existing config
+3. Process placeholders
+4. Apply TLS/other settings
+
+This allows placeholders in partials to work correctly.
+
+### Ordering
+
+- Partials with explicit `order` numbers are sorted numerically
+- Unnumbered partials are sorted alphabetically
+- Auto-assigned order starts after highest explicit number
+- Ordering is per-target (each target file has its own sequence)
+
+### Marker System (Runtime Only)
+
+Runtime partials are wrapped with comment markers to prevent duplicate appends on container restart:
+
+```toml
+# === Merged from: thumbnails.toml (order: 1) ===
+# This section was automatically merged from a partial config file.
+# DO NOT EDIT MANUALLY - changes will be lost on container restart.
+
+[http.services.thumbnails]
+cache = "lru"
+# ... content ...
+
+# === End of merge from: thumbnails.toml ===
+```
+
+On restart, old marked sections are removed before fresh partials are re-merged.
+
+### Example
+
+**Partial file** (`configs/partial/thumbnails.toml`):
+
+```toml
+[target]
+file = "gateway.toml"
+order = 1
+
+[http.services.thumbnails]
+cache = "lru"
+output_type = "jpg"
+quality = 80
+```
+
+**Result**: Content is merged into `gateway.toml` at order 1, before placeholder processing.
+
+### Documentation
+
+For complete documentation on partial configs:
+
+- **Schema Reference**: See [`partial-config-schema.md`](partial-config-schema.md) for complete schema and examples
+- **Schema File**: See [`services/revad-base/schemas/partial-config.nuon`](../../schemas/partial-config.nuon) for authoritative schema definition
+
 ## Related Documentation
 
 - [Initialization](initialization.md) - Initialization process and config processing

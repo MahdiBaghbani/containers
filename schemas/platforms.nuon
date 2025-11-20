@@ -116,6 +116,7 @@
 // - No double dashes (--), no trailing dashes, no empty platform names
 // - FORBIDDEN in platforms.nuon:
 //   * dependencies.{name}.version (version control - define in versions.nuon overrides)
+//   * dependencies.{name}.single_platform (version control - define in versions.nuon overrides)
 //   * sources section (version control - define in versions.nuon overrides only)
 //   * external_images.{stage}.tag (version control - define in versions.nuon overrides)
 //   * external_images.{stage}.image (legacy - use 'name' field instead)

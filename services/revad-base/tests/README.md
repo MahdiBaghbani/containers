@@ -47,6 +47,7 @@ All test files follow a consistent structure:
 
 - `test-shared.nu` - Tests `shared.nu` functions (DNS, hosts, directories, JSON copy, TLS)
 - `test-utils.nu` - Tests `utils.nu` functions (file replacement, placeholder validation, env vars, placeholder processing)
+- `test-merge-partials.nu` - Tests `merge-partials.nu` functions (partial config parsing, merging, ordering, marker system)
 
 ## Test Coverage
 
@@ -108,6 +109,16 @@ All test files follow a consistent structure:
 - Environment variable retrieval
 - Placeholder processing
 
+### Partial Config Merge Tests
+
+- Partial file parsing (valid and invalid formats)
+- Target file filtering (finding partials for specific config files)
+- Ordering algorithm (explicit order numbers, alphabetical fallback, auto-assignment)
+- Marker removal (preventing duplicate appends on container restart)
+- Runtime merge with markers (for restart prevention)
+- Build-time merge without markers (baked into image)
+- Directory scanning (multiple partial directories with priority)
+
 ## Test Runner
 
 The `test-runner.nu` script:
@@ -118,6 +129,8 @@ The `test-runner.nu` script:
 - Provides overall test summary
 - Handles missing test files gracefully
 - Supports verbose output mode
+
+Available test suites: `utils`, `shared`, `gateway`, `dataprovider`, `authprovider`, `shareproviders`, `groupuserproviders`, `entrypoint`, `merge-partials`
 
 ## Notes
 

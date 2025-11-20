@@ -83,6 +83,16 @@
           "PACK_WITH_UPX": "false"
         },
         
+        // Override dependency versions (version control)
+        // FORBIDDEN: 'service' field (infrastructure - define in base config or platforms.nuon)
+        // FORBIDDEN: 'build_arg' field (infrastructure - define in base config or platforms.nuon)
+        "dependencies": {
+          "gaia": {
+            "version": "master", // string (required) - Dependency version
+            "single_platform": true // bool (optional) - Dependency is single-platform, use same version for all parent platforms, suppresses informational message
+          }
+        },
+        
         // Platform-specific overrides (only used when platforms.nuon exists)
         // Platform-specific overrides win over global overrides for the same field
         "platforms": {
@@ -93,6 +103,12 @@
             "sources": {
               "revad": {
                 "ref": "v1.0.0-debian"
+              }
+            },
+            "dependencies": {
+              "gaia": {
+                "version": "master",
+                "single_platform": true // Optional: Suppress informational message when using single-platform dependency
               }
             }
             // Can override any config field (sources, external_images, build_args, dependencies, labels, dockerfile)

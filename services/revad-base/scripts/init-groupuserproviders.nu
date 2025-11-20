@@ -22,6 +22,7 @@
 
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
+use ./lib/merge-partials.nu [merge_partial_configs]
 
 const CONFIG_DIR = "/configs/revad"
 
@@ -62,6 +63,10 @@ export def init_groupuserproviders [] {
   } else {
     print $"User/group providers config found - will process placeholders..."
   }
+  
+  # Merge partial configs before placeholder processing
+  # Partials merge into whatever config exists (base or overridden)
+  merge_partial_configs $config_file
   
   # Always process placeholders, even if config exists
   # This ensures placeholders are replaced even if previous run was incomplete

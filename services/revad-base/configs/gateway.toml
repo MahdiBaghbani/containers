@@ -90,6 +90,8 @@ home_provider = "/"
 "ocm" = {"address" = "{{placeholder:storageprovider.ocm}}"}
 "/sciencemesh" = { address = "{{placeholder:storageprovider.sciencemesh}}" }
 "sciencemesh" = { address = "{{placeholder:storageprovider.sciencemesh}}" }
+"/public" = {"address" = "{{placeholder:authprovider.publicshares.address}}"}
+"public" = {"address" = "{{placeholder:authprovider.publicshares.address}}"}
 
 ### OTHER PROVIDERS ###
 
@@ -273,6 +275,11 @@ string = "10.0.11"
 spaces_enabled = true
 timeout = 86400
 insecure = true
+
+[http.services.ocdav.publiclink_download]
+max_num_files = 10000
+max_size = 10737418240
+public_folder = "/public"
 
 [http.services.ocgraph]
 base_url = "{{ vars.external_reva_endpoint }}"

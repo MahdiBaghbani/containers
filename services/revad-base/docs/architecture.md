@@ -45,6 +45,7 @@ Share providers manage file and folder sharing:
 - **usershareprovider** - User-to-user file sharing
 - **publicshareprovider** - Public link sharing
 - **ocmshareprovider** - OCM cross-site sharing
+- **ocmincoming** - OCM incoming share management (receives shares from remote providers)
 
 ### User/Group Providers
 

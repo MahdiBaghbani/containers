@@ -122,6 +122,65 @@ Placeholders are processed by initialization scripts during container startup. S
 
 Most variables have defaults defined in initialization scripts. See CERNBox-specific defaults below.
 
+## Partial Configurations
+
+CERNBox uses partial configs to extend base Reva configurations without duplication. Partials are merged into target config files during build-time or runtime.
+
+### CERNBox-Specific Partials
+
+**Thumbnail Service** (`configs/partial/thumbnails.toml`):
+- Targets: `gateway.toml`
+- Order: 1
+- Purpose: Enables thumbnail generation for CERNBox UI
+- Configuration:
+  ```toml
+  [target]
+  file = "gateway.toml"
+  order = 1
+
+  [http.services.thumbnails]
+  cache = "lru"
+  output_type = "jpg"
+  quality = 80
+  insecure = true
+  fixed_resolutions = ["36x36"]
+
+  [http.services.thumbnails.cache_drivers.lru]
+  size = 1000000
+  expiration = 172800
+  ```
+
+### Partial Config Locations
+
+- **Build-time**: `services/cernbox-revad/configs/partial/*.toml` (merged during Dockerfile build)
+- **Runtime**: `/etc/revad/partial/*.toml` (volume mount) or `/configs/partial/*.toml` (image fallback)
+
+### Adding Custom Partials
+
+To add a custom partial config:
+
+1. Create a `.toml` file in `configs/partial/`
+2. Define `[target]` section with target file and optional order
+3. Add configuration content below `[target]` section
+
+Example:
+```toml
+[target]
+file = "gateway.toml"
+order = 20
+
+[http.services.custom]
+enabled = true
+```
+
+### Documentation
+
+For complete documentation on partial configs:
+
+- **Partial Config Schema**: See [`services/revad-base/docs/partial-config-schema.md`](../../../revad-base/docs/partial-config-schema.md) for complete schema and examples
+- **Reva Base Configuration**: See [`services/revad-base/docs/configuration.md`](../../../revad-base/docs/configuration.md#partial-configuration-system) for partial config system details
+- **Config Overrides**: See [`services/cernbox-revad/configs/README.md`](../../configs/README.md) for full override mechanism
+
 ## Related Documentation
 
 - [Architecture](architecture.md) - System architecture

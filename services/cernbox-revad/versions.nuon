@@ -3,9 +3,19 @@
 
   "versions": [
     {
-      "name": "master",
+      "name": "mahdi_fix_localhome",
       "latest": false,
       "overrides": {
+        "sources": {
+          "reva": {
+            "url": "https://github.com/MahdiBaghbani/reva-opencloud",
+            "ref": "feature/multi-reva-setup-with-localhome"
+          },
+          "reva_plugins": {
+            "url": "https://github.com/cernbox/reva-plugins",
+            "ref": "master"
+          }
+        },
         "platforms": {
           "production": {
             "external_images": {
@@ -14,13 +24,88 @@
               }
             },
             "dependencies": {
+              "common-tools": {
+                "version": "v1.0.0-debian"
+              },
+              "gaia": {
+                "version": "master",
+                "single_platform": true
+              },
+              "revad-base": {
+                "version": "mahdi_fix_localhome-production"
+              }
+            }
+          },
+          "development": {
+            "external_images": {
+              "build": {
+                "tag": "1.25-trixie"
+              }
+            },
+            "dependencies": {
+              "common-tools": {
+                "version": "v1.0.0-debian"
+              },
+              "gaia": {
+                "version": "master",
+                "single_platform": true
+              },
+              "revad-base": {
+                "version": "mahdi_fix_localhome-development"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "master",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "reva": {
+            "url": "https://github.com/cs3org/reva",
+            "ref": "master"
+          },
+          "reva_plugins": {
+            "url": "https://github.com/cernbox/reva-plugins",
+            "ref": "master"
+          }
+        },
+        "platforms": {
+          "production": {
+            "external_images": {
+              "build": {
+                "tag": "1.25-trixie"
+              }
+            },
+            "dependencies": {
+              "common-tools": {
+                "version": "v1.0.0-debian"
+              },
+              "gaia": {
+                "version": "master",
+                "single_platform": true
+              },
               "revad-base": {
                 "version": "master-production"
               }
             }
           },
           "development": {
+            "external_images": {
+              "build": {
+                "tag": "1.25-trixie"
+              }
+            },
             "dependencies": {
+              "common-tools": {
+                "version": "v1.0.0-debian"
+              },
+              "gaia": {
+                "version": "master",
+                "single_platform": true
+              },
               "revad-base": {
                 "version": "master-development"
               }
@@ -33,6 +118,16 @@
       "name": "v3.3.2",
       "latest": true,
       "overrides": {
+        "sources": {
+          "reva": {
+            "url": "https://github.com/cs3org/reva",
+            "ref": "v3.3.2"
+          },
+          "reva_plugins": {
+            "url": "https://github.com/cernbox/reva-plugins",
+            "ref": "master"
+          }
+        },
         "platforms": {
           "production": {
             "external_images": {
@@ -41,13 +136,32 @@
               }
             },
             "dependencies": {
+              "common-tools": {
+                "version": "v1.0.0-debian"
+              },
+              "gaia": {
+                "version": "master",
+                "single_platform": true
+              },
               "revad-base": {
                 "version": "v3.3.2-production"
               }
             }
           },
           "development": {
+            "external_images": {
+              "build": {
+                "tag": "1.25-trixie"
+              }
+            },
             "dependencies": {
+              "common-tools": {
+                "version": "v1.0.0-debian"
+              },
+              "gaia": {
+                "version": "master",
+                "single_platform": true
+              },
               "revad-base": {
                 "version": "v3.3.2-development"
               }

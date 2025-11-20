@@ -33,9 +33,9 @@ ARG CACHEBUST="default"
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
     apt-get install \
     --no-install-recommends \
     --assume-yes \
@@ -44,6 +44,8 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     git \
     ca-certificates \
     zlib1g-dev;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src/upx
 # Cache git clone: shared cache across all platforms, since it's the same UPX_REF
@@ -116,7 +118,7 @@ ARG TLS_CA_NAME=""
 COPY ./tls/certificate-authority/ /tmp/tls-ca-source/
 RUN if [ "$TLS_ENABLED" = "true" ]; then \
     if [ -z "$TLS_CA_NAME" ]; then \
-        echo "Error: TLS_CA_NAME must be provided when TLS_ENABLED=true" && exit 1; \
+    echo "Error: TLS_CA_NAME must be provided when TLS_ENABLED=true" && exit 1; \
     fi && \
     mkdir -p /usr/local/share/ca-certificates && \
     cp /tmp/tls-ca-source/${TLS_CA_NAME}.crt /usr/local/share/ca-certificates/ 2>/dev/null || \

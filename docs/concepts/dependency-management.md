@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Dependency Management
 
 ## Overview
@@ -184,22 +185,101 @@ Result: `base-service:v1.0.0-debian` (used as-is, no inheritance)
 Warning: Dependency 'dep-key' version 'v1.0.0' lacks platform suffix, inheriting 'debian' from parent
 ```
 
-#### Error: If dependency doesn't support platforms (no `platforms.nuon`) but parent is multi-platform
+#### Info: If dependency doesn't support platforms (no `platforms.nuon`) but parent is multi-platform
 
 ```text
-Error: Multi-platform service depends on single-platform service 'base-service'. 
-Dependency 'dep-key' cannot inherit platform 'debian'. 
-Consider creating a platforms manifest for 'base-service' or specify an explicit version with platform suffix.
+Info: Multi-platform service depends on single-platform service 'base-service'.
+Dependency 'base-service' will use version 'v1.0.0' for all platforms.
+If this is intentional, consider adding 'single_platform: true' to suppress this message.
 ```
+
+**Note:** Single-platform dependencies are now allowed. The same dependency version will be used for all parent platforms. If this is intentional, add `single_platform: true` to suppress the informational message.
 
 #### Solutions
 
-1. Create `platforms.nuon` for the dependency to make it multi-platform, OR
-2. Use explicit version with platform suffix: `"version": "v1.0.0-debian"`
+1. Add `single_platform: true` to suppress the informational message (recommended if intentional)
+2. Create `platforms.nuon` for the dependency to make it multi-platform, OR
+3. Use explicit version with platform suffix: `"version": "v1.0.0-debian"` (if dependency has platforms)
 
 For complete details on multi-platform builds and platform inheritance, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
 
 **Note:** Dependencies do not fall back to their own manifest's default version. They must either have an explicit version or inherit from the parent service version.
+
+## Single-Platform Dependencies
+
+When a multi-platform service depends on a single-platform service (a service without `platforms.nuon`), the dependency can be used across all parent platforms. This is useful when the dependency's binaries are compatible with all platforms of the parent service.
+
+### The `single_platform` Flag
+
+To explicitly mark a dependency as single-platform and suppress the informational message, use the `single_platform: true` flag:
+
+```nuon
+// versions.nuon overrides
+{
+  "dependencies": {
+    "gaia": {
+      "version": "master",
+      "single_platform": true  // Suppresses informational message
+    }
+  }
+}
+```
+
+### Behavior
+
+1. **Without `single_platform` flag**: Single-platform dependencies are allowed with an informational message
+2. **With `single_platform: true`**: No informational message is shown (intent is explicit)
+3. **Platform suffix precedence**: If a version has a platform suffix (e.g., `"v1.0.0-debian"`), it takes precedence over `single_platform: true` (with a warning)
+
+### Examples
+
+#### Example 1: Single-platform dependency without flag
+
+```nuon
+// Parent: multi-platform service (production, development)
+// Dependency: gaia (single-platform, Debian-based)
+{
+  "dependencies": {
+    "gaia": {
+      "version": "master"
+    }
+  }
+}
+```
+
+Result: `gaia:master` used for both `production` and `development` platforms
+Message: `Info: Multi-platform service depends on single-platform service 'gaia'...`
+
+#### Example 2: Single-platform dependency with flag
+
+```nuon
+{
+  "dependencies": {
+    "gaia": {
+      "version": "master",
+      "single_platform": true
+    }
+  }
+}
+```
+
+Result: `gaia:master` used for both platforms, no message
+
+#### Example 3: Conflicting config (platform suffix + flag)
+
+```nuon
+{
+  "dependencies": {
+    "base-service": {
+      "version": "v1.0.0-debian",  // Has platform suffix
+      "single_platform": true        // Flag is ignored
+    }
+  }
+}
+```
+
+Result: `base-service:v1.0.0-debian` (suffix takes precedence)
+Message: `Warning: Dependency has both platform suffix... and single_platform: true. Platform suffix takes precedence...`
 
 ### Image Reference Construction
 
@@ -306,13 +386,13 @@ For each dependency:
 
 ## Version Resolution Examples
 
-| Parent Version | Dependency Config | Resolved Dependency | Reason |
-|----------------|-------------------|---------------------|--------|
-| `v3.3.2` (from manifest) | Explicit: `version: "v3.3.2"` | `revad-base:v3.3.2` | Explicit version always wins |
-| `v3.3.2` (from manifest) | Not specified | `revad-base:v3.3.2` | Inherits from parent version |
-| `v2.0.0` (from manifest) | Not specified | `revad-base:v2.0.0` | Inherits from parent version |
-| Any | Explicit: `version: "v1.0.0-debian"` | `revad-base:v1.0.0-debian` | Explicit version with platform suffix |
-| Any | Not specified, no parent version | **Error** | No version can be determined |
+| Parent Version           | Dependency Config                    | Resolved Dependency        | Reason                                |
+| ------------------------ | ------------------------------------ | -------------------------- | ------------------------------------- |
+| `v3.3.2` (from manifest) | Explicit: `version: "v3.3.2"`        | `revad-base:v3.3.2`        | Explicit version always wins          |
+| `v3.3.2` (from manifest) | Not specified                        | `revad-base:v3.3.2`        | Inherits from parent version          |
+| `v2.0.0` (from manifest) | Not specified                        | `revad-base:v2.0.0`        | Inherits from parent version          |
+| Any                      | Explicit: `version: "v1.0.0-debian"` | `revad-base:v1.0.0-debian` | Explicit version with platform suffix |
+| Any                      | Not specified, no parent version     | **Error**                  | No version can be determined          |
 
 ### Complex Example: Multi-Platform Service with Dependency Chain
 

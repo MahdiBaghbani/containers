@@ -1,0 +1,21 @@
+# Partial config file for CERNBox thumbnail service
+# This file is merged into gateway.toml at build-time or runtime
+# See services/revad-base/docs/partial-config-schema.md for schema documentation
+
+[target]
+file = "gateway.toml"
+order = 1
+
+# Thumbnail service configuration
+# This service is required for CERNBox UI to display file thumbnails
+[http.services.thumbnails]
+cache = "lru"
+output_type = "jpg"
+quality = 80
+insecure = true
+fixed_resolutions = ["36x36"]
+
+# LRU cache driver configuration
+[http.services.thumbnails.cache_drivers.lru]
+size = 1000000
+expiration = 172800 # 2 days

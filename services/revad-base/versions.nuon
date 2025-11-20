@@ -3,6 +3,44 @@
 
   "versions": [
     {
+      "name": "mahdi_fix_localhome",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "revad": {
+            "url": "https://github.com/MahdiBaghbani/reva-opencloud",
+            "ref": "feature/multi-reva-setup-with-localhome"
+          }
+        },
+        "external_images": {
+          "build": {
+            "tag": "1.25-trixie"
+          }
+        },
+        "dependencies": {
+          "common-tools": {
+            "version": "v1.0.0-debian"
+          }
+        },
+        "platforms": {
+          "production": {
+            "external_images": {
+              "runtime": {
+                "tag": "nonroot"
+              }
+            }
+          },
+          "development": {
+            "external_images": {
+              "runtime": {
+                "tag": "trixie-slim"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "name": "master",
       "latest": false,
       "overrides": {

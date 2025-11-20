@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Multi-Platform Build Support
 
 This guide covers the multi-platform build system that allows building different container image variants for different base platforms (e.g., Debian, Alpine, Ubuntu).
@@ -101,22 +102,22 @@ For complete schema documentation, see [Platform Manifest Schema Reference](../r
 {
   // Required: Default platform name
   "default": "debian",
-  
+
   // Required: List of platform configurations
   "platforms": [
     {
       // Required: Platform identifier (lowercase alphanumeric with dashes)
       "name": "debian",
-      
+
       // Required: Platform-specific Dockerfile path
       "dockerfile": "Dockerfile.debian",
-      
+
       // Optional: Platform-specific build args
       "build_args": {
         "BASE_IMAGE": "debian:12-slim",
         "VARIANT": "standard"
       },
-      
+
       // Optional: Platform-specific external images
       "external_images": {
         "base": {
@@ -124,7 +125,7 @@ For complete schema documentation, see [Platform Manifest Schema Reference](../r
           "build_arg": "BASE_IMAGE"
         }
       },
-      
+
       // Optional: Platform-specific source repositories
       "sources": {
         "custom_lib": {
@@ -132,7 +133,7 @@ For complete schema documentation, see [Platform Manifest Schema Reference](../r
           "ref": "v2.0.0"
         }
       },
-      
+
       // Optional: Platform-specific dependencies
       "dependencies": {
         "other_service": {
@@ -140,7 +141,7 @@ For complete schema documentation, see [Platform Manifest Schema Reference](../r
           "build_arg": "OTHER_SERVICE_IMAGE"
         }
       },
-      
+
       // Optional: Platform-specific labels
       "labels": {
         "org.opencontainers.image.variant": "debian"
@@ -272,7 +273,7 @@ You can override configuration per platform in the version manifest:
     {
       "name": "v1.0.0",
       "latest": true,
-      
+
       // Platform-specific overrides
       "platforms": {
         "debian": {
@@ -406,17 +407,55 @@ You can specify exact versions with platform suffixes:
 }
 ```
 
-### Multi-Platform -> Single-Platform Error
+### Using Single-Platform Dependencies
 
-If a multi-platform service depends on a single-platform service, you get an error:
+When a multi-platform service depends on a single-platform service (a service without `platforms.nuon`), the dependency can be used across all parent platforms. This is useful when the dependency's binaries are compatible with all platforms of the parent service.
 
-```text
-Error: Service 'service_a' (multi-platform) depends on 'service_b' (single-platform).
-Options:
+#### Without `single_platform` Flag
 
-  1. Create platforms.nuon for service_b
-  2. Use explicit version with platform suffix: version: "v1.0.0-debian"
+By default, single-platform dependencies are allowed with an informational message:
+
+```nuon
+// Parent: multi-platform service (production, development)
+// Dependency: gaia (single-platform, Debian-based)
+{
+  "dependencies": {
+    "gaia": {
+      "version": "master"
+    }
+  }
+}
 ```
+
+Result: `gaia:master` is used for both `production` and `development` platforms
+Message: `Info: Multi-platform service depends on single-platform service 'gaia'...`
+
+#### With `single_platform` Flag
+
+To suppress the informational message and make intent explicit, use `single_platform: true`:
+
+```nuon
+{
+  "dependencies": {
+    "gaia": {
+      "version": "master",
+      "single_platform": true  // Suppresses informational message
+    }
+  }
+}
+```
+
+Result: `gaia:master` used for all platforms, no message
+
+#### When to Use `single_platform: true`
+
+Use `single_platform: true` when:
+
+- The dependency is intentionally single-platform and compatible with all parent platforms
+- You want to suppress the informational message
+- You want to make the intent explicit in the configuration
+
+**Note:** If a dependency version has a platform suffix (e.g., `"v1.0.0-debian"`), the suffix takes precedence over `single_platform: true` (with a warning).
 
 ## CLI Reference
 
@@ -488,7 +527,7 @@ CI matrix output now includes `platform` field:
   "include": [
     {
       "version": "v1.0.0",
-      "platform": "",  // Empty string for single-platform services
+      "platform": "", // Empty string for single-platform services
       "latest": true
     }
   ]
@@ -502,12 +541,12 @@ CI matrix output now includes `platform` field:
   "include": [
     {
       "version": "v1.0.0",
-      "platform": "debian",  // Platform name for multi-platform services
+      "platform": "debian", // Platform name for multi-platform services
       "latest": true
     },
     {
       "version": "v1.0.0",
-      "platform": "alpine",  // Platform name for multi-platform services
+      "platform": "alpine", // Platform name for multi-platform services
       "latest": false
     }
   ]
@@ -712,13 +751,13 @@ CI matrix now includes `platform` field in every entry.
 ##### Before (Matrix Format)
 
 ```json
-{"include": [{"version": "v1.0.0", "latest": true}]}
+{ "include": [{ "version": "v1.0.0", "latest": true }] }
 ```
 
 ##### After (Matrix Format)
 
 ```json
-{"include": [{"version": "v1.0.0", "platform": "", "latest": true}]}
+{ "include": [{ "version": "v1.0.0", "platform": "", "latest": true }] }
 ```
 
 #### Migration

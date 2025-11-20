@@ -34,7 +34,7 @@ def resolve-dependency-tag [
   })
   
   if ($explicit_version | str length) > 0 {
-    # Check platform suffix against dependency's platforms, not parent's
+    # Check platform suffix against dependency's platforms FIRST
     # A platform suffix is only valid if it matches the dependency service's platforms
     let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
     let dep_platforms = (if $dep_has_platforms {
@@ -54,19 +54,42 @@ def resolve-dependency-tag [
     })
     
     if $has_suffix {
-      # Explicit platform suffix detected - use as-is (no inheritance)
+      # Explicit platform suffix detected - use as-is (no inheritance, no single_platform logic)
+      # If single_platform flag is also set, warn that suffix takes precedence
+      let single_platform = (try { $dep_config.single_platform | default false } catch { false })
+      if $single_platform {
+        print $"Warning: Dependency '($dep_key)' has both platform suffix in version '($explicit_version)' and single_platform: true. Platform suffix takes precedence, single_platform flag is ignored."
+      }
       return $explicit_version
     } else {
-      # No valid platform suffix detected for dependency's platforms
-      # Apply platform inheritance if parent is multi-platform
+      # No valid platform suffix detected
+      # Check for single_platform flag (only true has meaning, false is treated as not set)
+      let single_platform = (try {
+        let val = ($dep_config.single_platform | default false)
+        if $val == true { true } else { false }
+      } catch { false })
+      
+      if $single_platform {
+        # Explicitly marked as single-platform - use version as-is, no platform suffix
+        # Warn if dependency actually has platforms (misconfiguration)
+        let dep_has_platforms_check = (check-platforms-manifest-exists $dep_service)
+        if $dep_has_platforms_check {
+          print $"Warning: Dependency '($dep_key)' (service: ($dep_service)) has single_platform: true but service '($dep_service)' has platforms.nuon. Using version without platform suffix anyway."
+        }
+        return $explicit_version
+      }
+      
+      # No single_platform flag - apply platform inheritance if parent is multi-platform
       if ($platform | str length) > 0 {
         let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
         
         if not $dep_has_platforms {
-          error make { msg: $"Multi-platform service depends on single-platform service '($dep_service)'. Dependency '($dep_key)' cannot inherit platform '($platform)'. Consider creating a platforms manifest for '($dep_service)' or specify an explicit version with platform suffix." }
+          # Single-platform dependency - allow it with informational message
+          print $"Info: Multi-platform service depends on single-platform service '($dep_service)'. Dependency '($dep_key)' will use version '($explicit_version)' for all platforms. If this is intentional, consider adding 'single_platform: true' to suppress this message."
+          return $explicit_version
         }
         
-        # Check if version already has dashes (might be a non-platform suffix like "v1.0.0-beta")
+        # Dependency has platforms - use platform inheritance
         let has_dashes = ($explicit_version | str contains "-")
         if $has_dashes {
           print $"Warning: Dependency '($dep_key)' version '($explicit_version)' does not have a valid platform suffix for '($dep_service)' platforms, inheriting '($platform)' from parent"
@@ -80,12 +103,29 @@ def resolve-dependency-tag [
     }
   }
   
+  # Parent version inheritance path
   if ($parent_version | str length) > 0 {
+    # Check for single_platform flag (only true has meaning)
+    let single_platform = (try {
+      let val = ($dep_config.single_platform | default false)
+      if $val == true { true } else { false }
+    } catch { false })
+    
+    if $single_platform {
+      let dep_has_platforms_check = (check-platforms-manifest-exists $dep_service)
+      if $dep_has_platforms_check {
+        print $"Warning: Dependency '($dep_key)' (service: ($dep_service)) has single_platform: true but service '($dep_service)' has platforms.nuon. Using version without platform suffix anyway."
+      }
+      return $parent_version
+    }
+    
     if ($platform | str length) > 0 {
       let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
       
       if not $dep_has_platforms {
-        error make { msg: $"Multi-platform service depends on single-platform service '($dep_service)'. Dependency '($dep_key)' cannot inherit platform '($platform)'. Consider creating a platforms manifest for '($dep_service)' or specify an explicit version in the dependency config." }
+        # Single-platform dependency - allow with informational message
+        print $"Info: Multi-platform service depends on single-platform service '($dep_service)'. Dependency '($dep_key)' will use version '($parent_version)' for all platforms. If this is intentional, consider adding 'single_platform: true' to suppress this message."
+        return $parent_version
       }
       
       return $"($parent_version)-($platform)"

@@ -17,7 +17,7 @@
     "disableFeedbackLink": true,
     "homeFolder": "/{{.Id}}",
     "previewFileMimeTypes": ["image/gif", "image/png", "image/jpeg"],
-    "openAppsInTab": true,
+    "openAppsInTab": false,
     "editor": {
       "autosaveEnabled": true,
       "autosaveInterval": 120

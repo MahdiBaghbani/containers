@@ -35,9 +35,9 @@ ENV CGO_ENABLED=1
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
     apt-get install \
     --no-install-recommends \
     --assume-yes \
@@ -45,7 +45,10 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     bash \
     make \
     build-essential \
-    libsqlite3-dev;
+    libsqlite3-dev \
+    binutils;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /
 
@@ -66,6 +69,10 @@ RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=loc
 RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
     make revad-static
 
+RUN ldd /revad-git/cmd/revad/revad 2>&1 | grep -q "not a dynamic executable" || \
+    (echo "ERROR: Binary is not statically linked" && exit 1) && \
+    echo "Binary is statically linked"
+
 ####################################
 ###  Compress binaries with UPX  ###
 ####################################
@@ -81,10 +88,10 @@ RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
     upx -qq --best --lzma /tmp/binaries/revad && upx -t /tmp/binaries/revad; \
     fi
 
-###################################
-###        Runtime image        ###
-###################################
-FROM ${BASE_RUNTIME_IMAGE}
+################################
+###     Directory builder    ###
+################################
+FROM ${BASE_RUNTIME_IMAGE} AS directory
 
 ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"
@@ -94,20 +101,16 @@ ARG COMMON_TOOLS_IMAGE
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive \
     apt-get install \
     --no-install-recommends \
     --assume-yes \
     bash \
-    curl \
-    tzdata \
-    iproute2 \
-    ca-certificates; \
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/*
+    ca-certificates;
 
-ENV TZ=Etc/UTC
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=compress /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
 RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
@@ -143,16 +146,77 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
     rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     fi
 
-RUN mkdir -p /revad-git/cmd /var/tmp/reva && \
-    chmod 755 /var/tmp/reva
+RUN mkdir -p /tls
+
+RUN mkdir -p /etc/revad /revad /var/run /var/tmp/reva && \
+    chmod 755 /etc/revad /revad /var/run /var/tmp/reva
 
 COPY --chmod=755 --from=compress /tmp/binaries/revad /revad-git/cmd/revad
 
-ENV PATH="${PATH}:/revad-git/cmd"
-
 COPY ./configs /configs/revad
-COPY ./scripts/* /usr/bin/
-COPY ./scripts/lib /usr/bin/lib
+
+COPY ./configs/partial /tmp/revad-partials
+RUN if [ -d /tmp/revad-partials ] && [ -n "$(find /tmp/revad-partials -name '*.toml' 2>/dev/null)" ]; then \
+    mkdir -p /configs/partial && \
+    find /tmp/revad-partials -type f -name '*.toml' -exec cp {} /configs/partial/ \; && \
+    rm -rf /tmp/revad-partials; \
+    else \
+    rm -rf /tmp/revad-partials; \
+    fi
+
+COPY ./scripts /tmp/scripts
+RUN mkdir -p /usr/bin/lib && \
+    cp -r /tmp/scripts/lib/* /usr/bin/lib/ && \
+    find /tmp/scripts -maxdepth 1 -type f \( -name '*.nu' -o -name '*.sh' \) -exec cp {} /usr/bin/ \; && \
+    rm -rf /tmp/scripts
+
+RUN if [ -d /configs/partial ] && [ -n "$(find /configs/partial -name '*.toml' 2>/dev/null)" ]; then \
+    nu -c "use /usr/bin/lib/merge-partials.nu [merge_partial_configs_build]; merge_partial_configs_build '/configs/revad' '/configs/partial'"; \
+    fi
+
+# Remove partials directory after merge (build-time partials should not be in final image)
+RUN rm -rf /configs/partial || true
+
+###################################
+###        Runtime image        ###
+###################################
+FROM ${BASE_RUNTIME_IMAGE}
+
+ENV TZ=Etc/UTC
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    bash \
+    curl \
+    tzdata \
+    iproute2 \
+    ca-certificates;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=755 --from=directory /etc/revad /etc/revad
+COPY --chmod=755 --from=directory /revad /revad
+COPY --chmod=755 --from=directory /revad-git/cmd/revad /revad-git/cmd/revad
+COPY --chmod=755 --from=directory /var/run /var/run
+COPY --chmod=755 --from=directory /var/tmp/reva /var/tmp/reva
+COPY --chmod=755 --from=directory /configs /configs
+COPY --chmod=755 --from=directory /usr/bin /usr/bin
+COPY --chmod=700 --from=directory /tls /tls
+COPY --chmod=755 --from=directory /etc/ssl /etc/ssl
+COPY --chmod=755 --from=directory /usr/local/bin/nu /usr/local/bin/nu
+
+RUN if [ -d /tls ]; then \
+    find /tls -type f -name "*.key" -exec chmod 600 {} \; && \
+    find /tls -type f -name "*.crt" -exec chmod 644 {} \; || true; \
+    fi
+
+ENV PATH="/revad/cmd:${PATH}"
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
 

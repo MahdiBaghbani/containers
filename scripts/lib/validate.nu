@@ -83,6 +83,10 @@ export def validate-platform-config [
           $errors = ($errors | append $"Platform '($platform_name)': dependencies.($dep_key).version: Field forbidden. Define in versions.nuon overrides.")
         }
         
+        if "single_platform" in ($dep | columns) {
+          $errors = ($errors | append $"Platform '($platform_name)': dependencies.($dep_key).single_platform: Field forbidden. Define in versions.nuon overrides.")
+        }
+        
         if not ("build_arg" in ($dep | columns)) {
           $errors = ($errors | append $"Platform '($platform_name)': dependencies.($dep_key) missing required field 'build_arg'")
         }
@@ -526,6 +530,46 @@ export def validate-version-overrides-structure [
         }
     }
     
+    # Validate dependencies in global overrides
+    if "dependencies" in ($overrides | columns) {
+        let deps = $overrides.dependencies
+        
+        let deps_type = ($deps | describe)
+        if not ($deps_type | str starts-with "record") {
+            $errors = ($errors | append $"Version '($version_name)': dependencies must be a record")
+        } else {
+            for dep_key in ($deps | columns) {
+                let dep = ($deps | get $dep_key)
+                
+                let dep_type = ($dep | describe)
+                if not ($dep_type | str starts-with "record") {
+                    $errors = ($errors | append $"Version '($version_name)': dependencies.($dep_key) must be a record")
+                    continue
+                }
+                
+                # Validate single_platform field
+                if "single_platform" in ($dep | columns) {
+                    let single_platform_val = ($dep | get "single_platform")
+                    let single_platform_type = ($single_platform_val | describe)
+                    if not ($single_platform_type | str starts-with "bool") {
+                        $errors = ($errors | append $"Version '($version_name)': dependencies.($dep_key).single_platform must be boolean")
+                    }
+                    # Note: single_platform: false is treated as not set (only true has meaning)
+                    # Note: Conflicting single_platform + platform suffix handled at runtime, not here
+                }
+                
+                # Validate forbidden fields
+                if "service" in ($dep | columns) {
+                    $errors = ($errors | append $"Version '($version_name)': dependencies.($dep_key).service: Field forbidden. Define in base config \(single-platform\) or platforms.nuon \(multi-platform\).")
+                }
+                
+                if "build_arg" in ($dep | columns) {
+                    $errors = ($errors | append $"Version '($version_name)': dependencies.($dep_key).build_arg: Field forbidden. Define in base config \(single-platform\) or platforms.nuon \(multi-platform\).")
+                }
+            }
+        }
+    }
+    
     # Validate platform-specific overrides
     if "platforms" in ($overrides | columns) {
         let platforms_overrides = $overrides.platforms
@@ -569,6 +613,44 @@ export def validate-version-overrides-structure [
                             
                             if "image" in ($img | columns) {
                                 $errors = ($errors | append $"Version '($version_name)': platforms.($platform_name).external_images.($img_key).image: Field forbidden (legacy). Use 'tag' field in overrides.")
+                            }
+                        }
+                    }
+                }
+                
+                # Validate dependencies in platform-specific overrides
+                if "dependencies" in ($platform_override | columns) {
+                    let deps = $platform_override.dependencies
+                    
+                    let deps_type = ($deps | describe)
+                    if not ($deps_type | str starts-with "record") {
+                        $errors = ($errors | append $"Version '($version_name)': platforms.($platform_name).dependencies must be a record")
+                    } else {
+                        for dep_key in ($deps | columns) {
+                            let dep = ($deps | get $dep_key)
+                            
+                            let dep_type = ($dep | describe)
+                            if not ($dep_type | str starts-with "record") {
+                                $errors = ($errors | append $"Version '($version_name)': platforms.($platform_name).dependencies.($dep_key) must be a record")
+                                continue
+                            }
+                            
+                            # Validate single_platform field (same logic as global overrides)
+                            if "single_platform" in ($dep | columns) {
+                                let single_platform_val = ($dep | get "single_platform")
+                                let single_platform_type = ($single_platform_val | describe)
+                                if not ($single_platform_type | str starts-with "bool") {
+                                    $errors = ($errors | append $"Version '($version_name)': platforms.($platform_name).dependencies.($dep_key).single_platform must be boolean")
+                                }
+                            }
+                            
+                            # Validate forbidden fields
+                            if "service" in ($dep | columns) {
+                                $errors = ($errors | append $"Version '($version_name)': platforms.($platform_name).dependencies.($dep_key).service: Field forbidden. Define in platforms.nuon.")
+                            }
+                            
+                            if "build_arg" in ($dep | columns) {
+                                $errors = ($errors | append $"Version '($version_name)': platforms.($platform_name).dependencies.($dep_key).build_arg: Field forbidden. Define in platforms.nuon.")
                             }
                         }
                     }
@@ -821,6 +903,10 @@ export def validate-service-config [
         
         if "version" in ($dep | columns) {
           $errors = ($errors | append $"($service_ctx): dependencies.($dep_key).version: Field forbidden. Define in versions.nuon overrides.")
+        }
+        
+        if "single_platform" in ($dep | columns) {
+          $errors = ($errors | append $"($service_ctx): dependencies.($dep_key).single_platform: Field forbidden. Define in versions.nuon overrides.")
         }
         
         if not ("build_arg" in ($dep | columns)) {

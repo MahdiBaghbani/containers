@@ -18,10 +18,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Share providers-specific initialization script
-# Processes share providers configuration file (usershareprovider, publicshareprovider, ocmshareprovider)
+# Processes share providers configuration file (usershareprovider, publicshareprovider, ocmshareprovider, ocmincoming)
 
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
+use ./lib/merge-partials.nu [merge_partial_configs]
 
 const CONFIG_DIR = "/configs/revad"
 
@@ -63,6 +64,10 @@ export def init_shareproviders [] {
     print $"Share providers config found - will process placeholders..."
   }
   
+  # Merge partial configs before placeholder processing
+  # Partials merge into whatever config exists (base or overridden)
+  merge_partial_configs $config_file
+  
   # Always process placeholders, even if config exists
   # This ensures placeholders are replaced even if previous run was incomplete
   # Get environment variables with defaults
@@ -89,7 +94,7 @@ export def init_shareproviders [] {
   let jwt_secret = (get_env_or_default "REVAD_JWT_SECRET" "reva-secret")
   
   # Get OCM shares provider configuration variables
-  # These are needed for ocmshareprovider service
+  # These are needed for ocmshareprovider and ocmincoming services (both use the same JSON file)
   let provider_domain = (get_env_or_default "DOMAIN" $domain)
   let web_domain = (get_env_or_default "WEB_DOMAIN" $domain)
   let web_protocol = (get_env_or_default "WEB_PROTOCOL" "http")

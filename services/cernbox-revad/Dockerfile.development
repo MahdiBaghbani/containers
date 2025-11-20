@@ -17,25 +17,119 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
 ARG REVAD_BASE_IMAGE="revad-base:v3.3.2-development"
+ARG GAIA_IMAGE="gaia:master"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+
+################################
+###  Import Gaia image       ###
+################################
+FROM ${GAIA_IMAGE} AS gaia
+
+################################
+###  Build Reva with Gaia    ###
+################################
+FROM ${BASE_BUILD_IMAGE} AS build
+
+ENV CGO_ENABLED=1
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    git \
+    bash \
+    ca-certificates \
+    binutils;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=gaia /usr/local/bin/gaia /usr/local/bin/gaia
+
+WORKDIR /
+
+ARG REVA_URL="https://github.com/cs3org/reva"
+ARG REVA_REF="v3.3.2"
+ARG REVA_PLUGINS_URL="https://github.com/cernbox/reva-plugins"
+ARG REVA_PLUGINS_REF="master"
+ARG CACHEBUST="default"
+
+RUN --mount=type=cache,id=cernbox-revad-reva-git-${CACHEBUST:-${REVA_REF}},target=/src/reva-git-cache,sharing=shared \
+    mkdir -p /src/reva-git-cache && \
+    if [ ! -d /src/reva-git-cache/.git ]; then \
+    git clone --depth 1 --recursive --shallow-submodules --branch "${REVA_REF}" ${REVA_URL} /src/reva-git-cache; \
+    fi && \
+    cp -a /src/reva-git-cache/. /reva-git
+
+RUN --mount=type=cache,id=cernbox-revad-reva-plugins-git-${CACHEBUST:-${REVA_PLUGINS_REF}},target=/src/reva-plugins-git-cache,sharing=shared \
+    mkdir -p /src/reva-plugins-git-cache && \
+    if [ ! -d /src/reva-plugins-git-cache/.git ]; then \
+    git clone --depth 1 --recursive --shallow-submodules --branch "${REVA_PLUGINS_REF}" ${REVA_PLUGINS_URL} /src/reva-plugins-git-cache; \
+    fi && \
+    cp -a /src/reva-plugins-git-cache/. /reva-plugins-git
+
+RUN --mount=type=cache,id=cernbox-revad-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    gaia build \
+    --with github.com/cernbox/reva-plugins=/reva-plugins-git \
+    --with github.com/cs3org/reva/v3=/reva-git \
+    --static \
+    --output /revad
+
+RUN ldd /revad 2>&1 | grep -q "not a dynamic executable" || \
+    (echo "ERROR: Binary is not statically linked" && exit 1) && \
+    echo "Binary is statically linked"
+
+####################################
+###  Compress binary with UPX    ###
+####################################
+FROM ${COMMON_TOOLS_IMAGE} AS compress
+
+RUN mkdir -p /tmp/binaries
+
+COPY --from=build /revad /tmp/binaries/revad
+
+ARG PACK_WITH_UPX="true"
+RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
+    strip -s /tmp/binaries/revad || true; \
+    upx -qq --best --lzma /tmp/binaries/revad && upx -t /tmp/binaries/revad; \
+    fi
 
 ################################
 ###     Directory builder    ###
 ################################
 FROM ${REVAD_BASE_IMAGE} AS directory
 
-# Allow cernbox-revad to override base Reva configs
-# Only copies if configs directory contains actual config files (.toml or .json)
-# If configs is empty or only contains README.md, base configs from revad-base are preserved
 COPY ./configs /tmp/cernbox-configs
 RUN if [ -n "$(find /tmp/cernbox-configs -type f \( -name '*.toml' -o -name '*.json' \) 2>/dev/null)" ]; then \
-    echo "Copying cernbox-revad configs to override base configs..." && \
     find /tmp/cernbox-configs -type f \( -name '*.toml' -o -name '*.json' \) -exec cp {} /configs/revad/ \; && \
     rm -rf /tmp/cernbox-configs; \
     else \
-    echo "No cernbox-revad configs found (only README.md), using base configs from revad-base"; \
     rm -rf /tmp/cernbox-configs; \
     fi
+
+COPY ./configs/partial /tmp/cernbox-partials
+RUN if [ -d /tmp/cernbox-partials ] && [ -n "$(find /tmp/cernbox-partials -name '*.toml' 2>/dev/null)" ]; then \
+    mkdir -p /configs/partial && \
+    find /tmp/cernbox-partials -type f -name '*.toml' -exec cp {} /configs/partial/ \; && \
+    rm -rf /tmp/cernbox-partials; \
+    else \
+    rm -rf /tmp/cernbox-partials; \
+    fi
+
+RUN if [ -d /configs/partial ] && [ -n "$(find /configs/partial -name '*.toml' 2>/dev/null)" ] && [ -d /configs/revad ]; then \
+    nu -c "use /usr/bin/lib/merge-partials.nu [merge_partial_configs_build]; merge_partial_configs_build '/configs/revad' '/configs/partial'"; \
+    fi
+
+# Remove partials directory after merge (build-time partials should not be in final image)
+RUN rm -rf /configs/partial || true
+
+RUN mkdir -p /revad-git/cmd
+COPY --chmod=755 --from=compress /tmp/binaries/revad /revad-git/cmd/revad
 
 # Create directories for localhome storage
 # With virtual_home_template="/home/{{.Username}}", localhome exposes paths under
@@ -59,6 +153,6 @@ RUN mkdir -p /revalocalstorage/data/marie && \
 ##############################
 FROM ${REVAD_BASE_IMAGE}
 
-# Copy directories from builder
-COPY --from=directory  /revalocalstorage /revalocalstorage
-COPY --from=directory  /configs/revad /configs/revad
+COPY --from=directory /revalocalstorage /revalocalstorage
+COPY --from=directory /configs/revad /configs/revad
+COPY --from=directory /revad-git /revad-git

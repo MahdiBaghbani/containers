@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Open Cloud Mesh Containers: container build scripts and images
+// Copyright (C) 2025 Open Cloud Mesh Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+// Partial Configuration Schema
+// Location: services/{service}/configs/partial/*.toml (build-time) or /etc/revad/partial/*.toml (runtime)
+// Docs: services/revad-base/docs/partial-config-schema.md, services/revad-base/docs/configuration.md
+
+// Example partial config file structure:
+{
+  // [target] section - REQUIRED: Defines which config file this partial targets
+  "[target]": {
+    "file": "gateway.toml",  // string (required) - Target config file name (e.g., "gateway.toml", "dataprovider-localhome.toml")
+    "order": 10              // integer (optional) - Merge order (explicit numbers take precedence, then alphabetical)
+  },
+
+  // Content below [target] section is merged into the target config file
+  // This content can contain:
+  // - TOML sections (e.g., [http.services.thumbnails])
+  // - Placeholders (e.g., {{placeholder:name:default}}) - processed after merge
+  // - Any valid TOML content that should be appended to the target file
+
+  // Example: Thumbnail service configuration
+  "[http.services.thumbnails]": {
+    "cache": "lru",
+    "output_type": "jpg",
+    "quality": 80,
+    "insecure": true,
+    "fixed_resolutions": ["36x36"]
+  },
+
+  "[http.services.thumbnails.cache_drivers.lru]": {
+    "size": 1000000,
+    "expiration": 172800
+  }
+}
+
+// Ordering Rules:
+// 1. Partials with explicit "order" numbers are sorted numerically (1, 2, 3, ...)
+// 2. Partials without "order" are sorted alphabetically by filename
+// 3. Auto-assigned order starts after the highest explicit number
+// 4. Ordering is per-target (each target file has its own sequence)
+//
+// Example:
+// - thumbnails.toml (no order) -> auto-order = 3 (alphabetical first)
+// - cernbox-extras.toml (order = 2) -> order = 2
+// - ocm-config.toml (order = 1) -> order = 1
+// - logging.toml (no order) -> auto-order = 4 (alphabetical second)
+//
+// Result: ocm-config (1), cernbox-extras (2), thumbnails (3), logging (4)
+
+// Marker System (Runtime):
+// When partials are merged at runtime, they are wrapped with comment markers:
+//
+// # === Merged from: thumbnails.toml (order: 10) ===
+// # This section was automatically merged from a partial config file.
+// # DO NOT EDIT MANUALLY - changes will be lost on container restart.
+// # To modify, edit the source partial file instead.
+//
+// [http.services.thumbnails]
+// ... content ...
+//
+// # === End of merge from: thumbnails.toml ===
+//
+// These markers allow the system to remove old merged sections on container restart,
+// preventing duplicate appends.
+
+// Build-Time vs Runtime:
+// - Build-time partials: services/{service}/configs/partial/*.toml
+//   Merged during Dockerfile build, baked into image at /configs/revad/
+// - Runtime partials: /etc/revad/partial/*.toml (volume) or /configs/partial/*.toml (image fallback)
+//   Merged during container initialization, written to /etc/revad/
+
+// See Also:
+// - services/revad-base/docs/partial-config-schema.md - Complete schema documentation
+// - services/revad-base/docs/configuration.md - Configuration system overview
+

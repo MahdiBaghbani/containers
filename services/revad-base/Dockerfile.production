@@ -30,9 +30,9 @@ ENV CGO_ENABLED=1
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
     apt-get install \
     --no-install-recommends \
     --assume-yes \
@@ -40,7 +40,8 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     bash \
     make \
     build-essential \
-    libsqlite3-dev;
+    libsqlite3-dev \
+    binutils;
 
 WORKDIR /
 
@@ -60,6 +61,10 @@ RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=loc
     go mod download
 RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
     make revad-static
+
+RUN ldd /revad-git/cmd/revad/revad 2>&1 | grep -q "not a dynamic executable" || \
+    (echo "ERROR: Binary is not statically linked" && exit 1) && \
+    echo "Binary is statically linked"
 
 ####################################
 ###  Compress binaries with UPX  ###
@@ -87,7 +92,6 @@ RUN mkdir -p /etc/revad /revad/cmd /var/run /var/tmp/reva && \
     chown -R 65532:65532 /etc/revad /revad/cmd /var/run /var/tmp/reva && \
     chmod 755 /etc/revad /revad/cmd /var/run /var/tmp/reva
 
-# Create nsswitch.conf for nonroot user.
 RUN echo "hosts: files dns" > /etc/nsswitch.conf && \
     chown 65532:65532 /etc/nsswitch.conf && \
     chmod 644 /etc/nsswitch.conf

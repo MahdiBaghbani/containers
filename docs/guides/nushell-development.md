@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Nushell Development Guide
 
 This guide covers essential Nushell patterns, common pitfalls, and best practices for working with Nushell scripts in this project.
@@ -154,13 +155,13 @@ def func [param: any = null] {
 
 ```nu
 # WRONG - parameters are backwards!
-["a", "b", "c"] | reduce -f [] {|acc, item| 
+["a", "b", "c"] | reduce -f [] {|acc, item|
     $acc | append $item
 }
 # Returns: "c" (last item, not accumulated list)
 
 # CORRECT - item comes FIRST, accumulator SECOND
-["a", "b", "c"] | reduce -f [] {|item, acc| 
+["a", "b", "c"] | reduce -f [] {|item, acc|
     $acc | append $item
 }
 # Returns: ["a", "b", "c"] (properly accumulated)
@@ -212,6 +213,25 @@ $list | prepend $new_item
 $list | where {|x| $x > 5 } | each {|x| $x * 2 }
 ```
 
+### File Filtering by Extension
+
+**CRITICAL**: Nushell does NOT support regex patterns in `where` clauses using `=~` operator with escaped patterns.
+
+```nu
+# WRONG - Invalid literal error
+ls $dir | where type == file | where name =~ "\.toml$" | get name
+
+# CORRECT - Use closure with str ends-with
+ls $dir | where type == file | where {|f| ($f.name | str ends-with ".toml")} | get name
+
+# CORRECT - Alternative: filter after getting names
+ls $dir | where type == file | get name | where {|n| ($n | str ends-with ".toml")}
+```
+
+**Why**: The `=~` operator expects a different syntax, and escaped regex patterns like `"\.toml$"` cause "Invalid literal" parse errors. Use closures with string methods (`str ends-with`, `str starts-with`, `str contains`) instead.
+
+**Pattern**: Always use closures `{|item| ...}` with string methods for file extension filtering.
+
 ## Error Handling
 
 ### Try-Catch Blocks
@@ -237,7 +257,7 @@ try {
 
 ```nu
 # Use '?' to propagate errors (newer Nushell)
-let result = (some-command)? 
+let result = (some-command)?
 
 # Or use try with early return
 def safe-operation [] {
@@ -495,9 +515,9 @@ let result = (let data = [1, 2, 3]
 
 # CORRECT - assign first, then use
 let data = [1, 2, 3]
-let result = (if ($condition) { 
-    $data 
-} else { 
+let result = (if ($condition) {
+    $data
+} else {
     $data | where {|x| $x > 1 }
 })
 
@@ -858,6 +878,21 @@ export def some-function [arg: string] { ... }  # Must have 'export'
 1. Exported in their module (`export def`)
 2. Imported where they're used (`use module.nu [function-name]`)
 
+#### Error: "Invalid literal" when filtering files by extension?
+
+```nu
+# WRONG - Regex pattern with =~ causes "Invalid literal" parse error
+ls $dir | where type == file | where name =~ "\.toml$" | get name
+
+# CORRECT - Use closure with str ends-with
+ls $dir | where type == file | where {|f| ($f.name | str ends-with ".toml")} | get name
+
+# CORRECT - Alternative: filter after getting names
+ls $dir | where type == file | get name | where {|n| ($n | str ends-with ".toml")}
+```
+
+**Key Insight**: The `=~` operator doesn't support escaped regex patterns like `"\.toml$"`. Use closures with string methods (`str ends-with`, `str starts-with`, `str contains`) for file extension filtering.
+
 ## Version-Specific Notes
 
 - Some features (like `?` operator) require newer Nushell versions
@@ -950,9 +985,9 @@ Every test MUST call `cleanup-test-environment`:
 ```nu
 let test1 = (run-test "Test name" {
   let test_env = (setup-test-environment "service" "v1.0.0")
-  
+
   # Test logic here
-  
+
   cleanup-test-environment | ignore  # Always pipe to ignore
   true  # Always return true on success
 } $verbose_flag)

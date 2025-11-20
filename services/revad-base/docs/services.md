@@ -36,6 +36,7 @@ The gateway container runs multiple services:
 - **usershareprovider** - User-to-user file sharing
 - **publicshareprovider** - Public link sharing
 - **ocmshareprovider** - OCM cross-site sharing
+- **ocmincoming** - OCM incoming share management (receives shares from remote providers)
 
 ### Share Provider Responsibilities
 
@@ -47,7 +48,7 @@ The gateway container runs multiple services:
 ### Share Provider Storage Drivers
 
 - **Memory:** Used for usershareprovider and publicshareprovider (can be upgraded to SQL)
-- **JSON:** Used for ocmshareprovider (shares stored in JSON file)
+- **JSON:** Used for ocmshareprovider and ocmincoming (shares stored in JSON file, both services use the same file)
 
 ## User/Group Providers Service
 

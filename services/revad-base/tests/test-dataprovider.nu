@@ -20,6 +20,8 @@
 # Integration tests for init-dataprovider.nu
 # Tests dataprovider initialization workflow for all supported types
 
+use ../scripts/lib/merge-partials.nu [merge_partial_configs]
+
 # Test dataprovider type validation
 # Verifies that only valid dataprovider types are accepted
 def test_dataprovider_type_validation [] {
@@ -106,6 +108,93 @@ def test_dataprovider_config_copy [] {
   }
   
   rm -rf $test_config_dir $test_source_dir
+  return {passed: $passed, failed: $failed}
+}
+
+# Test dataprovider partial config merging
+# Verifies that partial configs are merged before placeholder processing
+def test_dataprovider_partial_merge [] {
+  print "Testing dataprovider partial config merge..."
+  
+  # Setup test environment
+  let test_config_dir = "/tmp/test_dataprovider_partials"
+  let test_partials_dir = $"($test_config_dir)/partial"
+  rm -rf $test_config_dir
+  ^mkdir -p $test_config_dir $test_partials_dir
+  
+  # Create base dataprovider config
+  let base_config = '''[vars]
+data_server_url = "{{placeholder:data-server-url-internal.localhome}}"
+gateway_svc = "{{placeholder:gateway-svc}}"
+
+[grpc.services.storageprovider]
+address = ":9143"
+'''
+  $base_config | save -f $"($test_config_dir)/dataprovider-localhome.toml"
+  
+  # Create partial config
+  # Match the format used in test-merge-partials.nu
+  "[target]
+file = 'dataprovider-localhome.toml'
+order = 10
+
+[grpc.services.storageprovider.drivers.localhome]
+root = '/custom/root'" | save -f $"($test_partials_dir)/localhome-custom.toml"
+  
+  # Set environment variable for config directory
+  $env.REVAD_CONFIG_DIR = $test_config_dir
+  
+  mut passed = 0
+  mut failed = 0
+  
+  # Test merge_partial_configs
+  let merge_result = (try {
+    merge_partial_configs "dataprovider-localhome.toml"
+    true
+  } catch {|err|
+    print $"  [FAIL] Partial merge: FAILED with error: ($err.msg)"
+    false
+  })
+  
+  if $merge_result {
+    # Verify partial was merged
+    let result = (open --raw $"($test_config_dir)/dataprovider-localhome.toml")
+    let has_custom_root = ($result | str contains "/custom/root")
+    let has_marker = ($result | str contains "# === Merged from:")
+    
+    if $has_custom_root and $has_marker {
+      $passed = ($passed + 1)
+      print "  [PASS] Partial merge: PASSED"
+    } else {
+      print "  [FAIL] Partial merge: FAILED (partial not merged or marker missing)"
+      $failed = ($failed + 1)
+    }
+  } else {
+    $failed = ($failed + 1)
+  }
+  
+  # Test that merge works when no partials exist (should not fail)
+  rm -rf $test_partials_dir
+  ^mkdir -p $test_partials_dir
+  
+  let no_partials_result = (try {
+    merge_partial_configs "dataprovider-localhome.toml"
+    true
+  } catch {|err|
+    print $"  [FAIL] No partials handling: FAILED with error: ($err.msg)"
+    false
+  })
+  
+  if $no_partials_result {
+    $passed = ($passed + 1)
+    print "  [PASS] No partials handling: PASSED"
+  } else {
+    $failed = ($failed + 1)
+  }
+  
+  rm -rf $test_config_dir
+  $env.REVAD_CONFIG_DIR = null
+  
   return {passed: $passed, failed: $failed}
 }
 
@@ -225,12 +314,16 @@ def main [
   $total_passed = ($total_passed + $test2.passed)
   $total_failed = ($total_failed + $test2.failed)
   
-  let test3 = (test_dataprovider_placeholder_processing)
-  if $test3 { $total_passed = ($total_passed + 1) } else { $total_failed = ($total_failed + 1) }
+  let test3 = (test_dataprovider_partial_merge)
+  $total_passed = ($total_passed + $test3.passed)
+  $total_failed = ($total_failed + $test3.failed)
   
-  let test4 = (test_dataprovider_data_server_url_construction)
-  $total_passed = ($total_passed + $test4.passed)
-  $total_failed = ($total_failed + $test4.failed)
+  let test4 = (test_dataprovider_placeholder_processing)
+  if $test4 { $total_passed = ($total_passed + 1) } else { $total_failed = ($total_failed + 1) }
+  
+  let test5 = (test_dataprovider_data_server_url_construction)
+  $total_passed = ($total_passed + $test5.passed)
+  $total_failed = ($total_failed + $test5.failed)
   
   print ""
   print $"Tests: ($total_passed) passed, ($total_failed) failed"

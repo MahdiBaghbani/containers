@@ -39,9 +39,9 @@ FROM ${BASE_BUILD_IMAGE} AS builder
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
     apt-get install \
     --no-install-recommends \
     --assume-yes \
@@ -51,6 +51,8 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     sed \
     gzip \
     curl;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=755 --from=common-tools-builder /usr/local/bin/nu /usr/local/bin/nu
 RUN nu --version || (echo "Nushell verification failed" && exit 1)

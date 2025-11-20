@@ -20,6 +20,8 @@
 # Integration tests for init-gateway.nu
 # Tests gateway initialization workflow including config copying and processing
 
+use ../scripts/lib/merge-partials.nu [merge_partial_configs]
+
 # Test gateway config file copying
 # Verifies that gateway config template is correctly copied to runtime directory
 def test_gateway_config_copy [] {
@@ -83,6 +85,95 @@ config_dir = "{{placeholder:config-dir}}"
   }
   
   rm -rf $test_config_dir $test_source_dir
+  return {passed: $passed, failed: $failed}
+}
+
+# Test gateway partial config merging
+# Verifies that partial configs are merged before placeholder processing
+def test_gateway_partial_merge [] {
+  print "Testing gateway partial config merge..."
+  
+  # Setup test environment
+  let test_config_dir = "/tmp/test_gateway_partials"
+  let test_partials_dir = $"($test_config_dir)/partial"
+  rm -rf $test_config_dir
+  ^mkdir -p $test_config_dir $test_partials_dir
+  
+  # Create base gateway config
+  let base_config = '''[vars]
+internal_gateway = "{{placeholder:internal-gateway}}"
+provider_domain = "{{placeholder:provider-domain}}"
+
+[http.services.gateway]
+address = ":80"
+'''
+  $base_config | save -f $"($test_config_dir)/gateway.toml"
+  
+  # Create partial config (must have [target] section first, then content)
+  # Match the format used in test-merge-partials.nu
+  "[target]
+file = 'gateway.toml'
+order = 10
+
+[http.services.thumbnails]
+address = ':8080'" | save -f $"($test_partials_dir)/thumbnails.toml"
+  
+  # Set environment variable for config directory
+  $env.REVAD_CONFIG_DIR = $test_config_dir
+  
+  mut passed = 0
+  mut failed = 0
+  
+  # Test merge_partial_configs
+  let merge_result = (try {
+    merge_partial_configs "gateway.toml"
+    true
+  } catch {|err|
+    print $"  [FAIL] Partial merge: FAILED with error: ($err.msg)"
+    false
+  })
+  
+  if $merge_result {
+    # Verify partial was merged
+    let result = (open --raw $"($test_config_dir)/gateway.toml")
+    let has_thumbnails = ($result | str contains "[http.services.thumbnails]")
+    let has_marker = ($result | str contains "# === Merged from:")
+    
+    if $has_thumbnails and $has_marker {
+      $passed = ($passed + 1)
+      print "  [PASS] Partial merge: PASSED"
+    } else {
+      print "  [FAIL] Partial merge: FAILED (partial not merged or marker missing)"
+      print $"    Has thumbnails: ($has_thumbnails), Has marker: ($has_marker)"
+      print $"    Config content: ($result | str substring 0..200)"
+      $failed = ($failed + 1)
+    }
+  } else {
+    $failed = ($failed + 1)
+  }
+  
+  # Test that merge works when no partials exist (should not fail)
+  rm -rf $test_partials_dir
+  ^mkdir -p $test_partials_dir
+  
+  let no_partials_result = (try {
+    merge_partial_configs "gateway.toml"
+    true
+  } catch {|err|
+    print $"  [FAIL] No partials handling: FAILED with error: ($err.msg)"
+    false
+  })
+  
+  if $no_partials_result {
+    $passed = ($passed + 1)
+    print "  [PASS] No partials handling: PASSED"
+  } else {
+    $failed = ($failed + 1)
+  }
+  
+  rm -rf $test_config_dir
+  $env.REVAD_CONFIG_DIR = null
+  
   return {passed: $passed, failed: $failed}
 }
 
@@ -209,13 +300,17 @@ def main [
   $total_passed = ($total_passed + $test1.passed)
   $total_failed = ($total_failed + $test1.failed)
   
-  let test2 = (test_gateway_placeholder_processing)
+  let test2 = (test_gateway_partial_merge)
   $total_passed = ($total_passed + $test2.passed)
   $total_failed = ($total_failed + $test2.failed)
   
-  let test3 = (test_gateway_tls_disabling)
+  let test3 = (test_gateway_placeholder_processing)
   $total_passed = ($total_passed + $test3.passed)
   $total_failed = ($total_failed + $test3.failed)
+  
+  let test4 = (test_gateway_tls_disabling)
+  $total_passed = ($total_passed + $test4.passed)
+  $total_failed = ($total_failed + $test4.failed)
   
   print ""
   print $"Tests: ($total_passed) passed, ($total_failed) failed"
