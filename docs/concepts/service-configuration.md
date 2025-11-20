@@ -137,7 +137,7 @@ The build script automatically generates three build arguments per source:
 
 ```text
 Source key: "web_extensions"
-  ↓
+  ->
 Generates: WEB_EXTENSIONS_REF, WEB_EXTENSIONS_URL, and WEB_EXTENSIONS_SHA
 ```
 

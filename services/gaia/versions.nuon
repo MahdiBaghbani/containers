@@ -1,36 +1,38 @@
 {
   "default": "master",
+  
+  "defaults": {
+    "sources": {
+      "gaia": {
+        "url": "https://github.com/MahdiBaghbani/gaia",
+        "ref": "mahdi/feature/build-static"
+      }
+    },
+    "external_images": {
+      "build": {
+        "name": "golang",
+        "tag": "1.25-trixie",
+        "build_arg": "BASE_BUILD_IMAGE"
+      },
+      "runtime": {
+        "name": "debian",
+        "tag": "trixie-slim",
+        "build_arg": "BASE_RUNTIME_IMAGE"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "version": "v1.0.0-debian",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      }
+    }
+  },
+  
   "versions": [
     {
       "name": "master",
-      "latest": true,
-      "overrides": {
-        "sources": {
-          "gaia": {
-            "url": "https://github.com/MahdiBaghbani/gaia",
-            "ref": "mahdi/feature/build-static"
-          }
-        },
-        "external_images": {
-          "build": {
-            "name": "golang",
-            "tag": "1.25-trixie",
-            "build_arg": "BASE_BUILD_IMAGE"
-          },
-          "runtime": {
-            "name": "debian",
-            "tag": "trixie-slim",
-            "build_arg": "BASE_RUNTIME_IMAGE"
-          }
-        },
-        "dependencies": {
-          "common-tools": {
-            "service": "common-tools",
-            "version": "v1.0.0-debian",
-            "build_arg": "COMMON_TOOLS_IMAGE"
-          }
-        }
-      }
+      "latest": true
     }
   ]
 }

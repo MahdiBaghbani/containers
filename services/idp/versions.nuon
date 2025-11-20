@@ -1,22 +1,23 @@
 {
   "default": "v26.4.2",
   
+  "defaults": {
+    "external_images": {
+      "runtime": {
+        "tag": "26.4.2"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-rhel"
+      }
+    }
+  },
+  
   "versions": [
     {
       "name": "v26.4.2",
-      "latest": true,
-      "overrides": {
-        "external_images": {
-          "runtime": {
-            "tag": "26.4.2"
-          }
-        },
-        "dependencies": {
-          "common-tools": {
-            "version": "v1.0.0-rhel"
-          }
-        }
-      }
+      "latest": true
     }
   ]
 }

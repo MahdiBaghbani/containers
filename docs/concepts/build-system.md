@@ -516,13 +516,13 @@ When a platform manifest exists, configurations are merged in this order:
 
 ```text
 Base Config (services/{service-name}.nuon)
-  ↓
+  ->
 Platform Config (from platforms.nuon)
-  ↓
+  ->
 Global Version Overrides (from versions.nuon)
-  ↓
+  ->
 Platform-Specific Version Overrides (from versions.nuon)
-  ↓
+  ->
 Final Config
 ```
 

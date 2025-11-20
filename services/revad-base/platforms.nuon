@@ -1,5 +1,15 @@
 {
   "default": "production",
+  
+  "defaults": {
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      }
+    }
+  },
+  
   "platforms": [
     {
       "name": "production",
@@ -12,12 +22,6 @@
         "runtime": {
           "name": "gcr.io/distroless/static-debian12",
           "build_arg": "BASE_RUNTIME_IMAGE"
-        }
-      },
-      "dependencies": {
-        "common-tools": {
-          "service": "common-tools",
-          "build_arg": "COMMON_TOOLS_IMAGE"
         }
       }
     },
@@ -32,12 +36,6 @@
         "runtime": {
           "name": "debian",
           "build_arg": "BASE_RUNTIME_IMAGE"
-        }
-      },
-      "dependencies": {
-        "common-tools": {
-          "service": "common-tools",
-          "build_arg": "COMMON_TOOLS_IMAGE"
         }
       }
     }

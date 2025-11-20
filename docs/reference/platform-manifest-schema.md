@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Platform Manifest Schema
 
 ## Overview
@@ -36,21 +37,195 @@ For the authoritative schema file, see [`schemas/platforms.nuon`](../../schemas/
 
 ## Top-Level Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `default` | string | Yes | Default platform name. Must match a platform `name` in the `platforms` array. |
-| `platforms` | list | Yes | List of platform configurations |
+| Field       | Type   | Required | Description                                                                                                                                                                  |
+| ----------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `default`   | string | Yes      | Default platform name. Must match a platform `name` in the `platforms` array.                                                                                                |
+| `defaults`  | record | No       | Top-level defaults applied to all platforms unless overridden. Structure matches platform config (without `name` and `dockerfile`). Deep-merged into each platform's config. |
+| `platforms` | list   | Yes      | List of platform configurations                                                                                                                                              |
+
+## Top-Level Defaults
+
+The optional `defaults` field allows you to define common configuration values that apply to all platforms unless overridden. This reduces repetition when multiple platforms share the same configuration.
+
+### Defaults Structure
+
+The `defaults` field has the same structure as platform configs, but excludes:
+
+- `name` - Each platform must have its own name
+- `dockerfile` - Each platform must have its own dockerfile path
+
+Allowed fields:
+
+- `build_args` - Default build arguments
+- `external_images` - Default external images (infrastructure only: name and build_arg)
+- `dependencies` - Default dependencies (infrastructure only: service and build_arg)
+- `labels` - Default labels
+
+### How Defaults Work
+
+1. **Defaults** are deep-merged into each platform's config
+2. **Platform configs** take precedence over defaults (platform wins)
+3. If a platform doesn't define a field, it uses the default
+
+### Merge Order
+
+```text
+Base Config
+  ->
+Platform Config (with platform defaults already merged)
+  ->
+Version Overrides
+```
+
+### Example: Using Defaults
+
+**Before (repetitive):**
+
+```nuon
+{
+  "default": "production",
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "Dockerfile.production",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "gcr.io/distroless/static-debian12",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "development",
+      "dockerfile": "Dockerfile.development",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    }
+  ]
+}
+```
+
+**After (with defaults):**
+
+```nuon
+{
+  "default": "production",
+  "defaults": {
+    "external_images": {
+      "build": {
+        "name": "golang",
+        "build_arg": "BASE_BUILD_IMAGE"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      }
+    }
+  },
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "Dockerfile.production",
+      "external_images": {
+        "runtime": {
+          "name": "gcr.io/distroless/static-debian12",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "development",
+      "dockerfile": "Dockerfile.development",
+      "external_images": {
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Overriding Defaults
+
+Platform configs take precedence over defaults:
+
+```nuon
+{
+  "defaults": {
+    "external_images": {
+      "build": {
+        "name": "golang",
+        "build_arg": "BASE_BUILD_IMAGE"
+      }
+    }
+  },
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "Dockerfile.production",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "custom-runtime",  // Overrides default
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Validation Rules
+
+Defaults are validated using the same rules as platform configs:
+
+- Forbids `sources` section (version control - define in versions.nuon overrides only)
+- Forbids `tag` field in `external_images` (version control - define in versions.nuon overrides)
+- Forbids `version` field in `dependencies` (version control - define in versions.nuon overrides)
+- Requires `name` and `build_arg` in `external_images` (if present)
+- Requires `service` and `build_arg` in `dependencies` (if present)
 
 ## Platform Specification
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Platform identifier (lowercase alphanumeric with dashes). Must be unique within the platforms list. |
-| `dockerfile` | string | Yes | Platform-specific Dockerfile path |
-| `build_args` | record | No | Platform-specific build args |
-| `external_images` | record | No | Platform-specific external images (infrastructure only: name and build_arg, no tag) |
-| `dependencies` | record | No | Platform-specific dependencies (infrastructure only: service and build_arg, no version) |
-| `labels` | record | No | Platform-specific labels |
+| Field             | Type   | Required | Description                                                                                         |
+| ----------------- | ------ | -------- | --------------------------------------------------------------------------------------------------- |
+| `name`            | string | Yes      | Platform identifier (lowercase alphanumeric with dashes). Must be unique within the platforms list. |
+| `dockerfile`      | string | Yes      | Platform-specific Dockerfile path                                                                   |
+| `build_args`      | record | No       | Platform-specific build args                                                                        |
+| `external_images` | record | No       | Platform-specific external images (infrastructure only: name and build_arg, no tag)                 |
+| `dependencies`    | record | No       | Platform-specific dependencies (infrastructure only: service and build_arg, no version)             |
+| `labels`          | record | No       | Platform-specific labels                                                                            |
 
 ## Platform Name Rules
 
@@ -132,13 +307,13 @@ When a platform manifest exists, configurations are merged in this order:
 
 ```text
 Base Config (services/{service-name}.nuon)
-  ↓
+  ->
 Platform Config (from platforms.nuon)
-  ↓
+  ->
 Global Version Overrides (from versions.nuon)
-  ↓
+  ->
 Platform-Specific Version Overrides (from versions.nuon)
-  ↓
+  ->
 Final Config
 ```
 
@@ -161,6 +336,7 @@ For complete details on configuration merging, see [Build System](../concepts/bu
 - `tls` section - Metadata, must be in base config only
 
 **Error examples:**
+
 ```text
 Platform 'debian': sources: Section forbidden. Define in versions.nuon overrides only.
 Platform 'debian': external_images.build.tag: Field forbidden. Define in versions.nuon overrides.

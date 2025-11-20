@@ -1,6 +1,35 @@
 {
   "default": "v3.3.2",
-
+  
+  "defaults": {
+    "external_images": {
+      "build": {
+        "tag": "1.25-trixie"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      }
+    },
+    "platforms": {
+      "production": {
+        "external_images": {
+          "runtime": {
+            "tag": "nonroot"
+          }
+        }
+      },
+      "development": {
+        "external_images": {
+          "runtime": {
+            "tag": "trixie-slim"
+          }
+        }
+      }
+    }
+  },
+  
   "versions": [
     {
       "name": "mahdi_fix_localhome",
@@ -10,32 +39,6 @@
           "revad": {
             "url": "https://github.com/MahdiBaghbani/reva-opencloud",
             "ref": "feature/multi-reva-setup-with-localhome"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "1.25-trixie"
-          }
-        },
-        "dependencies": {
-          "common-tools": {
-            "version": "v1.0.0-debian"
-          }
-        },
-        "platforms": {
-          "production": {
-            "external_images": {
-              "runtime": {
-                "tag": "nonroot"
-              }
-            }
-          },
-          "development": {
-            "external_images": {
-              "runtime": {
-                "tag": "trixie-slim"
-              }
-            }
           }
         }
       }
@@ -49,32 +52,6 @@
             "url": "https://github.com/cs3org/reva",
             "ref": "master"
           }
-        },
-        "external_images": {
-          "build": {
-            "tag": "1.25-trixie"
-          }
-        },
-        "dependencies": {
-          "common-tools": {
-            "version": "v1.0.0-debian"
-          }
-        },
-        "platforms": {
-          "production": {
-            "external_images": {
-              "runtime": {
-                "tag": "nonroot"
-              }
-            }
-          },
-          "development": {
-            "external_images": {
-              "runtime": {
-                "tag": "trixie-slim"
-              }
-            }
-          }
         }
       }
     },
@@ -86,32 +63,6 @@
           "revad": {
             "url": "https://github.com/cs3org/reva",
             "ref": "v3.3.2"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "1.25-trixie"
-          }
-        },
-        "dependencies": {
-          "common-tools": {
-            "version": "v1.0.0-debian"
-          }
-        },
-        "platforms": {
-          "production": {
-            "external_images": {
-              "runtime": {
-                "tag": "nonroot"
-              }
-            }
-          },
-          "development": {
-            "external_images": {
-              "runtime": {
-                "tag": "trixie-slim"
-              }
-            }
           }
         }
       }

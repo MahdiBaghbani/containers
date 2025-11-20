@@ -173,13 +173,13 @@ When a platform manifest exists, configurations are merged in this order:
 
 ```text
 Base Config (services/{service-name}.nuon)
-  ↓
+  ->
 Platform Config (from platforms.nuon)
-  ↓
+  ->
 Global Version Overrides (from versions.nuon)
-  ↓
+  ->
 Platform-Specific Version Overrides (from versions.nuon)
-  ↓
+  ->
 Final Config
 ```
 
@@ -291,6 +291,116 @@ You can override configuration per platform in the version manifest:
   ]
 }
 ```
+
+### Top-Level Platform Defaults
+
+When multiple platforms share the same configuration values, you can use the optional `defaults` field in `platforms.nuon` to reduce repetition. Defaults are deep-merged into each platform's config.
+
+**Example: Reducing Repetition**
+
+**Before (repetitive):**
+
+```nuon
+{
+  "default": "production",
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "Dockerfile.production",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "gcr.io/distroless/static-debian12",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "development",
+      "dockerfile": "Dockerfile.development",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    }
+  ]
+}
+```
+
+**After (with defaults):**
+
+```nuon
+{
+  "default": "production",
+  "defaults": {
+    "external_images": {
+      "build": {
+        "name": "golang",
+        "build_arg": "BASE_BUILD_IMAGE"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      }
+    }
+  },
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "Dockerfile.production",
+      "external_images": {
+        "runtime": {
+          "name": "gcr.io/distroless/static-debian12",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "development",
+      "dockerfile": "Dockerfile.development",
+      "external_images": {
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    }
+  ]
+}
+```
+
+**How Platform Defaults Work:**
+
+1. **Defaults** are deep-merged into each platform's config
+2. **Platform configs** take precedence over defaults
+3. Each platform must still define its own `name` and `dockerfile` (these cannot be in defaults)
+
+**Note:** Platform defaults cannot include `sources` (version control - define in versions.nuon overrides only) or `tag` in external_images (version control - define in versions.nuon overrides).
+
+**See Also:** [Platform Manifest Schema Reference](../reference/platform-manifest-schema.md#top-level-defaults) for complete defaults documentation.
 
 ## Tag Generation
 
@@ -768,6 +878,13 @@ Update CI workflows to handle `platform` field:
 - Non-empty = multi-platform, pass to `--platform` flag
 
 ## Best Practices
+
+### Reducing Repetition
+
+- Use `defaults` in `platforms.nuon` when multiple platforms share configuration
+- Extract common values (external_images, dependencies, build_args) to defaults
+- Keep platform-specific values (dockerfile, name) in individual platform configs
+- Use `defaults` in `versions.nuon` when multiple versions share configuration
 
 ### 1. Choose Meaningful Platform Names
 

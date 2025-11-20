@@ -1,6 +1,23 @@
 {
   "default": "v3.3.2",
 
+  "defaults": {
+    "external_images": {
+      "build": {
+        "tag": "1.25-trixie"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      },
+      "gaia": {
+        "version": "master",
+        "single_platform": true
+      }
+    }
+  },
+
   "versions": [
     {
       "name": "mahdi_fix_localhome",
@@ -18,38 +35,14 @@
         },
         "platforms": {
           "production": {
-            "external_images": {
-              "build": {
-                "tag": "1.25-trixie"
-              }
-            },
             "dependencies": {
-              "common-tools": {
-                "version": "v1.0.0-debian"
-              },
-              "gaia": {
-                "version": "master",
-                "single_platform": true
-              },
               "revad-base": {
                 "version": "mahdi_fix_localhome-production"
               }
             }
           },
           "development": {
-            "external_images": {
-              "build": {
-                "tag": "1.25-trixie"
-              }
-            },
             "dependencies": {
-              "common-tools": {
-                "version": "v1.0.0-debian"
-              },
-              "gaia": {
-                "version": "master",
-                "single_platform": true
-              },
               "revad-base": {
                 "version": "mahdi_fix_localhome-development"
               }
@@ -74,38 +67,14 @@
         },
         "platforms": {
           "production": {
-            "external_images": {
-              "build": {
-                "tag": "1.25-trixie"
-              }
-            },
             "dependencies": {
-              "common-tools": {
-                "version": "v1.0.0-debian"
-              },
-              "gaia": {
-                "version": "master",
-                "single_platform": true
-              },
               "revad-base": {
                 "version": "master-production"
               }
             }
           },
           "development": {
-            "external_images": {
-              "build": {
-                "tag": "1.25-trixie"
-              }
-            },
             "dependencies": {
-              "common-tools": {
-                "version": "v1.0.0-debian"
-              },
-              "gaia": {
-                "version": "master",
-                "single_platform": true
-              },
               "revad-base": {
                 "version": "master-development"
               }
@@ -130,38 +99,14 @@
         },
         "platforms": {
           "production": {
-            "external_images": {
-              "build": {
-                "tag": "1.25-trixie"
-              }
-            },
             "dependencies": {
-              "common-tools": {
-                "version": "v1.0.0-debian"
-              },
-              "gaia": {
-                "version": "master",
-                "single_platform": true
-              },
               "revad-base": {
                 "version": "v3.3.2-production"
               }
             }
           },
           "development": {
-            "external_images": {
-              "build": {
-                "tag": "1.25-trixie"
-              }
-            },
             "dependencies": {
-              "common-tools": {
-                "version": "v1.0.0-debian"
-              },
-              "gaia": {
-                "version": "master",
-                "single_platform": true
-              },
               "revad-base": {
                 "version": "v3.3.2-development"
               }

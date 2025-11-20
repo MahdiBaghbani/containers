@@ -25,6 +25,43 @@
   // ERROR: "Default platform 'debian' not found in platforms list"
   "default": "debian", // string (required, must exist in platforms list)
   
+  // Optional top-level defaults - applied to all platforms unless overridden
+  // Structure matches platform config (without 'name' and 'dockerfile' which are per-platform)
+  // See docs/guides/multi-platform-builds.md for usage examples
+  "defaults": { // record (optional)
+    // Default build arguments - deep-merged with base config build_args
+    "build_args": {
+      "BASE_IMAGE": "debian:trixie-slim",
+      "BUILD_VARIANT": "debian"
+    },
+    
+    // Default external images - infrastructure only (name and build_arg)
+    // FORBIDDEN: 'tag' field (version control - must be in versions.nuon overrides)
+    // FORBIDDEN: 'image' field (legacy - use 'name' instead)
+    "external_images": {
+      "runtime": {
+        "name": "debian",
+        "build_arg": "BASE_RUNTIME_IMAGE"
+      }
+    },
+    
+    // Default dependencies - infrastructure only (service and build_arg)
+    // FORBIDDEN: 'version' field (version control - must be in versions.nuon overrides)
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      }
+    },
+    
+    // Default labels - deep-merged with base config labels
+    "labels": {
+      "org.opencloudmesh.platform": "debian"
+    }
+    // NOTE: 'dockerfile' is NOT included in defaults (each platform must specify its own)
+    // NOTE: 'sources' is FORBIDDEN in platforms.nuon (version control - define in versions.nuon overrides only)
+  },
+  
   // List of all supported platforms for this service
   "platforms": [ // list<record> (required, must have at least one entry)
     {

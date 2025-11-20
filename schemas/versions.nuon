@@ -25,6 +25,70 @@
   // ERROR: "Default version 'v1.0.0' not found in versions list"
   "default": "v1.0.0", // string (required)
   
+  // Optional top-level defaults - applied to all versions unless overridden
+  // Structure matches 'overrides' field - deep-merged into each version's overrides
+  // See docs/guides/multi-version-builds.md for usage examples
+  "defaults": { // record (optional)
+    // Default source refs - applied to all versions unless overridden
+    "sources": {
+      "revad": {
+        "ref": "v1.0.0" // string (optional, overrides default)
+      }
+    },
+    
+    // Default external image tags - applied to all versions unless overridden
+    // FORBIDDEN: 'name' field (infrastructure - define in base config or platforms.nuon)
+    // FORBIDDEN: 'build_arg' field (infrastructure - define in base config or platforms.nuon)
+    // FORBIDDEN: 'image' field (legacy - use 'tag' field instead)
+    "external_images": {
+      "build": {
+        "tag": "1.25-alpine" // string (optional) - Docker image tag (can include digest: "tag@sha256:digest")
+      }
+    },
+    
+    // Default build args - applied to all versions unless overridden
+    "build_args": {
+      "PACK_WITH_UPX": "false"
+    },
+    
+    // Default dependency versions - applied to all versions unless overridden
+    // FORBIDDEN: 'service' field (infrastructure - define in base config or platforms.nuon)
+    // FORBIDDEN: 'build_arg' field (infrastructure - define in base config or platforms.nuon)
+    "dependencies": {
+      "gaia": {
+        "version": "master", // string (optional) - Dependency version
+        "single_platform": true // bool (optional) - Dependency is single-platform
+      }
+    },
+    
+    // Platform-specific defaults - applied to all versions for specified platforms
+    // Platform-specific defaults merge into version overrides.platforms.{platform}
+    "platforms": {
+      "debian": { // Platform name must match a platform in platforms.nuon
+        "build_args": {
+          "DEBIAN_SPECIFIC": "value"
+        },
+        "sources": {
+          "revad": {
+            "ref": "v1.0.0-debian"
+          }
+        }
+        // Can include any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+      },
+      "alpine": { // Platform name must match a platform in platforms.nuon
+        "build_args": {
+          "ALPINE_SPECIFIC": "value"
+        },
+        "external_images": {
+          "build": {
+            "tag": "1.26-alpine" // Platform-specific tag override
+          }
+        }
+        // Can include any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+      }
+    }
+  },
+  
   // List of all supported versions
   "versions": [ // list<record> (required)
     {

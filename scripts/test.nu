@@ -26,7 +26,7 @@ def main [
   print "Running OCM Containers Test Suite\n"
   
   let test_suites = if $suite == "all" {
-    ["manifests", "services", "tls", "tag-generation", "build-system"]
+    ["manifests", "services", "tls", "tag-generation", "build-system", "defaults"]
   } else {
     [$suite]
   }

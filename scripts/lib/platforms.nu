@@ -53,6 +53,20 @@ export def get-default-platform [platforms: record] {
   }
 }
 
+# Apply platform defaults to platform spec (deep-merge defaults into platform)
+export def apply-platform-defaults [
+  platforms_manifest: record,
+  platform_spec: record
+] {
+  let defaults = (try { $platforms_manifest.defaults } catch { {} })
+  if ($defaults | is-empty) {
+    return $platform_spec
+  }
+
+  # Apply defaults to platform spec (defaults → platform)
+  deep-merge $defaults $platform_spec
+}
+
 export def get-platform-spec [
   platforms: record,
   platform_name: string
@@ -69,7 +83,10 @@ export def get-platform-spec [
     error make { msg: $"Platform '($platform_name)' not found in platforms manifest" }
   }
   
-  $found.0
+  let platform_spec = $found.0
+  
+  # Apply defaults before returning
+  apply-platform-defaults $platforms $platform_spec
 }
 
 export def get-platform-names [platforms: record] {

@@ -37,6 +37,7 @@ For the authoritative schema file, see [`schemas/versions.nuon`](../../schemas/v
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `default` | string | Yes | Default version to build when no `--version` flag is specified. Must match a version `name` in the `versions` array. |
+| `defaults` | record | No | Top-level defaults applied to all versions unless overridden. Structure matches `overrides` field. Deep-merged into each version's overrides. |
 | `versions` | list | Yes | List of version specifications |
 
 ### Validation Rules for `default` field
@@ -50,6 +51,195 @@ For the authoritative schema file, see [`schemas/versions.nuon`](../../schemas/v
   ```
 
 - **Important:** If you remove a version from the `versions` array but it's still referenced by `default`, the build will fail. Always update `default` when removing versions.
+
+## Top-Level Defaults
+
+The optional `defaults` field allows you to define common configuration values that apply to all versions unless overridden. This reduces repetition when multiple versions share the same configuration.
+
+### Defaults Structure
+
+The `defaults` field has the same structure as the `overrides` field in version specifications:
+
+- `sources` - Default source repository refs/URLs
+- `external_images` - Default external image tags
+- `build_args` - Default build arguments
+- `dependencies` - Default dependency versions
+- `platforms` - Platform-specific defaults (for multi-platform services)
+
+### How Defaults Work
+
+1. **Global defaults** are deep-merged into each version's `overrides` field
+2. **Platform-specific defaults** (`defaults.platforms.{platform}`) are deep-merged into `overrides.platforms.{platform}` for each platform
+3. **Version overrides** take precedence over defaults (overrides win)
+4. If a version doesn't have an `overrides` field, defaults create it
+
+### Merge Order
+
+```text
+Base Config
+  ->
+Platform Config (with platform defaults applied)
+  ->
+Version Overrides (with version defaults already merged)
+  ├─ Global overrides (defaults -> overrides)
+  └─ Platform-specific overrides (defaults.platforms -> overrides.platforms)
+```
+
+### Example: Using Defaults
+
+**Before (repetitive):**
+
+```nuon
+{
+  "default": "v3.3.2",
+  "versions": [
+    {
+      "name": "v3.3.2",
+      "overrides": {
+        "external_images": {
+          "build": { "tag": "1.25-trixie" }
+        },
+        "dependencies": {
+          "common-tools": { "version": "v1.0.0-debian" }
+        },
+        "platforms": {
+          "production": {
+            "external_images": {
+              "runtime": { "tag": "nonroot" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "v3.3.3",
+      "overrides": {
+        "external_images": {
+          "build": { "tag": "1.25-trixie" }
+        },
+        "dependencies": {
+          "common-tools": { "version": "v1.0.0-debian" }
+        },
+        "platforms": {
+          "production": {
+            "external_images": {
+              "runtime": { "tag": "nonroot" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+**After (with defaults):**
+
+```nuon
+{
+  "default": "v3.3.2",
+  "defaults": {
+    "external_images": {
+      "build": { "tag": "1.25-trixie" }
+    },
+    "dependencies": {
+      "common-tools": { "version": "v1.0.0-debian" }
+    },
+    "platforms": {
+      "production": {
+        "external_images": {
+          "runtime": { "tag": "nonroot" }
+        }
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "v3.3.2",
+      "overrides": {}
+    },
+    {
+      "name": "v3.3.3",
+      "overrides": {}
+    }
+  ]
+}
+```
+
+### Platform-Specific Defaults
+
+You can define defaults that apply only to specific platforms:
+
+```nuon
+{
+  "default": "v1.0.0",
+  "defaults": {
+    "external_images": {
+      "build": { "tag": "1.25-trixie" }
+    },
+    "platforms": {
+      "production": {
+        "external_images": {
+          "runtime": { "tag": "nonroot" }
+        }
+      },
+      "development": {
+        "external_images": {
+          "runtime": { "tag": "trixie-slim" }
+        }
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "overrides": {
+        "platforms": {
+          "production": {
+            "external_images": {
+              "runtime": { "tag": "custom-runtime" }  // Overrides default
+            }
+          }
+          // development gets defaults.platforms.development automatically
+        }
+      }
+    }
+  ]
+}
+```
+
+### Overriding Defaults
+
+Version overrides take precedence over defaults:
+
+```nuon
+{
+  "defaults": {
+    "external_images": {
+      "build": { "tag": "1.25-trixie" }  // Default
+    }
+  },
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "overrides": {
+        "external_images": {
+          "build": { "tag": "1.26-trixie" }  // Overrides default
+        }
+      }
+    }
+  ]
+}
+```
+
+### Validation Rules
+
+Defaults are validated using the same rules as version overrides:
+
+- Allows `sources` section
+- Allows `tag` field in `external_images`
+- Forbids `name` and `build_arg` in `external_images` (infrastructure - defined in base config or platforms.nuon)
+- Platform names in `defaults.platforms` must match platforms in `platforms.nuon`
 
 ## Version Specification
 
@@ -231,6 +421,7 @@ Platform-specific overrides win over global overrides for the same field. All fi
 - `tls` section - Metadata, must be in base config only
 
 **Error examples:**
+
 ```text
 Version 'v1.0.0': external_images.build.name: Field forbidden. Define in base config (single-platform) or platforms.nuon (multi-platform).
 Version 'v1.0.0': tls: Section forbidden. Configure TLS in base service config only.

@@ -46,6 +46,9 @@ export def run-test [name: string, test_block: closure, verbose: bool] {
   let result = (try {
     let block_result = (do $test_block)
     if $block_result == null {
+      if not $verbose {
+        print $"Test: ($name) ... FAIL (returned null)"
+      }
       false
     } else {
       $block_result
@@ -58,6 +61,8 @@ export def run-test [name: string, test_block: closure, verbose: bool] {
   
   if ($result == true) and $verbose {
     print $"  PASS"
+  } else if ($result != true) and not $verbose {
+    print $"Test: ($name) ... FAIL"
   }
   
   $result

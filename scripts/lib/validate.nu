@@ -105,6 +105,79 @@ export def validate-platform-config [
 }
 
 # Validate platforms manifest (required fields, unique names, default exists, config structure)
+# Validate version defaults structure (reuses validate-version-overrides-structure)
+export def validate-version-defaults [
+  defaults: record,
+  platforms: any = null
+] {
+  mut errors = []
+  
+  # Extract global defaults (exclude platforms if present)
+  let global_defaults = (if "platforms" in ($defaults | columns) {
+    $defaults | reject platforms
+  } else {
+    $defaults
+  })
+  
+  # Validate global defaults structure
+  if not ($global_defaults | is-empty) {
+    let structure_validation = (validate-version-overrides-structure $global_defaults "defaults")
+    if not $structure_validation.valid {
+      $errors = ($errors | append $structure_validation.errors)
+    }
+  }
+  
+  # Validate platform-specific defaults if present
+  if "platforms" in ($defaults | columns) {
+    let default_platforms = $defaults.platforms
+    
+    let platforms_type = ($default_platforms | describe)
+    if not ($platforms_type | str starts-with "record") {
+      $errors = ($errors | append "defaults.platforms must be a record")
+    } else {
+      # Validate platform names against platforms manifest if available
+      if $platforms != null {
+        use ./platforms.nu [get-platform-names]
+        let platform_names = (get-platform-names $platforms)
+        
+        for platform_name in ($default_platforms | columns) {
+          if not ($platform_name in $platform_names) {
+            $errors = ($errors | append $"defaults.platforms: platform '($platform_name)' not found in platforms manifest")
+          }
+        }
+      }
+      
+      # Validate each platform's defaults structure recursively
+      for platform_name in ($default_platforms | columns) {
+        let platform_defaults = ($default_platforms | get $platform_name)
+        let platform_type = ($platform_defaults | describe)
+        if not ($platform_type | str starts-with "record") {
+          $errors = ($errors | append $"defaults.platforms.($platform_name) must be a record")
+          continue
+        }
+        
+        let platform_structure_validation = (validate-version-overrides-structure $platform_defaults $"defaults.platforms.($platform_name)")
+        if not $platform_structure_validation.valid {
+          $errors = ($errors | append $platform_structure_validation.errors)
+        }
+      }
+    }
+  }
+  
+  {
+    valid: ($errors | is-empty),
+    errors: $errors
+  }
+}
+
+# Validate platform defaults structure (reuses validate-platform-config)
+export def validate-platform-defaults [
+  defaults: record
+] {
+  # Call validate-platform-config directly with "defaults" as platform name for error messages
+  validate-platform-config $defaults "defaults"
+}
+
 export def validate-platforms-manifest [
   manifest: record
 ] {
@@ -170,6 +243,14 @@ export def validate-platforms-manifest [
     let platform_names = ($platforms | each {|p| try { $p.name } catch { "" }})
     if not ($default_name in $platform_names) {
       $errors = ($errors | append $"Default platform '($default_name)' not found in platforms list")
+    }
+  }
+  
+  # Validate defaults if present
+  if "defaults" in ($manifest | columns) {
+    let defaults_validation = (validate-platform-defaults $manifest.defaults)
+    if not $defaults_validation.valid {
+      $errors = ($errors | append $defaults_validation.errors)
     }
   }
   
@@ -289,6 +370,14 @@ export def validate-version-manifest [
     let found = ($versions | where name == $default_name)
     if ($found | is-empty) {
       $errors = ($errors | append $"Default version '($default_name)' not found in versions list")
+    }
+  }
+  
+  # Validate defaults if present
+  if "defaults" in ($manifest | columns) {
+    let defaults_validation = (validate-version-defaults $manifest.defaults $platforms)
+    if not $defaults_validation.valid {
+      $errors = ($errors | append $defaults_validation.errors)
     }
   }
   

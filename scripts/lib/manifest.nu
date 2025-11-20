@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use ./common.nu [deep-merge]
+
 export def check-versions-manifest-exists [
   service: string
 ] {
@@ -48,6 +50,66 @@ export def get-default-version [
   }
 }
 
+# Apply version defaults to version spec (deep-merge defaults into overrides)
+export def apply-version-defaults [
+  manifest: record,
+  version_spec: record
+] {
+  let defaults = (try { $manifest.defaults } catch { {} })
+  if ($defaults | is-empty) {
+    return $version_spec
+  }
+
+  mut version = $version_spec
+  let overrides = (try { $version.overrides } catch { {} })
+
+  # Extract global defaults (exclude platforms if present)
+  let global_defaults = (if "platforms" in ($defaults | columns) {
+    $defaults | reject platforms
+  } else {
+    $defaults
+  })
+
+  let merged_overrides = (if ($overrides | is-empty) {
+    # Even with empty overrides, we might have platform-specific defaults
+    if "platforms" in ($defaults | columns) {
+      $defaults  # Return full defaults including platforms
+    } else {
+      $global_defaults
+    }
+  } else {
+    # Deep merge global defaults into global overrides
+    let global_overrides = (if "platforms" in ($overrides | columns) {
+      $overrides | reject platforms
+    } else {
+      $overrides
+    })
+    mut merged_global = (deep-merge $global_defaults $global_overrides)
+
+    # Handle platform-specific defaults
+    if "platforms" in ($defaults | columns) {
+      let default_platforms = $defaults.platforms
+      let override_platforms = (try { $overrides.platforms } catch { {} })
+
+      mut merged_platforms = $override_platforms
+      for platform_name in ($default_platforms | columns) {
+        let platform_defaults = ($default_platforms | get $platform_name)
+        let platform_overrides = (try { $override_platforms | get $platform_name } catch { {} })
+        $merged_platforms = ($merged_platforms | upsert $platform_name (deep-merge $platform_defaults $platform_overrides))
+      }
+      $merged_global = ($merged_global | insert platforms $merged_platforms)
+    } else if "platforms" in ($overrides | columns) {
+      # No platform defaults, but overrides has platforms - keep them
+      $merged_global = ($merged_global | insert platforms $overrides.platforms)
+    }
+
+    $merged_global
+  })
+
+  $version = ($version | upsert overrides $merged_overrides)
+  $version
+}
+
 export def get-version-spec [
   manifest: record,
   version_name: string
@@ -64,7 +126,10 @@ export def get-version-spec [
     error make { msg: $"Version '($version_name)' not found in manifest" }
   }
   
-  $found.0
+  let version_spec = $found.0
+  
+  # Apply defaults before returning
+  apply-version-defaults $manifest $version_spec
 }
 
 export def get-latest-versions [

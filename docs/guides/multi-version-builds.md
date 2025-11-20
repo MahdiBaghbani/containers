@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Version Manifests Guide
 
 ## Overview
@@ -91,12 +92,13 @@ nu scripts/build.nu --service revad-base --all-versions
 
 ### Top-Level Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `default` | string | Yes | Default version to build when no `--version` flag is specified. Must match a version `name` in the `versions` array. |
-| `versions` | list | Yes | List of version specifications |
+| Field      | Type   | Required | Description                                                                                                          |
+| ---------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------- |
+| `default`  | string | Yes      | Default version to build when no `--version` flag is specified. Must match a version `name` in the `versions` array. |
+| `versions` | list   | Yes      | List of version specifications                                                                                       |
 
 **Validation Rules for `default` field:**
+
 - The `default` value MUST exactly match a version `name` in the `versions` array
 - Validation occurs during service configuration loading (before build starts)
 - If `default` references a version that doesn't exist in `versions`, validation fails with error:
@@ -106,6 +108,7 @@ nu scripts/build.nu --service revad-base --all-versions
 - **Important:** If you remove a version from the `versions` array but it's still referenced by `default`, the build will fail. Always update `default` when removing versions.
 
 **Example of invalid manifest:**
+
 ```nuon
 {
   "default": "v1.0.0",  // ERROR ERROR: v1.0.0 not in versions array
@@ -120,18 +123,19 @@ nu scripts/build.nu --service revad-base --all-versions
 
 ### Version Specification
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Version identifier (automatically added as a tag). Must be unique across all versions. **MUST NOT include platform suffixes** (e.g., `-debian`, `-alpine`) - these are added automatically during expansion. |
-| `latest` | bool | No | Whether this version should be tagged as "latest" (default: false). Only ONE version can have this set to true. When true, "latest" tag is automatically added. |
-| `tags` | list&lt;string&gt; | No | Additional image tags (for aliases). Cannot contain the version `name` or `"latest"` (these are auto-generated). Tags must be unique across ALL versions. |
-| `overrides` | record | No | Configuration overrides for this version |
+| Field       | Type               | Required | Description                                                                                                                                                                                                  |
+| ----------- | ------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`      | string             | Yes      | Version identifier (automatically added as a tag). Must be unique across all versions. **MUST NOT include platform suffixes** (e.g., `-debian`, `-alpine`) - these are added automatically during expansion. |
+| `latest`    | bool               | No       | Whether this version should be tagged as "latest" (default: false). Only ONE version can have this set to true. When true, "latest" tag is automatically added.                                              |
+| `tags`      | list&lt;string&gt; | No       | Additional image tags (for aliases). Cannot contain the version `name` or `"latest"` (these are auto-generated). Tags must be unique across ALL versions.                                                    |
+| `overrides` | record             | No       | Configuration overrides for this version                                                                                                                                                                     |
 
 **WARNING: Platform Suffixes in Version Names**
 
 Version names in the manifest MUST NOT include platform suffixes. Platform suffixes (e.g., `-debian`, `-alpine`) are automatically added during version expansion when a `platforms.nuon` manifest exists.
 
 **WRONG:**
+
 ```nuon
 {
   "name": "v1.0.0-debian"  // ERROR: Platform suffix in version name
@@ -139,6 +143,7 @@ Version names in the manifest MUST NOT include platform suffixes. Platform suffi
 ```
 
 **CORRECT:**
+
 ```nuon
 {
   "name": "v1.0.0"  // Platform suffix added automatically during expansion
@@ -148,6 +153,7 @@ Version names in the manifest MUST NOT include platform suffixes. Platform suffi
 When building with `--version v1.0.0-debian`, the build system detects the platform suffix for filtering, but the version name in the manifest must be the base name without the suffix.
 
 **Tag Generation Rules:**
+
 - Final tags = `[name]` + (if `latest: true` then `["latest"]`) + `tags`
 - Example: `name: "v3.3.2"`, `latest: true`, `tags: ["v3.3", "v3"]` -> Final: `["v3.3.2", "latest", "v3.3", "v3"]`
 - The `name` and `"latest"` are automatically generated - do NOT include them in the `tags` array
@@ -166,6 +172,7 @@ The `overrides` section can override any field from the base service config:
 - `dependencies.{name}.version` - Pin dependency to specific version
 
 **Override Behavior:**
+
 - Overrides are **deep merged** with base config
 - Specific fields override; missing fields use base config values
 
@@ -208,6 +215,7 @@ When a service has a `platforms.nuon` manifest, you can override configuration p
 ```
 
 **Platform Override Merge Precedence:**
+
 1. Base config (`services/{service-name}.nuon`)
 2. Platform config (`platforms.nuon`)
 3. Global version overrides (`versions.nuon` - `overrides` excluding `platforms` key)
@@ -216,6 +224,130 @@ When a service has a `platforms.nuon` manifest, you can override configuration p
 Platform-specific overrides win over global overrides for the same field. All fields can be overridden per platform: `sources`, `external_images`, `build_args`, `dependencies`, `labels`, `dockerfile`.
 
 **See Also:** [Multi-Platform Builds Guide](multi-platform-builds.md) for complete platform documentation.
+
+### Top-Level Defaults
+
+When multiple versions share the same configuration values, you can use the optional `defaults` field to reduce repetition. Defaults are deep-merged into each version's `overrides` field.
+
+**Example: Reducing Repetition**
+
+**Before (repetitive):**
+
+```nuon
+{
+  "default": "v3.3.2",
+  "versions": [
+    {
+      "name": "v3.3.2",
+      "overrides": {
+        "external_images": {
+          "build": { "tag": "1.25-trixie" }
+        },
+        "dependencies": {
+          "common-tools": { "version": "v1.0.0-debian" }
+        }
+      }
+    },
+    {
+      "name": "v3.3.3",
+      "overrides": {
+        "external_images": {
+          "build": { "tag": "1.25-trixie" }
+        },
+        "dependencies": {
+          "common-tools": { "version": "v1.0.0-debian" }
+        }
+      }
+    }
+  ]
+}
+```
+
+**After (with defaults):**
+
+```nuon
+{
+  "default": "v3.3.2",
+  "defaults": {
+    "external_images": {
+      "build": { "tag": "1.25-trixie" }
+    },
+    "dependencies": {
+      "common-tools": { "version": "v1.0.0-debian" }
+    }
+  },
+  "versions": [
+    {
+      "name": "v3.3.2",
+      "overrides": {}
+    },
+    {
+      "name": "v3.3.3",
+      "overrides": {}
+    }
+  ]
+}
+```
+
+**Platform-Specific Defaults:**
+
+For multi-platform services, you can define defaults that apply only to specific platforms:
+
+```nuon
+{
+  "default": "v1.0.0",
+  "defaults": {
+    "external_images": {
+      "build": { "tag": "1.25-trixie" }
+    },
+    "platforms": {
+      "production": {
+        "external_images": {
+          "runtime": { "tag": "nonroot" }
+        }
+      },
+      "development": {
+        "external_images": {
+          "runtime": { "tag": "trixie-slim" }
+        }
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "overrides": {
+        "platforms": {
+          "production": {
+            "external_images": {
+              "runtime": { "tag": "custom-runtime" }  // Overrides default
+            }
+          }
+          // development gets defaults.platforms.development automatically
+        }
+      }
+    }
+  ]
+}
+```
+
+**How Defaults Work:**
+
+1. **Global defaults** merge into each version's `overrides` field
+2. **Platform-specific defaults** (`defaults.platforms.{platform}`) merge into `overrides.platforms.{platform}`
+3. **Version overrides** take precedence over defaults
+4. If a version doesn't have an `overrides` field, defaults create it
+
+**Migration:**
+
+To migrate an existing manifest to use defaults:
+
+1. Identify common values shared across all versions
+2. Extract them to the `defaults` field
+3. Remove duplicates from version `overrides`
+4. Verify merged configs match exactly (field-by-field comparison)
+
+**See Also:** [Version Manifest Schema Reference](../reference/version-manifest-schema.md#top-level-defaults) for complete defaults documentation.
 
 ---
 
@@ -281,6 +413,7 @@ nu scripts/build.nu --service revad-base --latest-only
 ```
 
 **Flag Distinction:**
+
 - `--version <string>` - Build a single specific version
 - `--versions <string>` - Build multiple versions (comma-separated list)
 
@@ -292,11 +425,12 @@ nu scripts/build.nu --service revad-base --matrix-json
 ```
 
 Output:
+
 ```json
 {
   "include": [
-    {"version": "v1.29.0", "latest": true, "tags": "v1.29.0,v1.29,v1,latest"},
-    {"version": "v1.28.0", "latest": false, "tags": "v1.28.0,v1.28"}
+    { "version": "v1.29.0", "latest": true, "tags": "v1.29.0,v1.29,v1,latest" },
+    { "version": "v1.28.0", "latest": false, "tags": "v1.28.0,v1.28" }
   ]
 }
 ```
@@ -338,10 +472,10 @@ jobs:
       revad-base: ${{ steps.reva.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Nushell
         run: curl -sSL https://install.nu | sh
-      
+
       - name: Generate revad-base matrix
         id: reva
         run: |
@@ -356,7 +490,7 @@ jobs:
       matrix: ${{ fromJson(needs.matrix.outputs.revad-base) }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Build revad-base:${{ matrix.version }}
         run: |
           nu scripts/build.nu \
@@ -386,6 +520,7 @@ jobs:
 **Use Case:** Build Reva v1.29 and v1.28
 
 `services/revad-base/versions.nuon`:
+
 ```nuon
 {
   "default": "v1.29.0",
@@ -414,6 +549,7 @@ jobs:
 ```
 
 Build commands:
+
 ```bash
 # Build both versions
 nu scripts/build.nu --service revad-base --all-versions
@@ -428,6 +564,7 @@ nu scripts/build.nu --service revad-base --all-versions
 **Use Case:** Nextcloud with different contacts app versions
 
 `services/nextcloud/versions.nuon`:
+
 ```nuon
 {
   "default": "v31.0.5",
@@ -539,11 +676,13 @@ nu scripts/build.nu --service revad-base --all-versions
 ### Naming Conventions
 
 **Version Names:**
+
 - Use semantic version format: `v1.2.3`
 - Use descriptive names for special versions: `edge`, `dev`, `stable`
 - Version names must be unique across all versions in the manifest
 
 **Tags:**
+
 - Version name is automatically used as a tag (don't include in `tags` array)
 - Use `latest: true` for the current production version (only one!)
 - Use `tags` array for semantic version aliases: `["v1.29", "v1"]`
@@ -555,12 +694,14 @@ nu scripts/build.nu --service revad-base --all-versions
 - One manifest per service
 - Group related versions together
 - Use comments to document version compatibility
+- Use `defaults` to reduce repetition when versions share configuration
 
 ### Maintenance
 
 - Archive old versions after EOL
 - Keep at least 2 recent versions
 - Test new versions before marking as `latest`
+- Extract common values to `defaults` to reduce file size and maintenance burden
 
 ---
 
@@ -579,6 +720,7 @@ nu scripts/build.nu --service revad-base --all-versions
 **Problem:** Service wants `revad-base:v2` but only `v3` is available.
 
 **Solution:** Build the required dependency version first:
+
 ```bash
 nu scripts/build.nu --service revad-base --version v2
 nu scripts/build.nu --service cernbox-revad --version v2
