@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Service Configuration Schema
 
 ## Overview
@@ -103,7 +104,7 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
 - Build args are auto-generated: `{SOURCE_KEY}_REF` and `{SOURCE_KEY}_URL`
 - Example: `"web_extensions"` -> `WEB_EXTENSIONS_REF` and `WEB_EXTENSIONS_URL`
 
-For complete details, see [Source Build Args](../../source-build-args.md).
+For complete details, see [Source Build Arguments Convention](../concepts/service-configuration.md#source-build-arguments-convention).
 
 ## External Images
 
@@ -276,6 +277,7 @@ All other fields (`dockerfile`, `external_images`, `sources`, `dependencies`, `b
 **Note:** Labels are Docker image metadata (like TLS), not infrastructure or version control, so they are allowed in base config even when `platforms.nuon` exists.
 
 **Error example:**
+
 ```text
 Service 'my-service': external_images.build: Field forbidden when platforms.nuon exists. Move to platforms.nuon (infrastructure) or versions.nuon (versions).
 ```
@@ -288,35 +290,35 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
   "name": "service-name",
   "context": "services/service-name",
   "dockerfile": "services/service-name/Dockerfile",
-  
+
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
       "ref": "v3.3.2"
     }
   },
-  
+
   "external_images": {
     "build": {
       "name": "golang",
       "build_arg": "BASE_BUILD_IMAGE"
     }
   },
-  
+
   "dependencies": {
     "revad-base": {
       "build_arg": "REVAD_BASE_IMAGE"
     }
   },
-  
+
   "build_args": {
     "CUSTOM_ARG": "value"
   },
-  
+
   "labels": {
     "org.opencontainers.image.title": "Service Name"
   },
-  
+
   "tls": {
     "enabled": true,
     "mode": "ca-and-cert",
@@ -483,7 +485,6 @@ Service depending on multiple services with different versions:
 
 ## See Also
 
-- [Service Configuration](../concepts/service-configuration.md) - Service config concepts
+- [Service Configuration](../concepts/service-configuration.md) - Service config concepts (includes source build args convention)
 - [Dependency Management](../concepts/dependency-management.md) - Dependency resolution
-- [Source Build Args](../../source-build-args.md) - Source build args convention
 - [Schema File](../../schemas/service.nuon) - Authoritative schema definition

@@ -30,7 +30,7 @@
   //           ERROR: "Service 'X': external_images.build: Field forbidden when platforms.nuon exists. Move to platforms.nuon (infrastructure) or versions.nuon (versions)."
 
   // Source repositories - build args auto-generated: {SOURCE_KEY}_REF and {SOURCE_KEY}_URL
-  // See docs/source-build-args.md for complete convention
+  // See docs/concepts/service-configuration.md#source-build-arguments-convention for complete convention
   // VALIDATION: Source keys must match ^[a-z0-9_]+$ (lowercase alphanumeric with underscores only)
   // VALIDATION: build_arg field is FORBIDDEN (auto-generated, will cause validation error)
   // NOTE: For single-platform services, sources are REQUIRED in base config (versions.nuon can override, but base must have as fallback).
@@ -81,7 +81,7 @@
     "revad-base": {
       "build_arg": "REVAD_BASE_IMAGE" // string (required) - must be unique across all dependencies
     },
-    
+
     // Advanced case: multiple dependencies from same service with different versions
     // Useful for different platform variants (e.g., debian vs alpine) of the same service
     "common-tools-builder": {
@@ -122,7 +122,8 @@
     "cert_name": "reva", // string (optional if mode="ca-only", required if mode="ca-and-cert" or "cert-only")
     "instances": 1, // int (optional) - used by certificate generation scripts
     "domain_suffix": "docker", // string (optional) - used by certificate generation scripts
-    "sans": [ // list<string> (optional) - used by certificate generation scripts
+    "sans": [
+      // list<string> (optional) - used by certificate generation scripts
       "DNS:service.docker"
     ]
   }

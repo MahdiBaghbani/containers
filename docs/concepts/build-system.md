@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Build System
 
 ## Overview
@@ -50,17 +51,17 @@ When injecting build arguments, the build system applies them in this order (lat
 
 - `ARG REVAD_BASE_IMAGE="revad-base:latest"` - Used only if the build script doesn't provide this arg
 
-**Note:** Dependencies have the highest priority for dependency-related build arguments and will override environment variables. TLS arguments are added after dependencies but use a separate namespace (TLS_*) and don't conflict with dependency build args.
+**Note:** Dependencies have the highest priority for dependency-related build arguments and will override environment variables. TLS arguments are added after dependencies but use a separate namespace (TLS\_\*) and don't conflict with dependency build args.
 
 ### Environment Variable Override Behavior
 
-| Build Arg Type | Can Be Overridden by Env Var? | Reason |
-|----------------|-------------------------------|--------|
-| Source args (auto-generated) | **YES** | `REVAD_REF`, `REVAD_URL` can be overridden for testing |
-| External image args | **YES** | `BASE_BUILD_IMAGE` can be overridden for testing |
-| Config `build_args` | **YES** | `CUSTOM_ARG` can be overridden for testing |
-| **Dependency args** | **NO** | Dependencies are system-managed and authoritative |
-| **TLS args** | **NO** | TLS args use separate namespace (TLS_*) |
+| Build Arg Type               | Can Be Overridden by Env Var? | Reason                                                 |
+| ---------------------------- | ----------------------------- | ------------------------------------------------------ |
+| Source args (auto-generated) | **YES**                       | `REVAD_REF`, `REVAD_URL` can be overridden for testing |
+| External image args          | **YES**                       | `BASE_BUILD_IMAGE` can be overridden for testing       |
+| Config `build_args`          | **YES**                       | `CUSTOM_ARG` can be overridden for testing             |
+| **Dependency args**          | **NO**                        | Dependencies are system-managed and authoritative      |
+| **TLS args**                 | **NO**                        | TLS args use separate namespace (TLS\_\*)              |
 
 ### Summary
 
@@ -209,6 +210,16 @@ Use `--show-build-order` flag to see build order without building:
 nu scripts/build.nu --service cernbox-web --show-build-order
 ```
 
+**Output:**
+
+```text
+=== Build Order ===
+
+1. revad-base:v3.3.2
+2. cernbox-revad:v1.0.0
+3. cernbox-web:v1.0.0
+```
+
 ## Automatic Dependency Building
 
 By default, the build system automatically builds missing dependencies.
@@ -216,6 +227,7 @@ By default, the build system automatically builds missing dependencies.
 ### Default Behavior
 
 When building a service:
+
 1. Build dependency graph
 2. Topological sort to determine build order
 3. Build each dependency in order (if missing)
@@ -577,6 +589,14 @@ Other platforms (alpine):
 ```
 
 For complete details on tag generation, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
+
+## Best Practices
+
+1. **Use per-service cache busting** for normal builds (default) - This ensures efficient caching while detecting source changes
+2. **Use `--no-cache`** for release builds to ensure freshness - Forces complete rebuilds for production releases
+3. **Let auto-build handle dependencies** (default behavior) - Simplifies workflow and ensures correct build order
+4. **Use `--show-build-order`** to debug dependency issues - Visualize the dependency graph before building
+5. **Review build summary** after multi-version builds - Check for partial failures and skipped builds
 
 ## See Also
 

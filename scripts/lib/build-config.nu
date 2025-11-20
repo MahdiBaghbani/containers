@@ -84,7 +84,7 @@ export def get-env-or-config [env_name: string, config_val: any] {
 }
 
 # Process sources into build args (auto-generates {SOURCE_KEY}_REF and {SOURCE_KEY}_URL)
-# See docs/source-build-args.md for convention
+# See docs/concepts/service-configuration.md#source-build-arguments-convention for convention
 # CRITICAL: Use reduce instead of for loop to avoid mut variable scope bug
 export def process-sources-to-build-args [sources: record] {
     ($sources | columns | reduce --fold {} {|source_key, acc|

@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Documentation
 
 Overview of DockyPody documentation structure.
@@ -30,8 +31,8 @@ Overview of DockyPody documentation structure.
 
 ### For New Users
 
-- Start with [Getting Started](guides/getting-started.md)
-- Then read [Service Configuration](concepts/service-configuration.md)
+- Start with [Getting Started](guides/getting-started.md) - Quick start tutorial
+- Then read [Service Configuration](concepts/service-configuration.md) - Understanding service configs
 
 ### For Developers
 
@@ -43,6 +44,8 @@ Overview of DockyPody documentation structure.
 - [Service Setup Guide](guides/service-setup.md) - Creating new services
 - [Multi-Version Builds](guides/multi-version-builds.md) - Version management
 - [Multi-Platform Builds](guides/multi-platform-builds.md) - Platform variants
+- [Docker Buildx](guides/docker-buildx.md) - Docker Buildx features
+- [System Administration](guides/system-administration.md) - System administration tasks
 
 ### Reference Documentation
 

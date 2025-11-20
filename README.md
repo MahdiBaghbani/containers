@@ -16,181 +16,65 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
-Open Cloud Mesh Containers
-===============
 
-This repository hosts scripts and resources to build and publish container images for OCM services using separate workflows for GitHub Actions and Forgejo Actions.
+# Open Cloud Mesh Containers
 
-Open Cloud Mesh Containers is based on a build system called DockyPody.
+This repository hosts scripts and resources to build and publish container images for OCM services using DockyPody, a Nushell-based build system.
 
-Workflows
----------
+## Quick Start
 
-- GitHub: `.github/workflows/build-containers.yml`
-- Forgejo: `.forgejo/workflows/build-containers.yml`
+1. **Generate TLS certificates:**
 
-Scripts (Nushell)
------------------
+   ```bash
+   make tls all
+   ```
 
-### Build Command
+2. **Build a service:**
 
-```bash
-nu scripts/build.nu --service <service-name> [options]
-```
+   ```bash
+   nu scripts/build.nu --service <service-name>
+   ```
 
-**New Features:**
+For complete setup instructions, see [Getting Started Guide](docs/guides/getting-started.md).
 
-- **Build all services:** `--all-services` to build all discovered services in dependency order
-- **Cache busting:** `--cache-bust <value>` or `--no-cache`
-- **Auto-build dependencies:** Enabled by default (use `--no-auto-build-deps` to disable)
-- **Build order:** `--show-build-order` to display without building
-- **Continue-on-failure:** Default for multi-version builds (use `--fail-fast` to break early)
+## Key Features
 
-### Version Management Flags
+- **Multi-platform builds** - Build for multiple architectures (linux/amd64, linux/arm64)
+- **Version management** - Build multiple versions from manifests with automatic tagging
+- **Dependency resolution** - Automatic dependency building with correct build order
+- **Cache optimization** - Deterministic cache busting for efficient rebuilds
+- **TLS management** - Selective certificate copying for secure, minimal images
 
-All version-related flags for building services:
+See [Build System](docs/concepts/build-system.md) for complete feature documentation.
 
-```bash
-# Build default version from manifest
-nu scripts/build.nu --service revad-base
+## Documentation
 
-# Build specific version
-nu scripts/build.nu --service revad-base --version v1.29.0
+### For New Users
 
-# Build all versions from manifest
-nu scripts/build.nu --service revad-base --all-versions
+- [Getting Started](docs/guides/getting-started.md) - Quick start tutorial
+- [Service Configuration](docs/concepts/service-configuration.md) - Understanding service configs
 
-# Build specific versions (comma-separated)
-nu scripts/build.nu --service revad-base --versions v1.29.0,v1.28.0
+### For Developers
 
-# Build only versions marked as latest
-nu scripts/build.nu --service revad-base --latest-only
+- [Nushell Development Guide](docs/guides/nushell-development.md) - Essential before editing scripts
+- [Build System](docs/concepts/build-system.md) - Build system architecture
 
-# Generate CI matrix JSON
-nu scripts/build.nu --service revad-base --matrix-json
-```
+### For Service Authors
 
-**Flag Distinction:**
+- [Service Setup Guide](docs/guides/service-setup.md) - Creating new services
+- [Multi-Version Builds](docs/guides/multi-version-builds.md) - Version management
+- [Multi-Platform Builds](docs/guides/multi-platform-builds.md) - Platform variants
 
-- `--version <string>` - Build a single specific version
-- `--versions <string>` - Build multiple versions (comma-separated list)
-- `--all-versions` - Build all versions in manifest
-- `--latest-only` - Build only versions with `latest: true`
+### Reference Documentation
 
-See [docs/guides/multi-version-builds.md](docs/guides/multi-version-builds.md) for details on version manifests.
+- [CLI Reference](docs/reference/cli-reference.md) - Complete CLI documentation
+- [Config Schema](docs/reference/config-schema.md) - Service configuration schema
+- [Version Manifest Schema](docs/reference/version-manifest-schema.md) - Version manifest schema
+- [Platform Manifest Schema](docs/reference/platform-manifest-schema.md) - Platform manifest schema
 
-### Build All Services
+See [Documentation Index](docs/index.md) for complete documentation listing.
 
-```bash
-# Build all services with default versions
-nu scripts/build.nu --all-services
-
-# Build all services, all versions
-nu scripts/build.nu --all-services --all-versions
-
-# Build all services for specific platform
-nu scripts/build.nu --all-services --platform debian
-
-# Show build order for all services
-nu scripts/build.nu --all-services --show-build-order
-
-# Generate CI matrix for all services
-nu scripts/build.nu --all-services --matrix-json
-```
-
-**Features:**
-
-- Discovers all services automatically
-- Constructs global dependency graph with deduplication
-- Builds in topological order (dependencies first)
-- Continue-on-failure by default (use `--fail-fast` to stop on first error)
-- Services without version manifests are skipped with a warning
-
-See [docs/reference/cli-reference.md](docs/reference/cli-reference.md#all-services) for complete documentation.
-
-### Multi-Platform Builds
-
-```bash
-# Build all platforms for a version (requires platforms.nuon)
-nu scripts/build.nu --service my-service --version v1.0.0
-
-# Build specific platform only
-nu scripts/build.nu --service my-service --version v1.0.0 --platform debian
-
-# Build with platform suffix
-nu scripts/build.nu --service my-service --version v1.0.0-alpine
-```
-
-See [docs/guides/multi-platform-builds.md](docs/guides/multi-platform-builds.md) for details on multi-platform builds.
-
-### Library Modules (`scripts/lib/`)
-
-**Core Libraries:**
-
-- `lib/common.nu` – Common utilities (path helpers, find-duplicates, require-ca, error handling, record utilities)
-- `lib/constants.nu` – Build system constants (platforms, tags, labels, error messages, defaults)
-- `lib/meta.nu` – Derive build type, tags, platforms from git/CI
-- `lib/services.nu` – Service discovery and management
-
-**Build System:**
-
-- `lib/build-config.nu` – Build configuration parsing (bool flags, list flags, env overrides, build args processing)
-- `lib/build-ops.nu` – Build operations (config loading, tag generation, label generation, TLS context management)
-- `lib/buildx.nu` – Setup buildx and perform builds
-- `lib/dependencies.nu` – Resolve internal service dependencies
-
-**Versioning:**
-
-- `lib/manifest.nu` – Load and merge version manifests
-- `lib/platforms.nu` – Multi-platform build support and configuration merging
-- `lib/matrix.nu` – Generate CI build matrices
-- `lib/validate.nu` – Validate service configs and manifests
-
-**TLS Management:**
-
-- `lib/tls-validation.nu` – TLS certificate validation and CA synchronization
-
-**Registry:**
-
-- `lib/registry/registry-info.nu` – Parse git origin to derive registry paths
-- `lib/registry/registry.nu` – Login to GHCR and Forgejo registries
-
-### Testing
-
-```bash
-# Run all test suites
-nu scripts/test.nu
-
-# Run specific test suite
-nu scripts/test.nu --suite manifests
-nu scripts/test.nu --suite services
-nu scripts/test.nu --suite tls
-
-# Run with verbose output
-nu scripts/test.nu --verbose
-```
-
-Tests are designed for development and debugging.
-
-TLS Certificate Management
---------------------------
-
-The build system implements selective TLS certificate copying for smaller, more secure images.
-
-```bash
-# Generate shared CA
-nu scripts/tls/generate-ca.nu
-
-# Generate all service certificates
-nu scripts/tls/generate-all-certs.nu
-```
-
-Each service config can declare TLS requirements. During build, only the CA and service-specific certificate are copied into the image (not all certificates).
-
-See [docs/concepts/tls-management.md](docs/concepts/tls-management.md) for complete TLS documentation.
-
-Service Configuration
----------------------
+## Service Configuration
 
 Services are defined in `services/{service-name}.nuon`:
 
@@ -199,102 +83,28 @@ Services are defined in `services/{service-name}.nuon`:
   "name": "revad-base",
   "context": "services/revad-base",
   "dockerfile": "services/revad-base/Dockerfile",
-  
   "sources": {
     "revad": {
       "url": "https://github.com/cs3org/reva",
       "ref": "v3.3.2"
-      // Auto-generates build args: REVAD_REF and REVAD_URL
-    }
-  },
-  
-  "external_images": {
-    "build": {
-      "image": "golang:1.25-trixie",
-      "build_arg": "BASE_BUILD_IMAGE"
-    }
-  },
-  
-  "dependencies": {
-    "revad-base": {
-      "version": "v3.3.2",
-      "build_arg": "REVAD_BASE_IMAGE"
     }
   }
 }
 ```
 
-**Source Build Args Convention:**
+See [Service Configuration](docs/concepts/service-configuration.md) for complete documentation.
 
-- Source keys must be lowercase alphanumeric with underscores
-- Build args are auto-generated: `{SOURCE_KEY}_REF` and `{SOURCE_KEY}_URL`
-- Example: `"nushell"` → `NUSHELL_REF` and `NUSHELL_URL`
+## Workflows
 
-See [docs/concepts/build-system.md](docs/concepts/build-system.md) and [docs/concepts/service-configuration.md](docs/concepts/service-configuration.md) for complete documentation.
+CI/CD workflows are available for GitHub Actions and Forgejo Actions:
 
-For multi-version builds, you can create `services/{service-name}/versions.nuon`. Check [docs/guides/multi-version-builds.md](docs/guides/multi-version-builds.md) for examples.
+- GitHub: `.github/workflows/build-containers.yml`
+- Forgejo: `.forgejo/workflows/build-containers.yml`
 
-Build System Enhancements
--------------------------
+See [CI/CD Workflows](docs/guides/ci-cd.md) for workflow documentation (pending).
 
-### Cache Busting
-
-Deterministic cache invalidation via source refs hash:
-
-```bash
-# Per-service cache bust (default)
-nu scripts/build.nu --service cernbox-web
-
-# Global override
-nu scripts/build.nu --service cernbox-web --cache-bust "abc123"
-
-# Force full rebuild
-nu scripts/build.nu --service cernbox-web --no-cache
-```
-
-### Automatic Dependency Building
-
-Dependencies are automatically built if missing (default):
-
-```bash
-# Auto-build dependencies
-nu scripts/build.nu --service cernbox-web
-
-# Disable auto-build
-nu scripts/build.nu --service cernbox-web --no-auto-build-deps
-
-# Push dependencies
-nu scripts/build.nu --service cernbox-web --push-deps
-
-# Tag dependencies
-nu scripts/build.nu --service cernbox-web --latest --tag-deps
-```
-
-### Build Order Resolution
-
-View build order without building:
-
-```bash
-nu scripts/build.nu --service cernbox-web --show-build-order
-```
-
-### Continue-on-Failure
-
-Multi-version builds continue on failure by default:
-
-```bash
-# Continue on failure (default)
-nu scripts/build.nu --service revad-base --all-versions
-
-# Fail fast
-nu scripts/build.nu --service revad-base --all-versions --fail-fast
-```
-
-See [docs/concepts/build-system.md](docs/concepts/build-system.md) for complete documentation.
-
-Conventions
------------
+## Conventions
 
 - Release builds: multi-arch (linux/amd64, linux/arm64)
-- Dev/Stage builds: linux/amd64 only, triggered by commit messages containing `(dev-build)` or `(stage-build)` (or `[dev-build]`, `[stage-build]`)
+- Dev/Stage builds: linux/amd64 only, triggered by commit messages containing `(dev-build)` or `(stage-build)`
 - Registries: GHCR (`ghcr.io`) and Forgejo (domain from git origin)

@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Docker Buildx Guide
 
 Quick reference for Docker Buildx features used in this project.
@@ -247,5 +248,5 @@ docker buildx prune --max-used-space 5GB
 
 - [Build System Concepts](../concepts/build-system.md) - Build system architecture
 - [Cache Busting](../concepts/build-system.md#cache-busting) - CACHEBUST details
-- [Source Build Args](../source-build-args.md) - Source build argument conventions
+- [Source Build Arguments](../concepts/service-configuration.md#source-build-arguments-convention) - Source build argument conventions
 - [System Administration Guide](system-administration.md) - ZFS and disk space management
