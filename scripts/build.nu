@@ -1309,9 +1309,14 @@ def build-single-version [
           let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps)
           $current_cache = $build_result.sha_cache  # Update cache for next dependency
         } catch {|err|
+          let error_msg = (try { $err.msg } catch { "Unknown error" })
           error make {
             msg: ($"Failed to build dependency '($dep_label)' while building '($build_label)'.\n\n" +
-                  $"Error: ($err.msg)")
+                  $"Error: ($error_msg)\n\n" +
+                  "Common causes:\n" +
+                  "  - Missing required files (check error message above)\n" +
+                  "  - Invalid configuration in service manifest\n" +
+                  "  - Docker build failure (check Dockerfile and context)")
           }
         }
       }

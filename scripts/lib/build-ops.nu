@@ -1,0 +1,439 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Open Cloud Mesh Containers: container build scripts and images
+# Copyright (C) 2025 Open Cloud Mesh Contributors
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Build operations for container image builds
+
+use ./platforms.nu [merge-version-overrides merge-platform-config get-platform-spec check-platforms-manifest-exists]
+use ./common.nu [get-service-config-path get-tls-mode]
+use ./validate.nu [validate-merged-config]
+
+# Load service config and merge platform/version overrides
+# See docs/concepts/service-configuration.md for merge order
+export def load-service-config [
+    service: string,
+    version_spec: record,
+    platform: string = "",
+    platforms: any = null
+] {
+    let cfg_path = (get-service-config-path $service)
+    let base_cfg = (open $cfg_path)
+    
+    mut merged_cfg = $base_cfg
+    
+    if ($platform | str length) > 0 {
+        if $platforms == null {
+            error make { msg: $"Platform '($platform)' specified but platforms manifest not provided to load-service-config" }
+        }
+        let platform_spec = (get-platform-spec $platforms $platform)
+        $merged_cfg = (merge-platform-config $merged_cfg $platform_spec)
+    }
+    
+    $merged_cfg = (merge-version-overrides $merged_cfg $version_spec $platform $platforms)
+    
+    # Validate merged config before returning
+    let has_platforms = (if $platforms != null { true } else { (check-platforms-manifest-exists $service) })
+    let validation = (validate-merged-config $merged_cfg $service $has_platforms $platform)
+    if not $validation.valid {
+        mut error_msg = "Merged config validation failed:\n"
+        for error in $validation.errors {
+            $error_msg = ($error_msg + $"  - ($error)\n")
+        }
+        error make { msg: $error_msg }
+    }
+    
+    $merged_cfg
+}
+
+export def extract-tls-metadata [
+    cfg: record,
+    ca_name: string = ""  # CA name from ca.json (read once per build in build.nu)
+] {
+    let tls_enabled = (try { $cfg.tls.enabled | default false } catch { false })
+    
+    let tls_mode_raw = (get-tls-mode $cfg)
+    let tls_mode = (if $tls_enabled {
+        if $tls_mode_raw == null {
+            error make {msg: "tls.mode is required when tls.enabled=true (validation should have caught this)"}
+        }
+        $tls_mode_raw
+    } else {
+        "disabled"
+    })
+    
+    let tls_cert_name = (try { $cfg.tls.cert_name } catch { "" })
+    
+    let tls_ca_name = (if $tls_enabled {
+        if ($ca_name | str trim | is-empty) {
+            error make {msg: "CA name must be provided when TLS is enabled. This is a build system bug - CA name should have been read and validated in build.nu."}
+        }
+        $ca_name
+    } else {
+        ""
+    })
+    
+    {
+        enabled: $tls_enabled,
+        mode: $tls_mode,
+        cert_name: $tls_cert_name,
+        ca_name: $tls_ca_name
+    }
+}
+
+export def prepare-tls-context [
+    service: string,
+    context: string,
+    tls_enabled: bool,
+    tls_mode: string  # Mode parameter (required, no default to prevent masking validation errors)
+] {
+    if not $tls_enabled {
+        return {copied: false, files: []}
+    }
+    
+    if ($tls_mode | str trim | is-empty) or $tls_mode == "disabled" {
+        error make {msg: "tls_mode parameter is required when tls_enabled=true. This is a build system bug."}
+    }
+    
+    if $tls_mode == "ca-only" {
+        print "CA-only mode: Skipping copy-tls.nu copy (not needed)"
+        return {copied: false, files: []}
+    }
+    
+    # Verify TLS helper script exists before copying
+    let tls_helper_script = "scripts/tls/copy-tls.nu"
+    if not ($tls_helper_script | path exists) {
+        error make {
+            msg: ($"TLS helper script not found: ($tls_helper_script)\n\n" +
+                  "This script is required for TLS modes 'ca-and-cert' and 'cert-only'.\n" +
+                  "The file should be located at scripts/tls/copy-tls.nu.\n\n")
+        }
+    }
+    
+    mkdir ($"($context)/scripts/tls")
+    cp $tls_helper_script $"($context)/scripts/tls/copy-tls.nu"
+    print "Copied TLS helper script to service context: copy-tls.nu"
+    {copied: true, files: ["copy-tls.nu"]}
+}
+
+export def cleanup-tls-context [
+    context: string,
+    tls_context: record
+] {
+    if not $tls_context.copied {
+        return
+    }
+    
+    for file in $tls_context.files {
+        rm -f $"($context)/scripts/tls/($file)"
+    }
+    
+    try { rmdir $"($context)/scripts/tls" } catch { }
+    print "Cleaned up TLS helper script(s) from service context"
+}
+
+# Generate image tags (default platform gets unprefixed versions of all tags, others get platform-suffixed only)
+export def generate-tags [
+    service: string,
+    version_spec: record,
+    is_local: bool,
+    registry_info: record,
+    platform: string = "",
+    default_platform: string = ""
+] {
+    mut base_tags = []
+    
+    let version_tag = (if ($platform | str length) > 0 {
+        $"($version_spec.name)-($platform)"
+    } else {
+        $version_spec.name
+    })
+    $base_tags = ($base_tags | append $version_tag)
+    
+    # Default platform also gets unprefixed version name
+    let is_default_platform = (($platform | str length) > 0 and $platform == $default_platform)
+    if $is_default_platform {
+        $base_tags = ($base_tags | append $version_spec.name)
+    }
+    
+    let is_latest = (try { $version_spec.latest } catch { false })
+    if $is_latest {
+        if ($platform | str length) > 0 {
+            $base_tags = ($base_tags | append $"latest-($platform)")
+            if $platform == $default_platform {
+                $base_tags = ($base_tags | append "latest")
+            }
+        } else {
+            $base_tags = ($base_tags | append "latest")
+        }
+    }
+    
+    let custom_tags = (try { $version_spec.tags } catch { [] })
+    for tag in $custom_tags {
+        let tag_with_platform = (if ($platform | str length) > 0 {
+            $"($tag)-($platform)"
+        } else {
+            $tag
+        })
+        $base_tags = ($base_tags | append $tag_with_platform)
+        
+        # Default platform also gets unprefixed custom tags
+        if $is_default_platform {
+            $base_tags = ($base_tags | append $tag)
+        }
+    }
+    
+    if $is_local {
+        $base_tags | each {|t| $"($service):($t)"}
+    } else {
+        let base_image_name_forgejo = $"($registry_info.forgejo_registry)/($registry_info.forgejo_path)/($service)"
+        let base_image_name_ghcr = $"($registry_info.github_registry)/($registry_info.github_path)/($service)"
+        $base_tags | each {|t| [$"($base_image_name_forgejo):($t)", $"($base_image_name_ghcr):($t)"]} | flatten
+    }
+}
+
+export def generate-labels [
+    service: string,
+    meta: record,
+    cfg: record,
+    source_shas: record = {}  # New parameter: source SHAs from extraction
+] {
+    let image_source = (try {
+        git remote get-url origin | str trim
+    } catch {
+        "local"
+    })
+    let image_revision = (if ($meta.sha | str length) > 0 { $meta.sha } else { "local" })
+
+    mut base_labels = {
+        "org.opencontainers.image.source": $image_source,
+        "org.opencontainers.image.revision": $image_revision,
+        "org.opencloudmesh.service": $service
+    }
+
+    # Add source-specific labels if sources exist
+    let cfg_sources = (try { $cfg.sources } catch { {} })
+    if not ($cfg_sources | is-empty) {
+        # Check for label conflicts (user-defined source revision labels)
+        let user_labels = (try { $cfg.labels } catch { {} } | default {})
+        let source_revision_label_prefix_oci = "org.opencontainers.image.source."
+        let source_revision_label_prefix_custom = "org.opencloudmesh.source."
+        let source_revision_label_suffix = ".revision"
+
+        # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
+        $base_labels = ($cfg_sources | columns | reduce --fold $base_labels {|source_key, acc|
+            let source = ($cfg_sources | get $source_key)
+            let sha = (try { $source_shas | get $"($source_key | str upcase)_SHA" } catch { "" })
+            let ref = (try { $source.ref } catch { "" })
+            let url = (try { $source.url } catch { "" })
+
+            # OCI-standard source revision label: org.opencontainers.image.source.{source_key}.revision
+            let oci_label_key = $"($source_revision_label_prefix_oci)($source_key)($source_revision_label_suffix)"
+            let custom_label_key = $"($source_revision_label_prefix_custom)($source_key)($source_revision_label_suffix)"
+
+            # Check if user has overridden these labels
+            let user_oci_override = (try { $user_labels | get $oci_label_key } catch { null })
+            let user_custom_override = (try { $user_labels | get $custom_label_key } catch { null })
+
+            mut labels = $acc
+
+            # Set OCI-standard revision label (unless user overridden)
+            if $user_oci_override == null {
+                if ($sha | str length) > 0 {
+                    $labels = ($labels | upsert $oci_label_key $sha)
+                } else {
+                    let ref_display = (if ($ref | str length) > 0 { $ref } else { "unknown" })
+                    $labels = ($labels | upsert $oci_label_key $"missing:($ref_display)")
+                }
+            } else {
+                print $"WARNING: [($service)] User-defined label '($oci_label_key)' overrides generated source revision label. Using user value: ($user_oci_override)"
+            }
+
+            # Set custom namespace revision label (unless user overridden)
+            if $user_custom_override == null {
+                if ($sha | str length) > 0 {
+                    $labels = ($labels | upsert $custom_label_key $sha)
+                } else {
+                    let ref_display = (if ($ref | str length) > 0 { $ref } else { "unknown" })
+                    $labels = ($labels | upsert $custom_label_key $"missing:($ref_display)")
+                }
+            } else {
+                print $"WARNING: [($service)] User-defined label '($custom_label_key)' overrides generated source revision label. Using user value: ($user_custom_override)"
+            }
+
+            # Source ref and URL (always include, user can override if needed)
+            if ($ref | str length) > 0 {
+                $labels = ($labels | upsert $"org.opencloudmesh.source.($source_key).ref" $ref)
+            }
+            if ($url | str length) > 0 {
+                $labels = ($labels | upsert $"org.opencloudmesh.source.($source_key).url" $url)
+            }
+
+            $labels
+        })
+    }
+
+    $base_labels | merge (try { $cfg.labels } catch { {} } | default {})
+}
+
+# Generate build arguments (priority order documented in docs/concepts/build-system.md)
+export def generate-build-args [
+    version_tag: string,
+    cfg: record,
+    meta: record,
+    deps_resolved: record,
+    tls_meta: record,
+    cache_bust_override: string = "",
+    no_cache: bool = false,
+    source_shas: record = {}  # New parameter
+] {
+    use ./build-config.nu [process-sources-to-build-args process-external-images-to-build-args]
+    
+    let commit_sha = (if ($meta.sha | str length) > 0 { $meta.sha } else { "local" })
+    let version = (if $meta.is_release { $meta.base_tag } else if ($meta.sha | str length) > 0 { $meta.sha } else { $version_tag })
+    
+    mut build_args = {
+        COMMIT_SHA: $commit_sha,
+        VERSION: $version
+    }
+    
+    let cfg_sources = (try { $cfg.sources } catch { {} })
+    if not ($cfg_sources | is-empty) {
+        let source_args = (process-sources-to-build-args $cfg_sources)
+        $build_args = ($build_args | merge $source_args)
+
+        # Add SHA build args (for label generation only, Dockerfiles can optionally declare and use if needed)
+        # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
+        $build_args = ($source_shas | columns | reduce --fold $build_args {|sha_key, acc|
+            let sha_value = ($source_shas | get $sha_key)
+            $acc | upsert $sha_key $sha_value
+        })
+    }
+    
+    let cfg_external_images = (try { $cfg.external_images } catch { {} })
+    if not ($cfg_external_images | is-empty) {
+        let ext_img_args = (process-external-images-to-build-args $cfg_external_images)
+        $build_args = ($build_args | merge $ext_img_args)
+    }
+    
+    let cfg_build_args = (try { $cfg.build_args } catch { {} })
+    $build_args = ($build_args | merge $cfg_build_args)
+    
+    # Apply env var overrides first (TLS_MODE excluded - system-managed)
+    for arg_name in ($build_args | columns) {
+        let env_val = (try { ($env | get -o $arg_name) } catch { "" })
+        if ($env_val != null) and ($env_val | str length) > 0 {
+            $build_args = ($build_args | upsert $arg_name $env_val)
+        }
+    }
+    
+    $build_args = ($build_args | merge $deps_resolved)
+    
+    # Set TLS args after env var loop to prevent override of system-managed values
+    $build_args = ($build_args | upsert TLS_ENABLED ($tls_meta.enabled | into string))
+    
+    if $tls_meta.enabled {
+        if ($tls_meta.mode | str trim | is-empty) or $tls_meta.mode == "disabled" {
+            error make {msg: "TLS_MODE is required when TLS_ENABLED=true. Build system should have validated this - this is a build system bug."}
+        }
+    }
+    
+    let env_tls_mode = (try { $env.TLS_MODE } catch { "" })
+    if ($env_tls_mode | str trim | is-not-empty) {
+        print $"WARNING: TLS_MODE environment variable is set to '($env_tls_mode)' but will be ignored. TLS_MODE is system-managed from config."
+    }
+    
+    $build_args = ($build_args | upsert TLS_MODE (try { $tls_meta.mode } catch { "" }))
+    $build_args = ($build_args | upsert TLS_CERT_NAME (try { $tls_meta.cert_name } catch { "" }))
+    $build_args = ($build_args | upsert TLS_CA_NAME (try { $tls_meta.ca_name } catch { "" }))
+    
+    # Compute CACHEBUST value
+    let cache_bust = (if ($cache_bust_override | str length) > 0 {
+        $cache_bust_override  # Global override from --cache-bust flag
+    } else if $no_cache {
+        (random uuid)  # Global random from --no-cache flag
+    } else {
+        let env_cache_bust = (try { $env.CACHEBUST } catch { "" })
+        if ($env_cache_bust | str length) > 0 {
+            $env_cache_bust  # Environment variable
+        } else {
+            # Per-service: compute from service's sources
+            let cfg_sources = (try { $cfg.sources } catch { {} })
+            if ($cfg_sources | is-empty) {
+                # No sources - use Git SHA as-is
+                if ($meta.sha | str length) > 0 {
+                    $meta.sha
+                } else {
+                    "local"
+                }
+            } else {
+                # Per-service: compute from service's sources (HYBRID: refs + SHAs)
+                let cfg_sources = (try { $cfg.sources } catch { {} })
+                if ($cfg_sources | is-empty) {
+                    # No sources - use Git SHA as-is
+                    if ($meta.sha | str length) > 0 {
+                        $meta.sha
+                    } else {
+                        "local"
+                    }
+                } else {
+                    # Hybrid: Combine refs and SHAs (sorted by source key for consistency)
+                    # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
+                    let source_keys_sorted = ($cfg_sources | columns | sort)
+                    let cache_bust_parts = ($source_keys_sorted | reduce --fold [] {|key, acc|
+                        let source = ($cfg_sources | get $key)
+                        let ref = (try { $source.ref } catch { "" })
+                        let sha_key = $"($key | str upcase)_SHA"
+                        let sha = (try { $source_shas | get $sha_key } catch { "" })
+
+                        # Use SHA if available, fallback to ref
+                        if ($sha | str length) > 0 {
+                            $acc | append $sha
+                        } else if ($ref | str length) > 0 {
+                            $acc | append $ref
+                        } else {
+                            $acc
+                        }
+                    })
+
+                    let cache_bust_input = ($cache_bust_parts | str join ":")
+                    if ($cache_bust_input | str length) > 0 {
+                        let hash_full = ($cache_bust_input | hash sha256)
+                        ($hash_full | str substring 0..15)  # First 16 characters (0-15 inclusive)
+                    } else {
+                        # Fallback: use Git SHA
+                        if ($meta.sha | str length) > 0 {
+                            $meta.sha
+                        } else {
+                            "local"
+                        }
+                    }
+                }
+            }
+        }
+    })
+    
+    # Ensure CACHEBUST is never empty (final safety check)
+    # This allows Dockerfiles to use simple ${CACHEBUST} syntax without fallback patterns
+    let cache_bust = (if ($cache_bust | str length) == 0 {
+        "default"  # Ultimate fallback - should never happen, but safety net
+    } else {
+        $cache_bust
+    })
+    
+    $build_args = ($build_args | upsert CACHEBUST $cache_bust)
+    
+    $build_args
+}
