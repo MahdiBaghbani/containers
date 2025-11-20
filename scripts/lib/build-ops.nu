@@ -208,7 +208,7 @@ export def generate-labels [
     service: string,
     meta: record,
     cfg: record,
-    source_shas: record = {}  # New parameter: source SHAs from extraction
+    source_shas: record = {}
 ] {
     let image_source = (try {
         git remote get-url origin | str trim
@@ -297,7 +297,7 @@ export def generate-build-args [
     tls_meta: record,
     cache_bust_override: string = "",
     no_cache: bool = false,
-    source_shas: record = {}  # New parameter
+    source_shas: record = {}
 ] {
     use ./build-config.nu [process-sources-to-build-args process-external-images-to-build-args]
     

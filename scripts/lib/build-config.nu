@@ -85,7 +85,6 @@ export def get-env-or-config [env_name: string, config_val: any] {
 
 # Process sources into build args (auto-generates {SOURCE_KEY}_REF and {SOURCE_KEY}_URL)
 # See docs/concepts/service-configuration.md#source-build-arguments-convention for convention
-# CRITICAL: Use reduce instead of for loop to avoid mut variable scope bug
 export def process-sources-to-build-args [sources: record] {
     ($sources | columns | reduce --fold {} {|source_key, acc|
         let source = ($sources | get $source_key)
@@ -98,20 +97,18 @@ export def process-sources-to-build-args [sources: record] {
 
         let ref_value = (try { $source.ref } catch { "" })
         if ($ref_value | str length) > 0 {
-            $result = ($result | upsert $ref_build_arg (get-env-or-config $ref_build_arg $ref_value))  # FIXED: upsert
+            $result = ($result | upsert $ref_build_arg (get-env-or-config $ref_build_arg $ref_value))
         }
 
         let url_value = (try { $source.url } catch { "" })
         if ($url_value | str length) > 0 {
-            $result = ($result | upsert $url_build_arg (get-env-or-config $url_build_arg $url_value))  # FIXED: upsert
+            $result = ($result | upsert $url_build_arg (get-env-or-config $url_build_arg $url_value))
         }
 
         $result
     })
 }
 
-# Also fix process-external-images-to-build-args
-# CRITICAL: Use reduce instead of for loop to avoid mut variable scope bug
 export def process-external-images-to-build-args [external_images: record] {
     ($external_images | columns | reduce --fold {} {|img_key, acc|
         let img = ($external_images | get $img_key)
@@ -140,7 +137,7 @@ export def process-external-images-to-build-args [external_images: record] {
             }
             
             let image_value = $"($name):($tag)"
-            $acc | upsert $build_arg (get-env-or-config $build_arg $image_value)  # FIXED: upsert
+            $acc | upsert $build_arg (get-env-or-config $build_arg $image_value)
         } else {
             $acc
         }
