@@ -61,9 +61,9 @@ RUN --mount=type=cache,id=revad-base-revad-git-${CACHEBUST:-${REVAD_REF}},target
     cp -a /src/reva-git-cache/. /revad-git
 
 WORKDIR /revad-git
-RUN --mount=type=cache,id=revad-base-go-mod-${CACHEBUST:-${REVAD_REF}},target=/go/pkg/mod,sharing=locked \
+RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
     go mod download
-RUN --mount=type=cache,id=revad-base-go-mod-${CACHEBUST:-${REVAD_REF}},target=/go/pkg/mod,sharing=locked \
+RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
     make revad-static
 
 ####################################
