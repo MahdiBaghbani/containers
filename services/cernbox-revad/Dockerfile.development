@@ -18,11 +18,24 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ARG REVAD_BASE_IMAGE="revad-base:v3.3.2-development"
-FROM ${REVAD_BASE_IMAGE}
 
-# Copy configuration files for revad into the container.
-# These configurations will control revad behavior at runtime.
-COPY ./configs /configs/revad
+################################
+###     Directory builder    ###
+################################
+FROM ${REVAD_BASE_IMAGE} AS directory
+
+# Allow cernbox-revad to override base Reva configs
+# Only copies if configs directory contains actual config files (.toml or .json)
+# If configs is empty or only contains README.md, base configs from revad-base are preserved
+COPY ./configs /tmp/cernbox-configs
+RUN if [ -n "$(find /tmp/cernbox-configs -type f \( -name '*.toml' -o -name '*.json' \) 2>/dev/null)" ]; then \
+    echo "Copying cernbox-revad configs to override base configs..." && \
+    find /tmp/cernbox-configs -type f \( -name '*.toml' -o -name '*.json' \) -exec cp {} /configs/revad/ \; && \
+    rm -rf /tmp/cernbox-configs; \
+    else \
+    echo "No cernbox-revad configs found (only README.md), using base configs from revad-base"; \
+    rm -rf /tmp/cernbox-configs; \
+    fi
 
 # Create directories for localhome storage
 # With virtual_home_template="/home/{{.Username}}", localhome exposes paths under
@@ -40,3 +53,12 @@ RUN mkdir -p /revalocalstorage/data/marie && \
     mkdir -p /revalocalstorage/.shadow/recycle_bin/richard && \
     mkdir -p /revalocalstorage/.shadow/versions/richard && \
     mkdir -p /revalocalstorage/.shadow/references/richard
+
+##############################
+###   Development Runtime   ###
+##############################
+FROM ${REVAD_BASE_IMAGE}
+
+# Copy directories from builder
+COPY --from=directory  /revalocalstorage /revalocalstorage
+COPY --from=directory  /configs/revad /configs/revad

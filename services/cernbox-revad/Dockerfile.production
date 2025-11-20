@@ -20,9 +20,9 @@
 ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
 ARG REVAD_BASE_IMAGE="revad-base:v3.3.2-production"
 
-################################
-###     Directory builder    ###
-################################
+#################################
+###     Directory builder     ###
+#################################
 FROM ${BASE_BUILD_IMAGE} AS directory
 
 # Create directories for localhome storage
@@ -44,9 +44,9 @@ RUN mkdir -p /revalocalstorage/data/marie && \
     chown -R 65532:65532 /revalocalstorage && \
     chmod 755 /revalocalstorage
 
-###################################
-###   Production Runtime        ###
-###################################
+##############################
+###   Production Runtime   ###
+##############################
 FROM ${REVAD_BASE_IMAGE}
 
 # Copy directories from builder with proper ownership
