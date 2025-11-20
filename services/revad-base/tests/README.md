@@ -1,61 +1,146 @@
-# Revad Base Init Script Test Suite
+# Revad Base Scripts Test Suite
 
-Test suite for `init.nu` variable derivation logic.
+Test suite for `revad-base` initialization scripts and utility functions.
 
 ## Running Tests
 
 From the project root:
 
 ```bash
-nu services/revad-base/tests/run-tests.nu
+nu services/revad-base/tests/test-runner.nu
+```
+
+Or run a specific test suite:
+
+```bash
+nu services/revad-base/tests/test-runner.nu --suite gateway
 ```
 
 Or from the tests directory:
 
 ```bash
 cd services/revad-base/tests
-nu run-tests.nu
+nu test-runner.nu
 ```
-
-## Test Coverage
-
-### Test 1: Minimal Environment (DOMAIN only)
-
-Tests that all variables can be derived correctly with only `DOMAIN` set. Verifies:
-
-- Default values for TLS, protocol, and port settings
-- WEB_DOMAIN derivation from DOMAIN (removing "reva" from hostname)
-- External endpoint construction
-- Data prefix defaults
-
-### Test 2: Empty DOMAIN Fallback
-
-Tests that the script correctly falls back to `localhost` when `DOMAIN` is empty or not set.
-
-### Test 3: Reserved Prefix Validation
-
-Tests that reserved path prefixes (like "api", "graph", etc.) are correctly rejected for data provider prefixes.
-
-### Test 4: Full Environment Variables
-
-Tests that explicitly set environment variables override defaults correctly.
-
-### Test 5: Fallback Scenario
-
-Tests that when `REVAD_EXTERNAL_HOST` and `REVAD_EXTERNAL_PROTOCOL` are not set, the script correctly falls back to `REVAD_PROTOCOL` and `DOMAIN`.
 
 ## Test Structure
 
-- `test-variable-derivation.nu` - Individual test functions for variable derivation logic
-- `run-tests.nu` - Test runner that executes all tests
+All test files follow a consistent structure:
+
+- Each test file has a `def main [--verbose]` function
+- Test functions return `{passed: X, failed: Y}` format
+- Tests output summary line: `Tests: X passed, Y failed`
+- Exit code 0 for success, 1 for failure
+
+## Test Files
+
+### Core Tests
+
+- `test-entrypoint.nu` - Tests `entrypoint-init.nu` functions (mode validation, type extraction)
+- `test-gateway.nu` - Tests `init-gateway.nu` (config copy, placeholder processing, TLS)
+- `test-dataprovider.nu` - Tests `init-dataprovider.nu` (type validation, config copy, placeholder processing)
+- `test-authprovider.nu` - Tests `init-authprovider.nu` (type validation, config copy, placeholder processing)
+- `test-shareproviders.nu` - Tests `init-shareproviders.nu` (config copy, placeholder processing, TLS)
+- `test-groupuserproviders.nu` - Tests `init-groupuserproviders.nu` (config copy, placeholder processing, TLS)
+
+### Utility Tests
+
+- `test-shared.nu` - Tests `shared.nu` functions (DNS, hosts, directories, JSON copy, TLS)
+- `test-utils.nu` - Tests `utils.nu` functions (file replacement, placeholder validation, env vars, placeholder processing)
+
+## Test Coverage
+
+### Entrypoint Tests
+
+- Mode validation (valid/invalid modes)
+- Dataprovider type extraction
+- Authprovider type extraction
+
+### Gateway Tests
+
+- Config file copying
+- Placeholder processing (all gateway placeholders)
+- TLS certificate disabling
+
+### Dataprovider Tests
+
+- Type validation (localhome, ocm, sciencemesh)
+- Config file copying for each type
+- Placeholder processing (nested placeholders)
+- Data server URL construction
+
+### Authprovider Tests
+
+- Type validation (oidc, machine, ocmshares, publicshares)
+- Config file copying for each type
+- Placeholder processing (type-specific placeholders)
+- Gateway address construction
+- TLS certificate disabling
+
+### Share Providers Tests
+
+- Config file copying
+- Placeholder processing
+- Gateway address construction
+- External endpoint construction
+- TLS certificate disabling
+
+### User/Group Providers Tests
+
+- Config file copying
+- Placeholder processing
+- Gateway address construction
+- TLS certificate disabling
+
+### Shared Functions Tests
+
+- NSSwitch configuration
+- Hosts file management
+- Log file creation
+- Directory creation
+- JSON file copying
+- Config file disabling
+
+### Utility Functions Tests
+
+- File string replacement
+- Placeholder validation
+- Environment variable retrieval
+- Placeholder processing
+
+## Test Runner
+
+The `test-runner.nu` script:
+
+- Runs all test suites or a specific suite
+- Parses test output for summary lines
+- Aggregates passed/failed counts
+- Provides overall test summary
+- Handles missing test files gracefully
+- Supports verbose output mode
 
 ## Notes
 
-These tests validate the variable derivation logic in isolation without requiring:
+These tests validate script logic in isolation without requiring:
 
 - Actual directory structures (`/revad`, `/configs`, etc.)
 - Docker containers
 - Reva binaries
 - Configuration files
 
-The tests focus on ensuring the environment variable parsing and default value logic works correctly.
+The tests focus on ensuring:
+
+- Environment variable parsing works correctly
+- Placeholder processing functions correctly
+- Config file operations work as expected
+- Type validation and extraction logic is correct
+
+## Test Output Format
+
+All tests output a summary line in this format:
+
+```text
+Tests: X passed, Y failed
+```
+
+The test runner parses this line to aggregate results across all test suites.

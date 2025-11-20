@@ -41,7 +41,7 @@ export def init_shareproviders [] {
   create_directory $revad_config_dir
   
   # Determine config file name
-  let config_file = "cernbox-shareproviders.toml"
+  let config_file = "shareproviders.toml"
   let config_path = $"($revad_config_dir)/($config_file)"
   
   # Check if config already exists
@@ -72,14 +72,14 @@ export def init_shareproviders [] {
   }
   
   # Get shareproviders-specific environment variables
-  # Defaults match CERN production pattern (9144) for easier debugging
-  let shareproviders_host = (get_env_or_default "REVAD_SHAREPROVIDERS_HOST" "cernbox-1-test-revad-shareproviders")
+  # Defaults use generic names (port matches common pattern: 9144)
+  let shareproviders_host = (get_env_or_default "REVAD_SHAREPROVIDERS_HOST" "revad-shareproviders")
   let shareproviders_grpc_port = (get_env_or_default "REVAD_SHAREPROVIDERS_GRPC_PORT" "9144")
   
   # Get gateway address for gRPC communication
   # Share providers need to communicate with gateway via gRPC
-  # Default matches CERN production pattern (9142) for easier debugging
-  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "cernbox-1-test-revad-gateway")
+  # Default uses generic name (port matches common pattern: 9142)
+  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
   let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   

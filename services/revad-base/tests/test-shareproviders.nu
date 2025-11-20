@@ -58,44 +58,52 @@ webdav_endpoint = "{{placeholder:external-reva-endpoint}}"
 [grpc.services.ocmshareprovider.drivers.json]
 file = "{{placeholder:ocmshares-json-file}}"
 '''
-  $template_content | save -f $"($test_source_dir)/cernbox-shareproviders.toml"
+  $template_content | save -f $"($test_source_dir)/shareproviders.toml"
   
   # Create mock JSON files
   '{"shares": []}' | save -f $"($test_source_dir)/shares.json"
   
+  mut passed = 0
+  mut failed = 0
+  
   # Test config file copy
-  let source_config = $"($test_source_dir)/cernbox-shareproviders.toml"
-  let dest_config = $"($test_config_dir)/cernbox-shareproviders.toml"
+  let source_config = $"($test_source_dir)/shareproviders.toml"
+  let dest_config = $"($test_config_dir)/shareproviders.toml"
   
   if ($source_config | path exists) {
     ^cp $source_config $dest_config
     
     if ($dest_config | path exists) {
-      print "  [PASS] Config file copy: PASSED"
+      $passed = ($passed + 1)
       
       # Verify JSON files are copied
       use ../scripts/lib/shared.nu [copy_json_files]
       copy_json_files $test_source_dir $test_config_dir
       
       if ($"($test_config_dir)/shares.json" | path exists) {
-        print "  [PASS] JSON files copy: PASSED"
-        rm -rf $test_config_dir $test_source_dir
-        return true
+        $passed = ($passed + 1)
       } else {
         print "  [FAIL] JSON files copy: FAILED"
-        rm -rf $test_config_dir $test_source_dir
-        return false
+        $failed = ($failed + 1)
       }
     } else {
       print "  [FAIL] Config file copy: FAILED"
-      rm -rf $test_config_dir $test_source_dir
-      return false
+      $failed = ($failed + 1)
     }
   } else {
     print "  [FAIL] Template file not found: FAILED"
-    rm -rf $test_config_dir $test_source_dir
-    return false
+    $failed = ($failed + 1)
   }
+  
+  if $failed == 0 {
+    print "  [PASS] Config copy: PASSED"
+  } else {
+    let failed_str = ($failed | into string)
+    print $"  [FAIL] Config copy: FAILED (" + $failed_str + " errors)"
+  }
+  
+  rm -rf $test_config_dir $test_source_dir
+  return {passed: $passed, failed: $failed}
 }
 
 # Test shareproviders placeholder processing
@@ -151,16 +159,28 @@ file = "{{placeholder:ocmshares-json-file}}"
   let has_json_file = ($result | str contains "/var/tmp/reva/shares.json")
   let no_placeholders = (not ($result | str contains "{{placeholder:"))
   
-  if $has_log_output and $has_log_level and $has_gateway and $has_grpc_address and $has_provider_domain and $has_endpoint and $has_json_file and $no_placeholders {
+  mut passed = 0
+  mut failed = 0
+  
+  if $has_log_output { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $has_log_level { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $has_gateway { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $has_grpc_address { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $has_provider_domain { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $has_endpoint { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $has_json_file { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $no_placeholders { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  
+  if $failed == 0 {
     print "  [PASS] Placeholder processing: PASSED"
-    rm $test_file
-    return true
   } else {
-    print "  [FAIL] Placeholder processing: FAILED"
+    let failed_str = ($failed | into string)
+    print $"  [FAIL] Placeholder processing: FAILED (" + $failed_str + " errors)"
     print "    Result: " + $result
-    rm $test_file
-    return false
   }
+  
+  rm $test_file
+  return {passed: $passed, failed: $failed}
 }
 
 # Test shareproviders gateway service address construction
@@ -183,9 +203,9 @@ def test_shareproviders_gateway_address_construction [] {
   }
   
   # Test with default values
-  let test2_host = "cernbox-1-test-revad-gateway"
+  let test2_host = "revad-gateway"
   let test2_port = "9142"
-  let test2_expected = "cernbox-1-test-revad-gateway:9142"
+  let test2_expected = "revad-gateway:9142"
   let test2_constructed = $"($test2_host):($test2_port)"
   if $test2_constructed == $test2_expected {
     $passed = ($passed + 1)
@@ -268,16 +288,23 @@ keyfile = "/tls/server.key"
   let has_key_disabled = ($result | str contains "# keyfile disabled")
   let no_cert_line = (not ($result | str contains 'certfile = "/tls/server.crt"'))
   
-  if $has_cert_disabled and $has_key_disabled and $no_cert_line {
+  mut passed = 0
+  mut failed = 0
+  
+  if $has_cert_disabled { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $has_key_disabled { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  if $no_cert_line { $passed = ($passed + 1) } else { $failed = ($failed + 1) }
+  
+  if $failed == 0 {
     print "  [PASS] TLS disabling: PASSED"
-    rm $test_file
-    return true
   } else {
-    print "  [FAIL] TLS disabling: FAILED"
+    let failed_str = ($failed | into string)
+    print $"  [FAIL] TLS disabling: FAILED (" + $failed_str + " errors)"
     print "    Result: " + $result
-    rm $test_file
-    return false
   }
+  
+  rm $test_file
+  return {passed: $passed, failed: $failed}
 }
 
 # Main test runner
@@ -290,10 +317,12 @@ def main [
   
   # Run tests
   let test1 = (test_shareproviders_config_copy)
-  if $test1 { $total_passed = ($total_passed + 1) } else { $total_failed = ($total_failed + 1) }
+  $total_passed = ($total_passed + $test1.passed)
+  $total_failed = ($total_failed + $test1.failed)
   
   let test2 = (test_shareproviders_placeholder_processing)
-  if $test2 { $total_passed = ($total_passed + 1) } else { $total_failed = ($total_failed + 1) }
+  $total_passed = ($total_passed + $test2.passed)
+  $total_failed = ($total_failed + $test2.failed)
   
   let test3 = (test_shareproviders_gateway_address_construction)
   $total_passed = ($total_passed + $test3.passed)
@@ -304,7 +333,8 @@ def main [
   $total_failed = ($total_failed + $test4.failed)
   
   let test5 = (test_shareproviders_tls_disabling)
-  if $test5 { $total_passed = ($total_passed + 1) } else { $total_failed = ($total_failed + 1) }
+  $total_passed = ($total_passed + $test5.passed)
+  $total_failed = ($total_failed + $test5.failed)
   
   print ""
   print $"Tests: ($total_passed) passed, ($total_failed) failed"

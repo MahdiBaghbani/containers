@@ -1,45 +1,22 @@
-# Configuration Reference
+# CERNBox Configuration Reference
 
-Configuration files, environment variables, and template system documentation.
+CERNBox-specific configuration, environment variables, and deployment settings.
+
+> **Generic Reva Configuration**: For information about the configuration system, placeholder processing, and configuration file structure, see [Reva Base Configuration Documentation](../../revad-base/docs/configuration.md).
 
 ## Configuration Files
 
-### Gateway Configuration
+Configuration files are provided by the `revad-base` image and use generic names:
 
-**File:** `cernbox-gateway.toml`  
-**Location:** `services/cernbox-revad/configs/`
+- `gateway.toml` - Gateway configuration
+- `dataprovider-{type}.toml` - Dataprovider configurations (localhome, ocm, sciencemesh)
+- `authprovider-{type}.toml` - Authprovider configurations (oidc, machine, ocmshares, publicshares)
+- `shareproviders.toml` - Share providers configuration
+- `groupuserproviders.toml` - User/group providers configuration
 
-**Key Sections:**
+**Location:** Configs are in `services/revad-base/configs/` and copied to `/configs/revad` in the image.
 
-- `[grpc.services.gateway]` - Gateway service configuration
-- `[grpc.services.authregistry]` - Auth registry mapping
-- `[grpc.services.storageregistry]` - Storage registry mapping
-
-**Service Addresses:**
-
-- Uses template variables for same-container services: `{{ grpc.services.authregistry.address }}`
-- Uses placeholders for external services: `{{placeholder:shareproviders.address}}`
-
-### Share Providers Configuration
-
-**File:** `cernbox-shareproviders.toml`  
-**Location:** `services/cernbox-revad/configs/`
-
-**Key Sections:**
-
-- `[grpc.services.usershareprovider]` - User share provider
-- `[grpc.services.publicshareprovider]` - Public share provider
-- `[grpc.services.ocmshareprovider]` - OCM share provider
-
-### User/Group Providers Configuration
-
-**File:** `cernbox-groupuserproviders.toml`  
-**Location:** `services/cernbox-revad/configs/`
-
-**Key Sections:**
-
-- `[grpc.services.userprovider]` - User provider
-- `[grpc.services.groupprovider]` - Group provider
+See [Reva Base Configuration](../../revad-base/docs/configuration.md) for details on configuration structure and placeholder system.
 
 ## Environment Variables
 
@@ -128,96 +105,9 @@ REVAD_DATAPROVIDER_SCIENCEMESH_PORT=80
 
 ## Placeholder System
 
-The configuration system uses placeholders for dynamic value injection.
+> **Generic Documentation**: For details on the placeholder system, placeholder syntax, and processing, see [Reva Base Configuration Documentation](../../revad-base/docs/configuration.md).
 
-### Placeholder Syntax
-
-```text
-{{placeholder:name:default-value}}
-```
-
-- **name:** Placeholder identifier
-- **default-value:** Optional default value if not provided
-
-### Placeholder Types
-
-#### Template Variables
-
-Used for same-container services:
-
-```text
-{{ grpc.services.service_name.address }}
-```
-
-Examples:
-
-- `{{ grpc.services.authregistry.address }}`
-- `{{ grpc.services.appregistry.address }}`
-- `{{ grpc.services.storageregistry.address }}`
-
-#### Custom Placeholders
-
-Used for external services and configuration:
-
-```text
-{{placeholder:shareproviders.address}}
-{{placeholder:groupuserproviders.address}}
-{{placeholder:log-level:debug}}
-{{placeholder:jwt-secret:reva-secret}}
-```
-
-### Placeholder Processing
-
-Placeholders are processed by Nushell scripts during container initialization:
-
-1. **Read Environment Variables:** Scripts read environment variables
-
-2. **Build Placeholder Map:** Create map of placeholder names to values
-
-3. **Process Templates:** Replace placeholders with actual values
-
-4. **Save Configuration:** Write processed config to `/etc/revad/`
-
-## Volume Mounts
-
-### Configuration Volumes
-
-Each service has its own configuration volume:
-
-```yaml
-volumes:
-  - "${PWD}/volumes/config/reva-gateway:/etc/revad"
-  - "${PWD}/volumes/config/reva-shareproviders:/etc/revad"
-  - "${PWD}/volumes/config/reva-groupuserproviders:/etc/revad"
-  # ... etc
-```
-
-### Data Volumes
-
-Shared data volumes:
-
-```yaml
-volumes:
-  - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
-```
-
-## Container Initialization
-
-### Initialization Scripts
-
-- **Gateway:** `init-gateway.nu`
-- **Share Providers:** `init-shareproviders.nu`
-- **User/Group Providers:** `init-groupuserproviders.nu`
-- **Auth Providers:** `init-authprovider.nu`
-- **Dataproviders:** `init-dataprovider.nu`
-
-### Initialization Process
-
-1. **Validate Environment:** Check required environment variables
-2. **Copy Templates:** Copy config templates from image
-3. **Process Placeholders:** Replace placeholders with values
-4. **TLS Configuration:** Handle TLS certificate setup
-5. **Start Service:** Launch Reva daemon with config file
+Placeholders are processed by initialization scripts during container startup. See [Reva Base Initialization](../../revad-base/docs/initialization.md) for details.
 
 ## Configuration Validation
 
@@ -225,12 +115,12 @@ volumes:
 
 - `DOMAIN` - Domain name (required)
 - `REVAD_CONTAINER_MODE` - Container mode (required)
-- `REVAD_GATEWAY_HOST` - Gateway hostname (required)
-- `REVAD_GATEWAY_GRPC_PORT` - Gateway gRPC port (required)
+- `REVAD_GATEWAY_HOST` - Gateway hostname (required for gateway and dependent services)
+- `REVAD_GATEWAY_GRPC_PORT` - Gateway gRPC port (required for gateway and dependent services)
 
 ### Optional Environment Variables
 
-Most variables have defaults defined in initialization scripts.
+Most variables have defaults defined in initialization scripts. See CERNBox-specific defaults below.
 
 ## Related Documentation
 

@@ -150,6 +150,7 @@ COPY --chmod=755 --from=compress /tmp/binaries/revad /revad-git/cmd/revad
 
 ENV PATH="${PATH}:/revad-git/cmd"
 
+COPY ./configs /configs/revad
 COPY ./scripts/* /usr/bin/
 COPY ./scripts/lib /usr/bin/lib
 

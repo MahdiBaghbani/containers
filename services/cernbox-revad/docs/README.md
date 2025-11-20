@@ -8,11 +8,22 @@ CERNBox is deployed as a microservices architecture following the CERN productio
 
 ## Documentation Structure
 
-- **[Architecture](architecture.md)** - System architecture, service relationships, and data flow diagrams
-- **[Port Assignments](ports.md)** - Complete port reference for all services
-- **[Services](services.md)** - Detailed description of each service and container
-- **[Configuration](configuration.md)** - Configuration files, environment variables, and templates
-- **[Deployment](deployment.md)** - Deployment procedures, dependencies, and troubleshooting
+- **[Architecture](architecture.md)** - CERNBox-specific architecture and container deployment
+- **[Port Assignments](ports.md)** - CERNBox port assignments (CERN production pattern)
+- **[Services](services.md)** - CERNBox container deployment details
+- **[Configuration](configuration.md)** - CERNBox-specific configuration and environment variables
+- **[Deployment](deployment.md)** - CERNBox deployment procedures and troubleshooting
+
+## Generic Reva Documentation
+
+For generic Reva service documentation (service descriptions, placeholder system, initialization process), see:
+
+- **[Reva Base Documentation](../../revad-base/docs/README.md)** - Generic Reva service documentation
+- **[Reva Services](../../revad-base/docs/services.md)** - Generic service descriptions
+- **[Reva Configuration](../../revad-base/docs/configuration.md)** - Configuration system and placeholder processing
+- **[Reva Initialization](../../revad-base/docs/initialization.md)** - Initialization scripts and process
+- **[Reva Container Modes](../../revad-base/docs/container-modes.md)** - Container mode system
+- **[Reva Development Workflow](../../revad-base/docs/development-workflow.md)** - Development → production workflow
 
 ## Quick Reference
 

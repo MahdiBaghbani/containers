@@ -20,42 +20,105 @@
 # Test runner for revad-base scripts unit tests
 
 def main [
-  --suite: string = "all"       # Which test suite to run (all, utils, shared, gateway, dataprovider, shareproviders, groupuserproviders, entrypoint)
+  --suite: string = "all"       # Which test suite to run (all, utils, shared, gateway, dataprovider, authprovider, shareproviders, groupuserproviders, entrypoint)
   --verbose                      # Show detailed output
 ] {
   print "Running Reva Base Scripts Test Suite\n"
   
+  # Get test directory path (works from project root or tests directory)
+  let test_dir = (try {
+    if ("./services/revad-base/tests" | path exists) {
+      "./services/revad-base/tests"
+    } else if ("./test-runner.nu" | path exists) {
+      "."
+    } else {
+      error make { msg: "Could not find test directory. Run from project root or tests directory." }
+    }
+  } catch {
+    error make { msg: "Could not determine test directory path" }
+  })
+  
   let test_suites = if $suite == "all" {
-    ["utils", "shared", "gateway", "dataprovider", "shareproviders", "groupuserproviders", "entrypoint"]
+    ["utils", "shared", "gateway", "dataprovider", "authprovider", "shareproviders", "groupuserproviders", "entrypoint"]
   } else {
     [$suite]
   }
   
   mut total_passed = 0
   mut total_failed = 0
-  mut total_tests = 0
+  mut suites_passed = 0
+  mut suites_failed = 0
   
   for suite_name in $test_suites {
     print $"=== ($suite_name | str upcase) ==="
     
-    let result = (if $verbose {
-      nu $"($env.PWD)/services/revad-base/tests/test-($suite_name).nu" "--verbose" | complete
-    } else {
-      nu $"($env.PWD)/services/revad-base/tests/test-($suite_name).nu" | complete
+    let test_file = $"($test_dir)/test-($suite_name).nu"
+    
+    # Check if test file exists
+    if not ($test_file | path exists) {
+      print $"ERROR: Test file not found: ($test_file)"
+      $suites_failed = ($suites_failed + 1)
+      print ""
+      continue
+    }
+    
+    # Run test suite
+    let result = (try {
+      if $verbose {
+        nu $test_file "--verbose" | complete
+      } else {
+        nu $test_file | complete
+      }
+    } catch {
+      error make { msg: $"Failed to execute test file: ($test_file)" }
     })
     
     if $result.exit_code == 0 {
+      # Parse output for summary line
       let output = ($result.stdout | lines)
-      let summary_line = ($output | where {|line| $line | str contains "Tests:"} | get 0)
-      print $summary_line
-      $total_passed = ($total_passed + 1)
+      let summary_lines = ($output | where {|line| $line | str contains "Tests:"})
+      
+      if ($summary_lines | length) > 0 {
+        let summary_line = ($summary_lines | get 0)
+        print $summary_line
+        
+        # Extract passed/failed counts from summary line
+        # Format: "Tests: X passed, Y failed"
+        try {
+          let parts = ($summary_line | split row " ")
+          mut passed_count = 0
+          mut failed_count = 0
+          
+          mut i = 0
+          while $i < ($parts | length) {
+            if ($parts | get $i) == "passed," {
+              $passed_count = (try { ($parts | get ($i - 1) | into int) } catch { 0 })
+            } else if ($parts | get $i) == "failed" {
+              $failed_count = (try { ($parts | get ($i - 1) | into int) } catch { 0 })
+            }
+            $i = ($i + 1)
+          }
+          
+          $total_passed = ($total_passed + $passed_count)
+          $total_failed = ($total_failed + $failed_count)
+        } catch {
+          # If parsing fails, just count suite as passed
+          print "  (Could not parse test counts)"
+        }
+      } else {
+        print "  (No summary line found)"
+      }
+      
+      $suites_passed = ($suites_passed + 1)
     } else {
       print "FAILED"
       if $verbose {
         print $result.stdout
       }
-      print $result.stderr
-      $total_failed = ($total_failed + 1)
+      if ($result.stderr | str length) > 0 {
+        print $result.stderr
+      }
+      $suites_failed = ($suites_failed + 1)
     }
     print ""
   }
@@ -64,14 +127,17 @@ def main [
   print "Test Summary"
   print "================================"
   print $"Suites:  ($test_suites | length)"
-  print $"Passed: ($total_passed)"
-  print $"Failed: ($total_failed)"
+  print $"Passed: ($suites_passed)"
+  print $"Failed: ($suites_failed)"
+  if $total_passed > 0 or $total_failed > 0 {
+    print $"Tests:  ($total_passed) passed, ($total_failed) failed"
+  }
   
-  if $total_failed == 0 {
+  if $suites_failed == 0 {
     print "\nAll test suites passed!"
     exit 0
   } else {
-    print $"\n($total_failed) test suite\(s\) failed"
+    print $"\n($suites_failed) test suite\(s\) failed"
     exit 1
   }
 }

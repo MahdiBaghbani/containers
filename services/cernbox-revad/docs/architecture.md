@@ -164,26 +164,31 @@ sequenceDiagram
 
 ## Container Responsibilities
 
+> **Generic Service Descriptions**: For detailed descriptions of Reva services (gateway, dataprovider, authprovider, etc.), see [Reva Base Services Documentation](../../revad-base/docs/services.md).
+
 ### Gateway Container
 
+- **Container Name:** `cernbox-1-test-revad-gateway`
 - **Services:** gateway, authregistry, appregistry, storageregistry, preferences, ocminvitemanager, ocmproviderauthorizer, spacesregistry
 - **Port:** 9142 (gRPC), 80 (HTTP)
 - **Role:** Central routing and coordination point
-- **Config:** `cernbox-gateway.toml`
+- **Config:** `gateway.toml` (provided by revad-base)
 
 ### Share Providers Container
 
+- **Container Name:** `cernbox-1-test-revad-shareproviders`
 - **Services:** usershareprovider, publicshareprovider, ocmshareprovider
 - **Port:** 9144 (gRPC)
 - **Role:** Manages file and folder sharing
-- **Config:** `cernbox-shareproviders.toml`
+- **Config:** `shareproviders.toml` (provided by revad-base)
 
 ### User/Group Providers Container
 
+- **Container Name:** `cernbox-1-test-revad-groupuserproviders`
 - **Services:** userprovider, groupprovider
 - **Port:** 9145 (gRPC)
 - **Role:** User and group management
-- **Config:** `cernbox-groupuserproviders.toml`
+- **Config:** `groupuserproviders.toml` (provided by revad-base)
 
 ### Auth Provider Containers
 
@@ -204,7 +209,7 @@ The gateway uses explicit addresses for all external services:
 - **Template Variables:** Used for same-container services (e.g., `{{ grpc.services.authregistry.address }}`)
 - **Placeholders:** Used for external container services (e.g., `{{placeholder:shareproviders.address}}`)
 
-See [Configuration](configuration.md) for details on service addressing.
+See [Reva Base Configuration](../../revad-base/docs/configuration.md) for details on service addressing and the placeholder system.
 
 ## Benefits of This Architecture
 

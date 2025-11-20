@@ -159,6 +159,7 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 **Symptom:** Container fails to start with "port already in use"
 
 **Solution:**
+
 - Check for port conflicts: `netstat -tlnp | grep <port>`
 - Adjust ports in `env` file
 - See [Port Assignments](ports.md) for port reference
@@ -168,8 +169,9 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 **Symptom:** Service fails with configuration errors
 
 **Solution:**
+
 - Check environment variables: `docker-compose config`
-- Verify placeholder processing: `docker-compose exec gateway cat /etc/revad/cernbox-gateway.toml`
+- Verify placeholder processing: `docker-compose exec gateway cat /etc/revad/gateway.toml`
 - Check initialization logs: `docker-compose logs gateway | grep -i init`
 
 #### Service Not Found
@@ -177,6 +179,7 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 **Symptom:** Gateway cannot connect to provider services
 
 **Solution:**
+
 - Verify service names match in `docker-compose.yaml`
 - Check network connectivity: `docker-compose exec gateway ping shareproviders`
 - Verify ports match environment variables
@@ -186,6 +189,7 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 **Symptom:** Login fails or authentication errors
 
 **Solution:**
+
 - Check IdP is running: `docker-compose ps idp`
 - Verify OIDC provider configuration
 - Check IdP URL in environment variables
@@ -201,7 +205,7 @@ docker-compose config
 docker-compose exec gateway /bin/sh
 
 # View configuration file
-docker-compose exec gateway cat /etc/revad/cernbox-gateway.toml
+docker-compose exec gateway cat /etc/revad/gateway.toml
 
 # Check service connectivity
 docker-compose exec gateway ping shareproviders
@@ -277,4 +281,3 @@ docker-compose restart
 - [Port Assignments](ports.md) - Port reference
 - [Configuration](configuration.md) - Configuration details
 - [Services](services.md) - Service descriptions
-

@@ -1,77 +1,32 @@
-# Services Reference
+# CERNBox Services Reference
 
-Detailed description of each service and container in the CERNBox deployment.
+CERNBox-specific service deployment details and container configuration.
+
+> **Generic Service Descriptions**: For detailed descriptions of Reva services (gateway, dataprovider, authprovider, share providers, user/group providers), see [Reva Base Services Documentation](../../revad-base/docs/services.md).
 
 ## Gateway Container
 
 **Container Name:** `cernbox-1-test-revad-gateway`  
 **Port:** 9142 (gRPC), 80 (HTTP)  
-**Config File:** `cernbox-gateway.toml`
+**Config File:** `gateway.toml` (provided by revad-base)
 
-### Gateway Services
-
-- **gateway** - Main gateway service, routes requests to appropriate providers
-- **authregistry** - Maps authentication types to auth providers
-- **appregistry** - Manages application registry (MIME types, apps)
-- **storageregistry** - Maps storage paths to dataproviders
-- **preferences** - User preferences storage
-- **ocminvitemanager** - OCM invitation management
-- **ocmproviderauthorizer** - OCM provider authorization
-- **spacesregistry** - Spaces registry service
-
-### Gateway Responsibilities
-
-- Central routing point for all requests
-- Authentication routing via auth registry
-- Storage routing via storage registry
-- Application registry management
-- User preferences management
+See [Reva Base Services - Gateway](../../revad-base/docs/services.md#gateway-service) for service descriptions.
 
 ## Share Providers Container
 
 **Container Name:** `cernbox-1-test-revad-shareproviders`  
 **Port:** 9144 (gRPC)  
-**Config File:** `cernbox-shareproviders.toml`
+**Config File:** `shareproviders.toml` (provided by revad-base)
 
-### Share Provider Services
-
-- **usershareprovider** - User-to-user file sharing (memory driver)
-- **publicshareprovider** - Public link sharing (memory driver)
-- **ocmshareprovider** - OCM cross-site sharing (JSON driver)
-
-### Share Provider Responsibilities
-
-- Manage file and folder shares
-- Generate share tokens
-- Validate share access
-- OCM share coordination
-
-### Share Provider Storage Drivers
-
-- **Memory:** Used for usershareprovider and publicshareprovider (can be upgraded to SQL)
-- **JSON:** Used for ocmshareprovider (shares stored in JSON file)
+See [Reva Base Services - Share Providers](../../revad-base/docs/services.md#share-providers-service) for service descriptions.
 
 ## User/Group Providers Container
 
 **Container Name:** `cernbox-1-test-revad-groupuserproviders`  
 **Port:** 9145 (gRPC)  
-**Config File:** `cernbox-groupuserproviders.toml`
+**Config File:** `groupuserproviders.toml` (provided by revad-base)
 
-### User/Group Provider Services
-
-- **userprovider** - User management (JSON driver)
-- **groupprovider** - Group management (JSON driver)
-
-### User/Group Provider Responsibilities
-
-- User authentication and authorization
-- User metadata management
-- Group membership management
-- User/group lookups
-
-### User/Group Provider Storage Drivers
-
-- **JSON:** Used for both userprovider and groupprovider (can be upgraded to REST/LDAP)
+See [Reva Base Services - User/Group Providers](../../revad-base/docs/services.md#usergroup-providers-service) for service descriptions.
 
 ## Auth Provider Containers
 
@@ -79,43 +34,33 @@ Detailed description of each service and container in the CERNBox deployment.
 
 **Container Name:** `cernbox-1-test-revad-authprovider-oidc`  
 **Port:** 9158 (gRPC)  
-**Config File:** `cernbox-authprovider-oidc.toml`
+**Config File:** `authprovider-oidc.toml` (provided by revad-base)
 
-**Purpose:** Handles OIDC/OAuth2 authentication via Keycloak IdP
-
-**Features:**
-
-- Bearer token validation
-- OIDC token exchange
-- User information retrieval
+See [Reva Base Services - OIDC Auth Provider](../../revad-base/docs/services.md#oidc-auth-provider) for service description.
 
 ### Machine Auth Provider
 
 **Container Name:** `cernbox-1-test-revad-authprovider-machine`  
 **Port:** 9166 (gRPC)  
-**Config File:** `cernbox-authprovider-machine.toml`
+**Config File:** `authprovider-machine.toml` (provided by revad-base)
 
-**Purpose:** Handles machine-to-machine authentication
-
-**Features:**
-
-- API key validation
-- Machine token generation
-- Service authentication
+See [Reva Base Services - Machine Auth Provider](../../revad-base/docs/services.md#machine-auth-provider) for service description.
 
 ### OCM Shares Auth Provider
 
 **Container Name:** `cernbox-1-test-revad-authprovider-ocmshares`  
 **Port:** 9278 (gRPC)  
-**Config File:** `cernbox-authprovider-ocmshares.toml`
+**Config File:** `authprovider-ocmshares.toml` (provided by revad-base)
 
-**Purpose:** Handles authentication for OCM cross-site shares
+See [Reva Base Services - OCM Shares Auth Provider](../../revad-base/docs/services.md#ocm-shares-auth-provider) for service description.
 
-**Features:**
+### Public Shares Auth Provider
 
-- OCM share token validation
-- Cross-site authentication
-- Share access authorization
+**Container Name:** `cernbox-1-test-revad-authprovider-publicshares`  
+**Port:** 9160 (gRPC)  
+**Config File:** `authprovider-publicshares.toml` (provided by revad-base)
+
+See [Reva Base Services - Public Shares Auth Provider](../../revad-base/docs/services.md#public-shares-auth-provider) for service description.
 
 ## Dataprovider Containers
 
@@ -123,31 +68,25 @@ Detailed description of each service and container in the CERNBox deployment.
 
 **Container Name:** `cernbox-1-test-revad-dataprovider-localhome`  
 **Port:** 9143 (gRPC), 80 (HTTP)  
-**Config File:** `cernbox-dataprovider-localhome.toml`
+**Config File:** `dataprovider-localhome.toml` (provided by revad-base)
 
-**Purpose:** Local storage provider for user files
-
-**Storage:** Local filesystem storage
+See [Reva Base Services - Localhome Dataprovider](../../revad-base/docs/services.md#localhome-dataprovider) for service description.
 
 ### OCM Dataprovider
 
 **Container Name:** `cernbox-1-test-revad-dataprovider-ocm`  
 **Port:** 9146 (gRPC), 80 (HTTP)  
-**Config File:** `cernbox-dataprovider-ocm.toml`
+**Config File:** `dataprovider-ocm.toml` (provided by revad-base)
 
-**Purpose:** OCM storage provider for cross-site file access
-
-**Storage:** OCM protocol storage
+See [Reva Base Services - OCM Dataprovider](../../revad-base/docs/services.md#ocm-dataprovider) for service description.
 
 ### ScienceMesh Dataprovider
 
 **Container Name:** `cernbox-1-test-revad-dataprovider-sciencemesh`  
 **Port:** 9147 (gRPC), 80 (HTTP)  
-**Config File:** `cernbox-dataprovider-sciencemesh.toml`
+**Config File:** `dataprovider-sciencemesh.toml` (provided by revad-base)
 
-**Purpose:** ScienceMesh storage provider for received shares
-
-**Storage:** OCM received storage
+See [Reva Base Services - ScienceMesh Dataprovider](../../revad-base/docs/services.md#sciencemesh-dataprovider) for service description.
 
 ## External Services
 
@@ -196,7 +135,9 @@ graph TD
 
 - **gRPC:** Used for all inter-service communication
 - **HTTP:** Used for external access and data transfer
-- **Internal DNS:** Container names resolve automatically
+- **Internal DNS:** Container names resolve automatically via Docker networking
+
+See [Reva Base Architecture](../../revad-base/docs/architecture.md) for details on service communication patterns.
 
 ## Related Documentation
 

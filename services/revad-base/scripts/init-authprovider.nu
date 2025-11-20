@@ -48,7 +48,7 @@ export def init_authprovider [authprovider_type: string] {
   create_directory $revad_config_dir
   
   # Determine config file name
-  let config_file = $"cernbox-authprovider-($authprovider_type).toml"
+  let config_file = $"authprovider-($authprovider_type).toml"
   let config_path = $"($revad_config_dir)/($config_file)"
   
   # Check if config already exists
@@ -80,9 +80,9 @@ export def init_authprovider [authprovider_type: string] {
   
   # Get authprovider-specific environment variables
   # Environment variable names are constructed using uppercase type (e.g., REVAD_AUTHPROVIDER_OIDC_HOST)
-  # Defaults match CERN production ports for easier debugging (9158=OIDC, 9166=Machine, 9278=OCM Shares)
+  # Defaults use generic names (ports match common patterns: 9158=OIDC, 9166=Machine, 9160=Public Shares, 9278=OCM Shares)
   let type_upper = ($authprovider_type | str upcase)
-  let authprovider_host = (get_env_or_default $"REVAD_AUTHPROVIDER_($type_upper)_HOST" $"cernbox-1-test-revad-authprovider-($authprovider_type)")
+  let authprovider_host = (get_env_or_default $"REVAD_AUTHPROVIDER_($type_upper)_HOST" $"revad-authprovider-($authprovider_type)")
   
   # Set production-like default ports based on type
   mut default_port = "9158"  # OIDC default
@@ -98,8 +98,8 @@ export def init_authprovider [authprovider_type: string] {
   
   # Get gateway address for gRPC communication
   # Auth providers need to communicate with gateway via gRPC
-  # Default matches CERN production pattern (9142) for easier debugging
-  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "cernbox-1-test-revad-gateway")
+  # Default uses generic name (port matches common pattern: 9142)
+  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
   let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   
@@ -170,4 +170,3 @@ export def init_authprovider [authprovider_type: string] {
   disable_config_files
   print $"Authprovider ($authprovider_type) configuration initialized"
 }
-

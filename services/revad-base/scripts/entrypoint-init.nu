@@ -85,25 +85,25 @@ def main [] {
   if $container_mode == "gateway" {
     use ./init-gateway.nu [init_gateway]
     init_gateway
-    $config_file = "cernbox-gateway.toml"
+    $config_file = "gateway.toml"
   } else if ($container_mode | str starts-with "dataprovider-") {
     use ./init-dataprovider.nu [init_dataprovider]
     let dataprovider_type = (extract_dataprovider_type $container_mode)
     init_dataprovider $dataprovider_type
-    $config_file = $"cernbox-dataprovider-($dataprovider_type).toml"
+    $config_file = $"dataprovider-($dataprovider_type).toml"
   } else if ($container_mode | str starts-with "authprovider-") {
     use ./init-authprovider.nu [init_authprovider]
     let authprovider_type = (extract_authprovider_type $container_mode)
     init_authprovider $authprovider_type
-    $config_file = $"cernbox-authprovider-($authprovider_type).toml"
+    $config_file = $"authprovider-($authprovider_type).toml"
   } else if $container_mode == "shareproviders" {
     use ./init-shareproviders.nu [init_shareproviders]
     init_shareproviders
-    $config_file = "cernbox-shareproviders.toml"
+    $config_file = "shareproviders.toml"
   } else if $container_mode == "groupuserproviders" {
     use ./init-groupuserproviders.nu [init_groupuserproviders]
     init_groupuserproviders
-    $config_file = "cernbox-groupuserproviders.toml"
+    $config_file = "groupuserproviders.toml"
   } else {
     error make { msg: $"Unhandled container mode: ($container_mode)" }
   }

@@ -48,7 +48,7 @@ export def init_dataprovider [dataprovider_type: string] {
   create_directory $revad_config_dir
   
   # Determine config file name
-  let config_file = $"cernbox-dataprovider-($dataprovider_type).toml"
+  let config_file = $"dataprovider-($dataprovider_type).toml"
   let config_path = $"($revad_config_dir)/($config_file)"
   
   # Check if config already exists
@@ -81,7 +81,7 @@ export def init_dataprovider [dataprovider_type: string] {
   # Get dataprovider-specific environment variables
   # Environment variable names are constructed using uppercase type (e.g., REVAD_DATAPROVIDER_LOCALHOME_HOST)
   let type_upper = ($dataprovider_type | str upcase)
-  let dataprovider_host = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_HOST" $"cernbox-1-test-revad-dataprovider-($dataprovider_type)")
+  let dataprovider_host = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_HOST" $"revad-dataprovider-($dataprovider_type)")
   let dataprovider_port = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PORT" "80")
   let dataprovider_protocol = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PROTOCOL" "http")
   let dataprovider_grpc_port = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_GRPC_PORT" "")
@@ -92,7 +92,7 @@ export def init_dataprovider [dataprovider_type: string] {
   
   # Get gateway address for gRPC communication
   # Dataproviders need to communicate with gateway via gRPC for storage registry
-  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "cernbox-1-test-revad-gateway")
+  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
   let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "19000")
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   

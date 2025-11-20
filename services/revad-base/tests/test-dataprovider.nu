@@ -75,7 +75,7 @@ def test_dataprovider_config_copy [] {
   mut failed = 0
   
   for type in $types {
-    let config_file = $"cernbox-dataprovider-($type).toml"
+    let config_file = $"dataprovider-($type).toml"
     let template_content = $"[vars]\ndata_server_url = \"{{placeholder:data-server-url-internal.($type)}}\"\ngateway_svc = \"{{placeholder:gateway-svc}}\"\nconfig_dir = \"{{placeholder:config-dir}}\"\n"
     $template_content | save -f $"($test_source_dir)/($config_file)"
     
@@ -241,4 +241,3 @@ def main [
     exit 1
   }
 }
-

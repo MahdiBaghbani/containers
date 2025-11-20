@@ -41,7 +41,7 @@ export def init_groupuserproviders [] {
   create_directory $revad_config_dir
   
   # Determine config file name
-  let config_file = "cernbox-groupuserproviders.toml"
+  let config_file = "groupuserproviders.toml"
   let config_path = $"($revad_config_dir)/($config_file)"
   
   # Check if config already exists
@@ -72,14 +72,14 @@ export def init_groupuserproviders [] {
   }
   
   # Get groupuserproviders-specific environment variables
-  # Defaults match CERN production pattern (9145) for easier debugging
-  let groupuserproviders_host = (get_env_or_default "REVAD_GROUPUSERPROVIDERS_HOST" "cernbox-1-test-revad-groupuserproviders")
+  # Defaults use generic names (port matches common pattern: 9145)
+  let groupuserproviders_host = (get_env_or_default "REVAD_GROUPUSERPROVIDERS_HOST" "revad-groupuserproviders")
   let groupuserproviders_grpc_port = (get_env_or_default "REVAD_GROUPUSERPROVIDERS_GRPC_PORT" "9145")
   
   # Get gateway address for gRPC communication
   # User/group providers need to communicate with gateway via gRPC
-  # Default matches CERN production pattern (9142) for easier debugging
-  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "cernbox-1-test-revad-gateway")
+  # Default uses generic name (port matches common pattern: 9142)
+  let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
   let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   
