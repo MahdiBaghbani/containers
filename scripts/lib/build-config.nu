@@ -83,26 +83,102 @@ export def get-env-or-config [env_name: string, config_val: any] {
     }
 }
 
-# Process sources into build args (auto-generates {SOURCE_KEY}_REF and {SOURCE_KEY}_URL)
-# See docs/concepts/service-configuration.md#source-build-arguments-convention for convention
-export def process-sources-to-build-args [sources: record] {
+# Detect source type for a single source (local or git)
+# Returns "local" if path field present or {SOURCE_KEY}_PATH env var exists, otherwise "git"
+export def detect-source-type [source: record, source_key: string] {
+    # Check environment variable first (highest priority)
+    let env_path_key = $"($source_key | str upcase)_PATH"
+    let env_path = (try { ($env | get -o $env_path_key) } catch { null })
+    if ($env_path != null) and ($env_path | str length) > 0 {
+        return "local"
+    }
+    
+    # Check for path field in config
+    if "path" in ($source | columns) {
+        return "local"
+    }
+    
+    # Default to git (backward compatible)
+    "git"
+}
+
+# Detect source types for all sources (batch operation)
+# Returns record mapping source_key -> "local" | "git"
+export def detect-all-source-types [sources: record] {
     ($sources | columns | reduce --fold {} {|source_key, acc|
         let source = ($sources | get $source_key)
+        let source_type = (detect-source-type $source $source_key)
+        $acc | upsert $source_key $source_type
+    })
+}
 
+# Process sources into build args (auto-generates {SOURCE_KEY}_REF and {SOURCE_KEY}_URL for git, or {SOURCE_KEY}_PATH and {SOURCE_KEY}_MODE for local)
+# See docs/concepts/service-configuration.md#source-build-arguments-convention for convention
+export def process-sources-to-build-args [
+    sources: record,
+    source_types: record = {}
+] {
+    use ./common.nu [get-repo-root]
+    use ./validate.nu [validate-local-path]
+    
+    let repo_root = (get-repo-root)
+    # If source_types is empty, detect inline
+    let detected_types = (if ($source_types | is-empty) {
+        detect-all-source-types $sources
+    } else {
+        $source_types
+    })
+    
+    ($sources | columns | reduce --fold {} {|source_key, acc|
+        let source = ($sources | get $source_key)
+        let source_type = (try { $detected_types | get $source_key } catch { "git" })
+        let source_type = (if ($source_type | str length) == 0 { "git" } else { $source_type })
+        
         let source_key_upper = ($source_key | str upcase)
-        let ref_build_arg = $"($source_key_upper)_REF"
-        let url_build_arg = $"($source_key_upper)_URL"
-
         mut result = $acc
 
-        let ref_value = (try { $source.ref } catch { "" })
-        if ($ref_value | str length) > 0 {
-            $result = ($result | upsert $ref_build_arg (get-env-or-config $ref_build_arg $ref_value))
-        }
+        if $source_type == "local" {
+            # Local source - generate _PATH and _MODE args
+            let path_build_arg = $"($source_key_upper)_PATH"
+            let mode_build_arg = $"($source_key_upper)_MODE"
+            
+            # Check for env var override first (highest priority)
+            let env_path_key = $"($source_key_upper)_PATH"
+            let env_path = (try { ($env | get -o $env_path_key) } catch { null })
+            
+            if ($env_path != null) and ($env_path | str length) > 0 {
+                # Validate env var path
+                let path_validation = (validate-local-path $env_path $repo_root)
+                if not $path_validation.valid {
+                    error make {
+                        msg: ($"Environment variable '($env_path_key)' contains invalid path: " + ($path_validation.errors | str join "; "))
+                    }
+                }
+                $result = ($result | upsert $path_build_arg $env_path)
+            } else {
+                # Use config path field
+                let path_value = (try { $source.path } catch { "" })
+                if ($path_value | str length) > 0 {
+                    $result = ($result | upsert $path_build_arg $path_value)
+                }
+            }
+            
+            # Always set MODE to "local" for local sources
+            $result = ($result | upsert $mode_build_arg "local")
+        } else {
+            # Git source - generate _REF and _URL args (existing behavior)
+            let ref_build_arg = $"($source_key_upper)_REF"
+            let url_build_arg = $"($source_key_upper)_URL"
+            
+            let ref_value = (try { $source.ref } catch { "" })
+            if ($ref_value | str length) > 0 {
+                $result = ($result | upsert $ref_build_arg (get-env-or-config $ref_build_arg $ref_value))
+            }
 
-        let url_value = (try { $source.url } catch { "" })
-        if ($url_value | str length) > 0 {
-            $result = ($result | upsert $url_build_arg (get-env-or-config $url_build_arg $url_value))
+            let url_value = (try { $source.url } catch { "" })
+            if ($url_value | str length) > 0 {
+                $result = ($result | upsert $url_build_arg (get-env-or-config $url_build_arg $url_value))
+            }
         }
 
         $result

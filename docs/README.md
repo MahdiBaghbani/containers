@@ -37,6 +37,7 @@ Overview of DockyPody documentation structure.
 ### For Developers
 
 - [Nushell Development Guide](guides/nushell-development.md) - Essential before editing scripts
+- [Dockerfile Development Rules](guides/dockerfile-development.md) - Required conventions for Dockerfiles
 - [Build System](concepts/build-system.md) - Build system architecture
 
 ### For Service Authors

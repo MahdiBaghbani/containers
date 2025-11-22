@@ -157,6 +157,10 @@ yarn-error.log*
 # Runtime volumes (created on first run)
 volumes/
 
+# Build context local sources (copied by build system for local development)
+# This directory is ignored by git but must be visible to Docker build contexts
+.build-sources/
+
 # Environment files with secrets (keep .env.template if needed)
 examples/**/.envbug.md
 bug.md

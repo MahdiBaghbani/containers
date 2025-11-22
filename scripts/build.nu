@@ -22,23 +22,24 @@ use ./lib/registry/registry-info.nu [get-registry-info]
 use ./lib/registry/registry.nu [login-ghcr login-forgejo]
 use ./lib/buildx.nu [build load-image-into-builder]
 use ./lib/dependencies.nu [resolve-dependencies]
-use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest filter-versions get-version-or-null resolve-version-name get-version-spec]
+use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest filter-versions get-version-or-null resolve-version-name get-version-spec apply-version-defaults]
 use ./lib/platforms.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names expand-version-to-platforms strip-platform-suffix]
 use ./lib/matrix.nu [generate-service-matrix]
-use ./lib/build-config.nu [parse-bool-flag]
+use ./lib/build-config.nu [parse-bool-flag detect-all-source-types]
 use ./lib/tls-validation.nu [sync-and-validate-ca]
 use ./lib/validate.nu [validate-tls-config-merged]
-use ./lib/common.nu [read-ca-name]
+use ./lib/common.nu [read-ca-name get-repo-root]
 use ./lib/build-ops.nu [
     load-service-config
     extract-tls-metadata
     prepare-tls-context
     cleanup-tls-context
+    prepare-local-sources-context
     generate-tags
     generate-labels
     generate-build-args
 ]
-use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs]
+use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs show-build-order-for-version]
 
 export def main [
   --service: string,
@@ -234,52 +235,142 @@ export def main [
       }
     }
     
-    # Resolve version
-    let version_resolved = (resolve-version-name $version $versions_manifest $platforms_manifest $version_suffix_info)
-    let version_spec = (get-version-or-null $versions_manifest $version_resolved.base_name)
+    # Check for multi-version flags
+    let has_multi_version_flags = ($all_versions_val or ($versions | str length) > 0 or $latest_only_val)
     
-    if $version_spec == null {
-      let available_versions = (try {
-        $versions_manifest.versions | each {|v| $v.name} | str join ", "
-      } catch {
-        "unknown"
-      })
-      error make { 
-        msg: ($"Version '($version_resolved.base_name)' not found in manifest for service '($service)'.\n\n" +
-              $"Available versions: ($available_versions)")
+    if not $has_multi_version_flags {
+      # Single-version path
+      # Resolve version
+      let version_resolved = (resolve-version-name $version $versions_manifest $platforms_manifest $version_suffix_info)
+      let version_spec = (get-version-or-null $versions_manifest $version_resolved.base_name)
+      
+      if $version_spec == null {
+        let available_versions = (try {
+          $versions_manifest.versions | each {|v| $v.name} | str join ", "
+        } catch {
+          "unknown"
+        })
+        error make { 
+          msg: ($"Version '($version_resolved.base_name)' not found in manifest for service '($service)'.\n\n" +
+                $"Available versions: ($available_versions)")
+        }
       }
+      
+      # Determine platform
+      let target_platform = (if ($platform | str length) > 0 {
+        $platform
+      } else if ($version_resolved.detected_platform | str length) > 0 {
+        $version_resolved.detected_platform
+      } else if $has_platforms_manifest {
+        $default_platform
+      } else {
+        ""
+      })
+      
+      # Load service config and show build order
+      print "=== Build Order ==="
+      print ""
+      show-build-order-for-version $service $version_spec $target_platform $platforms_manifest $info {}
+      
+      return
     }
     
-    # Determine platform
-    let target_platform = (if ($platform | str length) > 0 {
-      $platform
-    } else if ($version_resolved.detected_platform | str length) > 0 {
-      $version_resolved.detected_platform
-    } else if $has_platforms_manifest {
-      $default_platform
-    } else {
-      ""
-    })
-    
-    # Load service config
-    let cfg = (load-service-config $service $version_spec $target_platform $platforms_manifest)
-    
-    # Build dependency graph
-    let graph = (build-dependency-graph $service $version_spec $cfg $target_platform $platforms_manifest false $info)
-    
-    # Perform topological sort
-    let build_order = (topological-sort-dfs $graph)
-    
-    # Print build order
-    print "=== Build Order ==="
-    print ""
-    for $idx in 0..<($build_order | length) {
-      let node = ($build_order | get $idx)
-      let label = ($idx + 1 | into string)
-      print $"($label). ($node)"
+    if $has_multi_version_flags {
+      # Version manifest check (for consistency with build path error message style)
+      # NOTE: This check is technically redundant since the version manifest is already validated
+      # before the --show-build-order early return. However, it is included here to:
+      # 1. Match the build path pattern (which checks manifest in multi-version path at line 343)
+      # 2. Provide consistent error message context ("show build order" vs "build")
+      # 3. Ensure error messages are clear and contextual for the display operation
+      if not $has_versions_manifest {
+        error make {
+          msg: ($"Service '($service)' does not have a version manifest. Cannot show build order for multiple versions.\n\n" +
+                "Multi-version build order requires a version manifest.\n" +
+                "To fix:\n" +
+                "1. Create services/($service)/versions.nuon\n" +
+                "2. Define at least one version with a 'default' field\n" +
+                "3. See docs/guides/multi-version-builds.md for examples")
+        }
+      }
+      
+      # Multi-version path: filter, expand, and display
+      let filter_result = (filter-versions $versions_manifest $platforms_manifest --all=$all_versions_val --versions=$versions --latest-only=$latest_only_val)
+      # Apply defaults to each version spec (filter-versions returns raw specs without defaults)
+      let versions_to_build = ($filter_result.versions | each {|v| apply-version-defaults $versions_manifest $v})
+      let detected_platforms_from_filter = $filter_result.detected_platforms
+      
+      if ($versions_to_build | is-empty) {
+        print "No versions to build based on filter criteria."
+        return
+      }
+      
+      # Platform expansion
+      mut expanded_versions = []
+      if $has_platforms_manifest {
+        for version_spec in $versions_to_build {
+          $expanded_versions = ($expanded_versions | append (expand-version-to-platforms $version_spec $platforms_manifest $default_platform))
+        }
+        
+        # Apply platform filtering
+        $expanded_versions = ($expanded_versions | where {|item|
+          ($platform | str length) == 0 or $item.platform == $platform
+        } | where {|item|
+          ($detected_platforms_from_filter | is-empty) or ($item.platform in $detected_platforms_from_filter)
+        })
+        
+        if ($expanded_versions | is-empty) {
+          print "No versions to build after platform filtering."
+          return
+        }
+      } else {
+        # Single-platform: use versions_to_build as-is
+        # Note: This differs from build path (lines 420-460) which iterates directly over versions_to_build.
+        # We use expanded_versions for consistency, but expanded_version.platform will be empty/missing.
+        $expanded_versions = $versions_to_build
+      }
+      
+      # Display build orders with grouped output
+      print "=== Build Order ==="
+      print ""
+      
+      # Initialize graph cache (shared across all versions for performance)
+      mut graph_cache = {}
+      
+      for $idx in 0..<($expanded_versions | length) {
+        let expanded_version = ($expanded_versions | get $idx)
+        
+        # Extract platform once (for single-platform services, expanded_version.platform may not exist)
+        let version_platform = (try { $expanded_version.platform } catch { "" })
+        
+        # Format version/platform label
+        let version_label = (if $has_platforms_manifest and ($version_platform | str length) > 0 {
+          $"Version: ($expanded_version.name) (($version_platform))"
+        } else {
+          $"Version: ($expanded_version.name)"
+        })
+        
+        print $version_label
+        
+        # Show build order for this version/platform with error handling and cache updates
+        # Note: Continue on error (graceful degradation) - matches Decision #6
+        # This allows displaying build orders for other versions even if one fails
+        try {
+          let result = (show-build-order-for-version $service $expanded_version $version_platform $platforms_manifest $info $graph_cache)
+          $graph_cache = $result.cache  # Update cache for next iteration
+        } catch {|err|
+          let error_msg = (try { $err.msg } catch { "Unknown error" })
+          print $"ERROR: Could not determine build order: ($error_msg)"
+          # Continue to next version (graceful degradation)
+        }
+        
+        # Add blank line between versions (except last)
+        if $idx < (($expanded_versions | length) - 1) {
+          print ""
+        }
+      }
+      
+      return
     }
-    
-    return
   }
   
   if not $has_platforms_manifest and ($versions | str length) > 0 {
@@ -350,7 +441,8 @@ export def main [
     }
     
     let filter_result = (filter-versions $versions_manifest $platforms_manifest --all=$all_versions_val --versions=$versions --latest-only=$latest_only_val)
-    let versions_to_build = $filter_result.versions
+    # Apply defaults to each version spec (filter-versions returns raw specs without defaults)
+    let versions_to_build = ($filter_result.versions | each {|v| apply-version-defaults $versions_manifest $v})
     let detected_platforms_from_filter = $filter_result.detected_platforms
     
     if ($versions_to_build | is-empty) {
@@ -644,18 +736,15 @@ def build-all-services [
       
       # Resolve versions to build
       let versions_to_build = (if $all_versions {
-        # Build all versions
-        $versions_manifest.versions
+        # Build all versions - apply defaults to each version spec
+        $versions_manifest.versions | each {|v| apply-version-defaults $versions_manifest $v}
       } else if $latest_only {
-        # Build only latest versions
-        $versions_manifest.versions | where {|v| try { $v.latest == true } catch { false }}
+        # Build only latest versions - apply defaults to each version spec
+        $versions_manifest.versions | where {|v| try { $v.latest == true } catch { false }} | each {|v| apply-version-defaults $versions_manifest $v}
       } else {
-        # Build default version only
+        # Build default version only - use get-version-spec which applies defaults
         let default_version_name = (get-default-version $versions_manifest)
-        let default_version_spec = ($versions_manifest.versions | where {|v| $v.name == $default_version_name} | first)
-        if $default_version_spec == null {
-          error make { msg: $"Default version '($default_version_name)' not found in manifest for service '($service_name)'" }
-        }
+        let default_version_spec = (get-version-spec $versions_manifest $default_version_name)
         [$default_version_spec]
       })
       
@@ -1159,6 +1248,25 @@ def build-single-version [
     return
   }
   
+  # Reject local sources in CI/production builds (must happen before SHA extraction)
+  # Cache source_types for use in build arg generation and other tasks
+  let cfg_sources = (try { $cfg.sources } catch { {} })
+  let source_types = (if not ($cfg_sources | is-empty) {
+    detect-all-source-types $cfg_sources
+  } else {
+    {}
+  })
+  
+  if not ($cfg_sources | is-empty) {
+    let local_sources = ($source_types | columns | where {|k| ($source_types | get $k) == "local"})
+    if ($local_sources | length) > 0 and $meta.build_type != "local" {
+      error make {
+        msg: ($"Error: Local sources are not allowed in CI builds. Use git sources instead.\n" +
+              $"Local sources found: [($local_sources | str join ', ')]")
+      }
+    }
+  }
+  
   # Validate after merge to catch dependencies in version overrides
   let tls_validation = (validate-tls-config-merged $cfg $service)
   if not $tls_validation.valid {
@@ -1194,11 +1302,47 @@ def build-single-version [
   
   # Extract source SHAs before generating labels
   # Cache is shared across all services in build session
+  # Filter to only git sources (skip local sources)
   let source_shas_result = (if (try { $cfg.sources } catch { {} } | is-empty) {
     {shas: {}, cache: $current_cache}  # Return cache unchanged
   } else {
     use ./lib/sources.nu [extract-source-shas]
-    extract-source-shas $cfg.sources $service $current_cache
+    # Filter sources to only git sources (exclude local sources)
+    let git_sources = (if not ($source_types | is-empty) {
+      ($cfg_sources | columns | where {|k| ($source_types | get $k | default "git") == "git"} | reduce --fold {} {|k, acc|
+        $acc | upsert $k ($cfg_sources | get $k)
+      })
+    } else {
+      # If source_types not available, filter by checking for path field
+      ($cfg_sources | columns | where {|k|
+        let source = ($cfg_sources | get $k)
+        not ("path" in ($source | columns))
+      } | reduce --fold {} {|k, acc|
+        $acc | upsert $k ($cfg_sources | get $k)
+      })
+    })
+    
+    # If all sources are local, skip SHA extraction entirely
+    if ($git_sources | is-empty) {
+      # All sources are local - return empty shas, merge local sources with empty SHAs
+      let local_shas = ($cfg_sources | columns | reduce --fold {} {|k, acc|
+        let sha_key = ($"($k | str upcase)_SHA")
+        $acc | upsert $sha_key ""
+      })
+      {shas: $local_shas, cache: $current_cache}
+    } else {
+      # Extract SHAs for git sources only
+      let git_shas_result = (extract-source-shas $git_sources $service $current_cache)
+      # Merge with empty SHAs for local sources
+      let local_shas = ($cfg_sources | columns | where {|k| ($source_types | get $k | default "git") == "local"} | reduce --fold {} {|k, acc|
+        let sha_key = ($"($k | str upcase)_SHA")
+        $acc | upsert $sha_key ""
+      })
+      {
+        shas: ($git_shas_result.shas | merge $local_shas),
+        cache: $git_shas_result.cache
+      }
+    }
   })
   let source_shas = $source_shas_result.shas
   # Update cache for this function's scope
@@ -1206,7 +1350,7 @@ def build-single-version [
 
   # Generate labels with source SHAs
   let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform)
-  let labels = (generate-labels $service $meta $cfg $source_shas)
+  let labels = (generate-labels $service $meta $cfg $source_shas $source_types)
   
   let build_label = (if ($current_platform | str length) > 0 {
     $"($service):($version_tag)-($current_platform)"
@@ -1337,8 +1481,18 @@ def build-single-version [
   }
   
   let tls_context = (prepare-tls-context $service $context $tls_meta.enabled $tls_meta.mode)
+  
+  # Prepare local sources context (copy local sources to build context)
+  let repo_root = (get-repo-root)
+  let local_source_paths = (if not ($cfg_sources | is-empty) {
+    prepare-local-sources-context $service $context $cfg_sources $source_types $repo_root
+  } else {
+    {}
+  })
+  
   # Generate build args (includes source SHAs for potential Dockerfile use)
-  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $cache_bust_override $no_cache $source_shas)
+  # local_source_paths contains resolved paths (relative to context root) for local sources
+  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths)
   
   build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $push_val $provenance_val $is_local
   

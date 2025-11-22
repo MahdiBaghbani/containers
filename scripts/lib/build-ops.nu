@@ -18,8 +18,8 @@
 # Build operations for container image builds
 
 use ./platforms.nu [merge-version-overrides merge-platform-config get-platform-spec check-platforms-manifest-exists]
-use ./common.nu [get-service-config-path get-tls-mode]
-use ./validate.nu [validate-merged-config]
+use ./common.nu [get-service-config-path get-tls-mode get-repo-root]
+use ./validate.nu [validate-merged-config validate-local-path]
 
 # Load service config and merge platform/version overrides
 # See docs/concepts/service-configuration.md for merge order
@@ -144,6 +144,103 @@ export def cleanup-tls-context [
     print "Cleaned up TLS helper script(s) from service context"
 }
 
+# Prepare local sources context by copying local source directories into build context
+# Returns record mapping source_key -> resolved_path_in_context (paths relative to context root for Docker)
+# Note: Copied sources are left in .build-sources/ after build for debugging (consistent with TLS helper pattern)
+export def prepare-local-sources-context [
+    service: string,
+    context: string,
+    sources: record,
+    source_types: record,
+    repo_root: string
+] {
+    # Filter to only local sources
+    let local_source_keys = ($sources | columns | where {|k| ($source_types | get $k | default "git") == "local"})
+    
+    if ($local_source_keys | is-empty) {
+        return {}
+    }
+    
+    # Resolve context to absolute path (if relative, resolve relative to repo root)
+    let resolved_context = (if ($context | path expand | str starts-with "/") {
+        ($context | path expand)
+    } else {
+        ($repo_root | path join $context | path expand)
+    })
+    
+    # Create .build-sources directory in context
+    let build_sources_dir = ($resolved_context | path join ".build-sources")
+    mkdir $build_sources_dir
+    
+    # Process each local source
+    let resolved_paths = ($local_source_keys | reduce --fold {} {|source_key, acc|
+        let source = ($sources | get $source_key)
+        let path_value = (try { $source.path } catch { "" })
+        
+        if ($path_value | str length) == 0 {
+            error make {msg: $"Local source '($source_key)' has empty path field"}
+        }
+        
+        # Resolve path relative to repo root
+        let resolved_source_path = (if ($path_value | path expand | str starts-with "/") {
+            # Absolute path - validate it's within repo root
+            let abs_path = ($path_value | path expand)
+            let repo_root_expanded = ($repo_root | path expand)
+            if not ($abs_path | str starts-with $repo_root_expanded) {
+                error make {msg: $"Local source '($source_key)' path '($path_value)' is outside repository root"}
+            }
+            $abs_path
+        } else {
+            # Relative path - resolve relative to repo root
+            ($repo_root | path join $path_value | path expand)
+        })
+        
+        # Validate path exists and is directory
+        let path_validation = (validate-local-path $resolved_source_path $repo_root)
+        if not $path_validation.valid {
+            error make {msg: ($"Local source '($source_key)' path validation failed: " + ($path_validation.errors | str join "; "))}
+        }
+        
+        # Check directory size and warn if large (>100MB)
+        let dir_size_bytes = (try {
+            (ls -a $resolved_source_path | get size | math sum)
+        } catch {
+            0
+        })
+        # Convert to MB (1MB = 1,048,576 bytes) - convert to int for comparison
+        let dir_size_int = ($dir_size_bytes | into int)
+        let size_mb = ($dir_size_int / 1048576)
+        if $size_mb > 100 {
+            let size_mb_str = ($size_mb | into string | str substring 0..5)
+            print $"WARNING: [($service)] Local source '($source_key)' directory is large \(($size_mb_str) MB\). This may slow down builds."
+        }
+        
+        # Copy source directory to build context
+        let target_dir = ($build_sources_dir | path join $source_key)
+        # Remove target directory if it exists (cleanup from previous builds)
+        try {
+            if ($target_dir | path exists) {
+                rm -rf $target_dir
+            }
+        } catch {|err|
+            error make {msg: $"Failed to remove existing target directory '($target_dir)': ($err.msg)"}
+        }
+        # Use cp -rL to follow symlinks (matches git clone behavior)
+        # Note: Nushell's cp command follows symlinks by default, but we use ^cp for explicit control
+        try {
+            ^cp -rL $resolved_source_path $target_dir
+        } catch {|err|
+            error make {msg: $"Failed to copy local source '($source_key)' from '($resolved_source_path)' to '($target_dir)': ($err.msg)"}
+        }
+        
+        # Return resolved path relative to context root (for Docker COPY commands)
+        let resolved_path_in_context = $".build-sources/($source_key)"
+        $acc | upsert $source_key $resolved_path_in_context
+    })
+    
+    $resolved_paths
+}
+
 # Generate image tags (default platform gets unprefixed versions of all tags, others get platform-suffixed only)
 export def generate-tags [
     service: string,
@@ -208,7 +305,8 @@ export def generate-labels [
     service: string,
     meta: record,
     cfg: record,
-    source_shas: record = {}
+    source_shas: record = {},
+    source_types: record = {}
 ] {
     let image_source = (try {
         git remote get-url origin | str trim
@@ -226,14 +324,28 @@ export def generate-labels [
     # Add source-specific labels if sources exist
     let cfg_sources = (try { $cfg.sources } catch { {} })
     if not ($cfg_sources | is-empty) {
-        # Check for label conflicts (user-defined source revision labels)
-        let user_labels = (try { $cfg.labels } catch { {} } | default {})
-        let source_revision_label_prefix_oci = "org.opencontainers.image.source."
-        let source_revision_label_prefix_custom = "org.opencloudmesh.source."
-        let source_revision_label_suffix = ".revision"
+        # Filter to only git sources BEFORE the reduce call (local sources don't get labels)
+        let source_keys = ($cfg_sources | columns)
+        let git_source_keys = (if not ($source_types | is-empty) {
+            ($source_keys | where {|k| ($source_types | get $k | default "git") == "git"})
+        } else {
+            # Fallback: filter by checking for path field
+            ($source_keys | where {|k|
+                let source = ($cfg_sources | get $k)
+                not ("path" in ($source | columns))
+            })
+        })
+        
+        # Only process git sources for label generation
+        if not ($git_source_keys | is-empty) {
+            # Check for label conflicts (user-defined source revision labels)
+            let user_labels = (try { $cfg.labels } catch { {} } | default {})
+            let source_revision_label_prefix_oci = "org.opencontainers.image.source."
+            let source_revision_label_prefix_custom = "org.opencloudmesh.source."
+            let source_revision_label_suffix = ".revision"
 
-        # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
-        $base_labels = ($cfg_sources | columns | reduce --fold $base_labels {|source_key, acc|
+            # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
+            $base_labels = ($git_source_keys | reduce --fold $base_labels {|source_key, acc|
             let source = ($cfg_sources | get $source_key)
             let sha = (try { $source_shas | get $"($source_key | str upcase)_SHA" } catch { "" })
             let ref = (try { $source.ref } catch { "" })
@@ -274,6 +386,9 @@ export def generate-labels [
             }
 
             # Source ref and URL (always include, user can override if needed)
+            # Defensive: wrap in try-catch for safety (should not be needed if filtering is correct)
+            let ref = (try { $source.ref } catch { "" })
+            let url = (try { $source.url } catch { "" })
             if ($ref | str length) > 0 {
                 $labels = ($labels | upsert $"org.opencloudmesh.source.($source_key).ref" $ref)
             }
@@ -282,7 +397,8 @@ export def generate-labels [
             }
 
             $labels
-        })
+            })
+        }
     }
 
     $base_labels | merge (try { $cfg.labels } catch { {} } | default {})
@@ -297,7 +413,9 @@ export def generate-build-args [
     tls_meta: record,
     cache_bust_override: string = "",
     no_cache: bool = false,
-    source_shas: record = {}
+    source_shas: record = {},
+    source_types: record = {},
+    local_source_paths: record = {}
 ] {
     use ./build-config.nu [process-sources-to-build-args process-external-images-to-build-args]
     
@@ -311,8 +429,27 @@ export def generate-build-args [
     
     let cfg_sources = (try { $cfg.sources } catch { {} })
     if not ($cfg_sources | is-empty) {
-        let source_args = (process-sources-to-build-args $cfg_sources)
-        $build_args = ($build_args | merge $source_args)
+        let source_args = (process-sources-to-build-args $cfg_sources $source_types)
+        # Update local source paths if provided (from context preparation - Task 4.2)
+        # For now, if local_source_paths has entries, update corresponding _PATH args
+        let source_args_updated = (if not ($local_source_paths | is-empty) {
+            ($source_args | columns | reduce --fold $source_args {|arg_key, acc|
+                if ($arg_key | str ends-with "_PATH") {
+                    # Extract source key from arg key (e.g., REVAD_PATH -> revad)
+                    let source_key = ($arg_key | str replace "_PATH" "" | str downcase)
+                    if $source_key in ($local_source_paths | columns) {
+                        $acc | upsert $arg_key ($local_source_paths | get $source_key)
+                    } else {
+                        $acc
+                    }
+                } else {
+                    $acc
+                }
+            })
+        } else {
+            $source_args
+        })
+        $build_args = ($build_args | merge $source_args_updated)
 
         # Add SHA build args (for label generation only, Dockerfiles can optionally declare and use if needed)
         # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
@@ -369,29 +506,37 @@ export def generate-build-args [
         if ($env_cache_bust | str length) > 0 {
             $env_cache_bust  # Environment variable
         } else {
-            # Per-service: compute from service's sources
+            # Per-service: compute from service's sources (HYBRID: refs + SHAs)
+            # Explicitly filter local sources before computation
             let cfg_sources = (try { $cfg.sources } catch { {} })
             if ($cfg_sources | is-empty) {
-                # No sources - use Git SHA as-is
+                # No sources at all - use existing fallback logic
                 if ($meta.sha | str length) > 0 {
                     $meta.sha
                 } else {
                     "local"
                 }
             } else {
-                # Per-service: compute from service's sources (HYBRID: refs + SHAs)
-                let cfg_sources = (try { $cfg.sources } catch { {} })
-                if ($cfg_sources | is-empty) {
-                    # No sources - use Git SHA as-is
-                    if ($meta.sha | str length) > 0 {
-                        $meta.sha
-                    } else {
-                        "local"
-                    }
+                # Filter to only git sources (exclude local sources)
+                let git_sources = (if not ($source_types | is-empty) {
+                    ($cfg_sources | columns | where {|k| ($source_types | get $k | default "git") == "git"})
                 } else {
+                    # Fallback: filter by checking for path field
+                    ($cfg_sources | columns | where {|k|
+                        let source = ($cfg_sources | get $k)
+                        not ("path" in ($source | columns))
+                    })
+                })
+                
+                # Condition: If git_sources is empty AND cfg_sources is NOT empty -> all sources are local -> always-bust
+                if ($git_sources | is-empty) {
+                    # All sources are local - always-bust by default (use random UUID or "local" sentinel)
+                    (random uuid)
+                } else {
+                    # Proceed with cache bust computation using git sources only
                     # Hybrid: Combine refs and SHAs (sorted by source key for consistency)
                     # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
-                    let source_keys_sorted = ($cfg_sources | columns | sort)
+                    let source_keys_sorted = ($git_sources | sort)
                     let cache_bust_parts = ($source_keys_sorted | reduce --fold [] {|key, acc|
                         let source = ($cfg_sources | get $key)
                         let ref = (try { $source.ref } catch { "" })

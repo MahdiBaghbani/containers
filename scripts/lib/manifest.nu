@@ -50,6 +50,21 @@ export def get-default-version [
   }
 }
 
+# Replace sources per key (override completely replaces default for each key)
+# Sources from defaults that are NOT in overrides are preserved
+def replace-sources-per-key [
+  default_sources: record,
+  override_sources: record
+] {
+  mut result = $default_sources
+  
+  for key in ($override_sources | columns) {
+    $result = ($result | upsert $key ($override_sources | get $key))
+  }
+  
+  $result
+}
+
 # Apply version defaults to version spec (deep-merge defaults into overrides)
 export def apply-version-defaults [
   manifest: record,
@@ -84,7 +99,29 @@ export def apply-version-defaults [
     } else {
       $overrides
     })
-    mut merged_global = (deep-merge $global_defaults $global_overrides)
+    
+    # Extract and replace sources per key
+    let default_sources = (try { $global_defaults.sources } catch { {} })
+    let override_sources = (try { $global_overrides.sources } catch { {} })
+    let merged_sources = (replace-sources-per-key $default_sources $override_sources)
+    
+    # Merge everything else (excluding sources)
+    let defaults_other = (if "sources" in ($global_defaults | columns) {
+      $global_defaults | reject sources
+    } else {
+      $global_defaults
+    })
+    let overrides_other = (if "sources" in ($global_overrides | columns) {
+      $global_overrides | reject sources
+    } else {
+      $global_overrides
+    })
+    mut merged_global = (deep-merge $defaults_other $overrides_other)
+    
+    # Insert merged sources
+    if not ($merged_sources | is-empty) {
+      $merged_global = ($merged_global | insert sources $merged_sources)
+    }
 
     # Handle platform-specific defaults
     if "platforms" in ($defaults | columns) {
@@ -95,7 +132,31 @@ export def apply-version-defaults [
       for platform_name in ($default_platforms | columns) {
         let platform_defaults = ($default_platforms | get $platform_name)
         let platform_overrides = (try { $override_platforms | get $platform_name } catch { {} })
-        $merged_platforms = ($merged_platforms | upsert $platform_name (deep-merge $platform_defaults $platform_overrides))
+        
+        # Extract and replace platform sources per key
+        let platform_default_sources = (try { $platform_defaults.sources } catch { {} })
+        let platform_override_sources = (try { $platform_overrides.sources } catch { {} })
+        let merged_platform_sources = (replace-sources-per-key $platform_default_sources $platform_override_sources)
+        
+        # Merge everything else (excluding sources)
+        let platform_defaults_other = (if "sources" in ($platform_defaults | columns) {
+          $platform_defaults | reject sources
+        } else {
+          $platform_defaults
+        })
+        let platform_overrides_other = (if "sources" in ($platform_overrides | columns) {
+          $platform_overrides | reject sources
+        } else {
+          $platform_overrides
+        })
+        mut merged_platform = (deep-merge $platform_defaults_other $platform_overrides_other)
+        
+        # Insert merged platform sources
+        if not ($merged_platform_sources | is-empty) {
+          $merged_platform = ($merged_platform | insert sources $merged_platform_sources)
+        }
+        
+        $merged_platforms = ($merged_platforms | upsert $platform_name $merged_platform)
       }
       $merged_global = ($merged_global | insert platforms $merged_platforms)
     } else if "platforms" in ($overrides | columns) {

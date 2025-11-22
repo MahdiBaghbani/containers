@@ -197,3 +197,22 @@ export def read-ca-name [tls_enabled: bool] {
     
     $ca_name
 }
+
+# Get repository root using git (for accurate repo root resolution)
+# Note: There is an existing get-repo-root in scripts/tls/lib.nu that uses FILE_PWD/PWD detection.
+# This function uses git-based detection for more accurate repo root resolution.
+# Keep separate for now - consolidation deferred to future refactoring task.
+export def get-repo-root [] {
+    let git_result = (try {
+        ^git rev-parse --show-toplevel
+    } catch {
+        null
+    })
+    
+    if $git_result != null {
+        ($git_result | str trim | path expand)
+    } else {
+        # Fallback to current working directory if git not available or not in git repo
+        ($env.PWD | path expand)
+    }
+}

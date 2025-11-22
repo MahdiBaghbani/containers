@@ -277,7 +277,7 @@ def build-graph-recursive [
 }
 
 # Build dependency graph for a service
-# Returns {nodes: list, edges: list}
+# Returns {nodes: list, edges: list, cache: record}
 export def build-dependency-graph [
   service: string,
   version_spec: record,
@@ -285,13 +285,9 @@ export def build-dependency-graph [
   platform: string,
   platforms: any,
   is_local: bool,
-  registry_info: record
+  registry_info: record,
+  graph_cache: record = {}
 ] {
-  mut nodes = []
-  mut edges = []
-  mut visited = []
-  mut config_cache = {}
-  
   # Create target node
   let version_name = $version_spec.name
   let node_key = (if ($platform | str length) > 0 {
@@ -299,6 +295,20 @@ export def build-dependency-graph [
   } else {
     $"($service):($version_name)"
   })
+  
+  # Check cache first
+  if $node_key in ($graph_cache | columns) {
+    return {
+      nodes: (($graph_cache | get $node_key).nodes),
+      edges: (($graph_cache | get $node_key).edges),
+      cache: $graph_cache  # Return cache unchanged
+    }
+  }
+  
+  mut nodes = []
+  mut edges = []
+  mut visited = []
+  mut config_cache = {}
   
   # Add target node to graph
   mut nodes = (add-node $nodes $node_key)
@@ -309,7 +319,14 @@ export def build-dependency-graph [
   # Build graph recursively
   let result = (build-graph-recursive $service $version_name $platform $nodes $edges $visited $config_cache)
   
-  {nodes: $result.nodes, edges: $result.edges}
+  # Store graph in cache and return
+  let graph = {nodes: $result.nodes, edges: $result.edges}
+  let updated_cache = ($graph_cache | insert $node_key $graph)
+  {
+    nodes: $graph.nodes,
+    edges: $graph.edges,
+    cache: $updated_cache
+  }
 }
 
 # Topological sort using DFS (detects all cycles)
@@ -408,4 +425,38 @@ export def topological-sort-dfs [
   }
   
   $result.finished
+}
+
+# Show build order for a single version/platform
+# Loads service config, builds dependency graph, performs topological sort, and prints numbered list
+# Note: Header is printed by caller for context (single vs multi-version display)
+# Returns {cache: record} for cache updates
+export def show-build-order-for-version [
+  service: string,
+  version_spec: record,
+  platform: string,
+  platforms_manifest: any,
+  info: record,
+  graph_cache: record
+] {
+  # Load service config
+  let cfg = (load-service-config $service $version_spec $platform $platforms_manifest)
+  
+  # Build dependency graph (with caching)
+  let result = (build-dependency-graph $service $version_spec $cfg $platform $platforms_manifest false $info $graph_cache)
+  let graph = {nodes: $result.nodes, edges: $result.edges}
+  let updated_cache = $result.cache
+  
+  # Perform topological sort
+  let build_order = (topological-sort-dfs $graph)
+  
+  # Print numbered list (no header - caller provides context)
+  for $idx in 0..<($build_order | length) {
+    let node = ($build_order | get $idx)
+    let label = ($idx + 1 | into string)
+    print $"($label). ($node)"
+  }
+  
+  # Return updated cache
+  {cache: $updated_cache}
 }

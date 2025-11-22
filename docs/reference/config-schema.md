@@ -98,13 +98,66 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
 }
 ```
 
+### Source Types
+
+Sources can be either **Git repositories** or **local folders** (development only):
+
+#### Git Sources
+
+Git sources use `url` and `ref` fields:
+
+```nuon
+{
+  "sources": {
+    "reva": {
+      "url": "https://github.com/cs3org/reva",
+      "ref": "v3.3.2"
+    }
+  }
+}
+```
+
+**Build args generated:** `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
+
+#### Local Sources (Development Only)
+
+Local sources use `path` field (mutually exclusive with `url`/`ref`):
+
+```nuon
+{
+  "sources": {
+    "reva": {
+      "path": "../reva"  // Relative to repository root
+    }
+  }
+}
+```
+
+**Build args generated:** `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE="local"`
+
+**CRITICAL RESTRICTIONS:**
+
+- **Development only** - Local sources are **REJECTED** in CI/production builds
+- **Mutually exclusive** - Cannot have both `path` and `url`/`ref` fields
+- **Path validation** - Paths must exist, be directories, and be within repository root
+- **No SHA generation** - Local sources do not generate `{SOURCE_KEY}_SHA` build args
+
+**Path Resolution:**
+
+- **Relative paths** - Resolved relative to repository root
+- **Absolute paths** - Must be within repository root (path traversal prevention)
+- **Environment variable override** - Can override using `{SOURCE_KEY}_PATH` env var
+
+For complete details, see [Source Build Arguments Convention](../concepts/service-configuration.md#source-build-arguments-convention).
+
 ### Naming Convention
 
 - Source key must be lowercase alphanumeric with underscores: `^[a-z0-9_]+$`
-- Build args are auto-generated: `{SOURCE_KEY}_REF` and `{SOURCE_KEY}_URL`
-- Example: `"web_extensions"` -> `WEB_EXTENSIONS_REF` and `WEB_EXTENSIONS_URL`
-
-For complete details, see [Source Build Arguments Convention](../concepts/service-configuration.md#source-build-arguments-convention).
+- Build args are auto-generated based on source type:
+  - Git sources: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
+  - Local sources: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`
+- Example: `"web_extensions"` (Git) -> `WEB_EXTENSIONS_REF`, `WEB_EXTENSIONS_URL`, `WEB_EXTENSIONS_SHA`
+- Example: `"reva"` (local) -> `REVA_PATH`, `REVA_MODE="local"`
 
 ## External Images
 
@@ -200,7 +253,7 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 
 **CRITICAL**: The `version` field is **FORBIDDEN** in base config and `platforms.nuon`. Version must be defined in `versions.nuon` overrides.
 
-### Single-Platform Services
+### Dependencies: Single-Platform Services
 
 ```nuon
 // services/my-service.nuon
@@ -227,7 +280,7 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 }
 ```
 
-### Multi-Platform Services
+### Dependencies: Multi-Platform Services
 
 ```nuon
 // services/my-service/platforms.nuon
@@ -286,7 +339,7 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 }
 ```
 
-### Validation Rules
+### Dependencies: Validation Rules
 
 - Each dependency MUST include `build_arg` field
 - `version` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)

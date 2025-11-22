@@ -29,22 +29,34 @@
   //           All other fields (dockerfile, sources, external_images, dependencies, build_args) are FORBIDDEN
   //           ERROR: "Service 'X': external_images.build: Field forbidden when platforms.nuon exists. Move to platforms.nuon (infrastructure) or versions.nuon (versions)."
 
-  // Source repositories - build args auto-generated: {SOURCE_KEY}_REF and {SOURCE_KEY}_URL
+  // Source repositories - build args auto-generated: {SOURCE_KEY}_REF and {SOURCE_KEY}_URL (git) or {SOURCE_KEY}_PATH and {SOURCE_KEY}_MODE (local)
   // See docs/concepts/service-configuration.md#source-build-arguments-convention for complete convention
   // VALIDATION: Source keys must match ^[a-z0-9_]+$ (lowercase alphanumeric with underscores only)
   // VALIDATION: build_arg field is FORBIDDEN (auto-generated, will cause validation error)
+  // VALIDATION: path and url/ref are MUTUALLY EXCLUSIVE (cannot have both in same source)
   // NOTE: For single-platform services, sources are REQUIRED in base config (versions.nuon can override, but base must have as fallback).
   //       For multi-platform services, sources are FORBIDDEN in base config (must be in versions.nuon overrides only).
+  // NOTE: path field can be defined in:
+  //       - Base config (services/{service}.nuon) - for single-platform services
+  //       - versions.nuon.defaults - for default source configuration
+  //       - versions.nuon version overrides - for version-specific local paths
+  //       - versions.nuon platform override blocks - for platform-specific local paths
+  //       - NOT in platforms.nuon directly (sources are FORBIDDEN in platforms.nuon)
+  // NOTE: path field is dev-only (rejected in CI builds, but allowed in all config locations above)
   "sources": {
     "revad": {
-      // Generates: REVAD_REF and REVAD_URL
-      "url": "https://github.com/cs3org/reva", // string (required) - repository URL
-      "ref": "v3.3.2" // string (required) - branch/tag/commit
+      // Git source example - generates: REVAD_REF and REVAD_URL
+      "url": "https://github.com/cs3org/reva", // string (required for git sources) - repository URL
+      "ref": "v3.3.2" // string (required for git sources) - branch/tag/commit
+      // OR use path for local development:
+      // "path": "../reva" // string (required for local sources) - relative or absolute path to local directory (mutually exclusive with url/ref)
     },
     "nushell": {
-      // Generates: NUSHELL_REF and NUSHELL_URL
+      // Git source example - generates: NUSHELL_REF and NUSHELL_URL
       "url": "https://github.com/nushell/nushell",
       "ref": "0.108.0"
+      // OR use path for local development:
+      // "path": "../nushell" // string (required for local sources) - relative or absolute path to local directory (mutually exclusive with url/ref)
     }
   },
 

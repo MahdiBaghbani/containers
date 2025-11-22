@@ -102,9 +102,11 @@ nu scripts/build.nu --service revad-base --all-versions
 - The `default` value MUST exactly match a version `name` in the `versions` array
 - Validation occurs during service configuration loading (before build starts)
 - If `default` references a version that doesn't exist in `versions`, validation fails with error:
-  ```
+
+  ```text
   Error: Default version 'v1.0.0' not found in versions list
   ```
+
 - **Important:** If you remove a version from the `versions` array but it's still referenced by `default`, the build will fail. Always update `default` when removing versions.
 
 **Example of invalid manifest:**
@@ -175,6 +177,60 @@ The `overrides` section can override any field from the base service config:
 
 - Overrides are **deep merged** with base config
 - Specific fields override; missing fields use base config values
+
+**Source Replacement (Special Behavior):**
+
+Source configurations use **per-key replacement** instead of deep merge. This is because source fields are mutually exclusive: a source cannot have both `path` (local) and `url`/`ref` (Git) at the same time.
+
+**How Source Replacement Works:**
+
+- When a source key appears in overrides, it **completely replaces** the default source for that key
+- Sources from defaults that are **not** in overrides are **preserved**
+- This applies to both global and platform-specific source overrides
+
+**Example: Git Source to Local Source**
+
+```nuon
+{
+  "default": "local",
+  "defaults": {
+    "sources": {
+      "gaia": {
+        "url": "https://github.com/example/gaia",
+        "ref": "v1.0.0"
+      },
+      "nushell": {
+        "url": "https://github.com/nushell/nushell",
+        "ref": "0.108.0"
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "local",
+      "overrides": {
+        "sources": {
+          "gaia": {
+            "path": ".repos/gaia"
+            // nushell omitted - will be preserved from defaults
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+**Result for `local` version:**
+
+- `sources.gaia`: Only `path` field (no `url`/`ref`) - **replaced**
+- `sources.nushell`: `url` and `ref` from defaults - **preserved**
+
+**Important Notes:**
+
+- Source replacement is **per-key only** - only source keys explicitly defined in overrides are replaced
+- Other fields (`dependencies`, `external_images`, `build_args`, etc.) continue using normal deep-merge
+- This behavior applies to both global and platform-specific source overrides
 
 **Platform-Specific Overrides (Multi-Platform Services):**
 
@@ -434,6 +490,75 @@ Output:
   ]
 }
 ```
+
+### Previewing Build Order
+
+Use `--show-build-order` to preview dependency chains for multiple versions without building:
+
+```bash
+# Show build order for default version
+nu scripts/build.nu --service revad-base --show-build-order
+
+# Show build order for all versions
+nu scripts/build.nu --service revad-base --show-build-order --all-versions
+
+# Show build order for specific versions
+nu scripts/build.nu --service revad-base --show-build-order --versions v1.29.0,v1.28.0
+
+# Show build order for latest versions only
+nu scripts/build.nu --service revad-base --show-build-order --latest-only
+
+# Show build order for all versions, filtered to specific platform
+nu scripts/build.nu --service revad-base --show-build-order --all-versions --platform production
+```
+
+**Output Format:**
+
+For single-version:
+
+```text
+=== Build Order ===
+
+1. common-tools:v1.0.0
+2. revad-base:v1.29.0
+```
+
+For multi-version:
+
+```text
+=== Build Order ===
+
+Version: v1.29.0
+1. common-tools:v1.0.0
+2. revad-base:v1.29.0
+
+Version: v1.28.0
+1. common-tools:v1.0.0
+2. revad-base:v1.28.0
+```
+
+For multi-platform services, each version/platform combination is displayed separately:
+
+```text
+=== Build Order ===
+
+Version: v1.29.0 (production)
+1. common-tools:v1.0.0:production
+2. revad-base:v1.29.0:production
+
+Version: v1.29.0 (development)
+1. common-tools:v1.0.0:development
+2. revad-base:v1.29.0:development
+```
+
+**Use Cases:**
+
+- Auditing dependency chains across multiple versions before building
+- Verifying that all versions resolve dependencies correctly
+- Understanding build order differences between versions
+- Release planning and dependency impact analysis
+
+**See Also:** [CLI Reference](../reference/cli-reference.md#--show-build-order) for complete flag documentation.
 
 ### Build Flags
 

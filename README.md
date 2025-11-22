@@ -44,8 +44,36 @@ For complete setup instructions, see [Getting Started Guide](docs/guides/getting
 - **Dependency resolution** - Automatic dependency building with correct build order
 - **Cache optimization** - Deterministic cache busting for efficient rebuilds
 - **TLS management** - Selective certificate copying for secure, minimal images
+- **Local development** - Use local folder sources for iterative development without committing changes
 
 See [Build System](docs/concepts/build-system.md) for complete feature documentation.
+
+## Local Development
+
+For local development, you can use local filesystem directories as sources instead of Git repositories:
+
+```nuon
+{
+  "sources": {
+    "reva": {
+      "path": "../reva"  // Local development directory
+    }
+  }
+}
+```
+
+**Benefits:**
+
+- Test changes without committing to Git
+- Iterate quickly on local modifications
+- Build with uncommitted code
+
+**Restrictions:**
+
+- **Development only** - Local sources are automatically rejected in CI/production builds
+- Paths must be within the repository root (path traversal prevention)
+
+For complete details, see [Service Configuration - Local Folder Sources](docs/concepts/service-configuration.md#local-folder-sources-development-only).
 
 ## Documentation
 

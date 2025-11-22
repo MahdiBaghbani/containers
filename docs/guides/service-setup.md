@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 # Service Setup Guide
 
 ## Overview
@@ -208,6 +209,132 @@ This example demonstrates the advanced pattern of having multiple dependencies f
 - `common-tools-builder` resolves to: `common-tools:v1.0.0-debian`
 - `common-tools-runtime` resolves to: `common-tools:v1.0.0-alpine`
 - Build args: `COMMON_TOOLS_BUILDER_IMAGE=common-tools:v1.0.0-debian` and `COMMON_TOOLS_RUNTIME_IMAGE=common-tools:v1.0.0-alpine`
+
+## Supporting Local Sources in Dockerfiles
+
+For local development, Dockerfiles can support both Git sources (for CI/production) and local folder sources (for development). This dual-mode pattern allows you to test changes without committing to Git. Review the enforcement rules in [Dockerfile Development Rules](dockerfile-development.md) before editing service-specific Dockerfiles.
+
+### Dual-Mode Dockerfile Pattern
+
+To support both Git and local sources, declare ARGs for both modes and use conditional logic:
+
+```dockerfile
+# Git source args (for CI/production)
+ARG REVAD_URL="https://github.com/cs3org/reva"
+ARG REVAD_REF="v3.3.2"
+ARG REVAD_SHA=""
+
+# Local source args (for development)
+ARG REVAD_PATH=""
+ARG REVAD_MODE=""
+
+FROM ${BASE_BUILD_IMAGE} AS build
+
+# Conditional logic: use local path if MODE is "local", otherwise use git clone
+RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/tmp/local-revad,ro \
+    if [ "$REVAD_MODE" = "local" ]; then \
+      mkdir -p /revad-git && \
+      cp -a /tmp/local-revad/. /revad-git; \
+    else \
+      git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git; \
+    fi
+
+WORKDIR /revad-git
+# ... rest of build steps ...
+```
+
+### Pattern Explanation
+
+1. **Declare all ARGs** - Include both Git args (`_URL`, `_REF`, `_SHA`) and local args (`_PATH`, `_MODE`)
+2. **Check MODE** - Use `REVAD_MODE="local"` to detect local source mode
+3. **Conditional logic** - Use shell `if` statement to choose between `cp` (local) or `git clone` (Git)
+
+**Why the bind mount matters:** local source directories are prepared inside the service context (for example `.build-sources/revad`). Docker build stages cannot see the host filesystem directly, so you must re-mount the prepared path inside the `RUN` step. Skipping the bind mount causes `cp` to fail with “No such file or directory,” which was the root cause of recent local-source build failures.
+
+### Example with Cache Mount
+
+For better performance with Git sources, you can combine cache mounts with conditional logic:
+
+```dockerfile
+ARG REVAD_URL="https://github.com/cs3org/reva"
+ARG REVAD_REF="v3.3.2"
+ARG REVAD_PATH=""
+ARG REVAD_MODE=""
+ARG CACHEBUST="default"
+
+FROM ${BASE_BUILD_IMAGE} AS build
+
+RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/tmp/local-revad,ro \
+    --mount=type=cache,id=revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
+    if [ "$REVAD_MODE" = "local" ]; then \
+      mkdir -p /revad-git && \
+      cp -a /tmp/local-revad/. /revad-git; \
+    else \
+      mkdir -p /src/reva-git-cache && \
+      if [ ! -d /src/reva-git-cache/.git ]; then \
+        git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_REF}" ${REVAD_URL} /src/reva-git-cache; \
+      fi && \
+      cp -a /src/reva-git-cache/. /revad-git; \
+    fi
+
+WORKDIR /revad-git
+# ... rest of build steps ...
+```
+
+**Note:** Cache mounts are only used for Git sources. Local sources are copied directly without cache.
+
+### Migration from Git-Only Dockerfiles
+
+To migrate an existing Dockerfile to support local sources:
+
+1. **Add local source ARGs** after existing Git source ARGs:
+
+   ```dockerfile
+   ARG REVAD_PATH=""
+   ARG REVAD_MODE=""
+   ```
+
+2. **Wrap git clone in conditional with a bind mount**:
+
+   ```dockerfile
+   # Before:
+   RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git
+
+   # After:
+   RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/tmp/local-revad,ro \
+       if [ "$REVAD_MODE" = "local" ]; then \
+         mkdir -p /revad-git && \
+         cp -a /tmp/local-revad/. /revad-git; \
+       else \
+         git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git; \
+       fi
+   ```
+
+3. **Test both modes**:
+
+   ```bash
+   # Test with Git source (default)
+   nu scripts/build.nu --service my-service
+
+   # Test with local source
+   export REVA_PATH="../reva"
+   nu scripts/build.nu --service my-service
+   ```
+
+### When to Use Local vs Git Sources
+
+- **Use local sources** for:
+
+  - Local development and testing
+  - Iterative development without committing changes
+  - Testing uncommitted modifications
+
+- **Use Git sources** for:
+  - CI/production builds (required - local sources are rejected)
+  - Reproducible builds
+  - Version tracking and labels
+
+**Important:** Local sources are automatically rejected in CI/production builds. Always use Git sources for CI/CD pipelines.
 
 ## See Also
 

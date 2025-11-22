@@ -320,11 +320,23 @@ nu scripts/build.nu --service cernbox-web --latest --tag-deps
 Display the dependency build order without actually building:
 
 ```bash
-# Show build order for service
+# Show build order for service (default version)
 nu scripts/build.nu --service cernbox-web --show-build-order
+
+# Show build order for specific version
+nu scripts/build.nu --service cernbox-web --show-build-order --version v1.0.0
+
+# Show build order for all versions
+nu scripts/build.nu --service cernbox-web --show-build-order --all-versions
+
+# Show build order for specific versions
+nu scripts/build.nu --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
+
+# Show build order for latest versions only
+nu scripts/build.nu --service cernbox-web --show-build-order --latest-only
 ```
 
-**Output format:**
+**Single-Version Output Format:**
 
 ```text
 === Build Order ===
@@ -334,11 +346,54 @@ nu scripts/build.nu --service cernbox-web --show-build-order
 3. cernbox-web:v1.0.0
 ```
 
+**Multi-Version Output Format:**
+
+```text
+=== Build Order ===
+
+Version: v1.0.0
+1. revad-base:v3.3.2
+2. cernbox-revad:v1.0.0
+3. cernbox-web:v1.0.0
+
+Version: v1.1.0
+1. revad-base:v3.3.2
+2. cernbox-revad:v1.1.0
+3. cernbox-web:v1.1.0
+```
+
+**Multi-Platform Output Format:**
+
+For multi-platform services, each version/platform combination is displayed separately:
+
+```text
+=== Build Order ===
+
+Version: v1.0.0 (production)
+1. revad-base:v3.3.2:production
+2. cernbox-revad:v1.0.0:production
+3. cernbox-web:v1.0.0:production
+
+Version: v1.0.0 (development)
+1. revad-base:v3.3.2:development
+2. cernbox-revad:v1.0.0:development
+3. cernbox-web:v1.0.0:development
+```
+
+**Multi-Version Flags:**
+
+- `--all-versions` - Show build order for all versions in the manifest
+- `--versions <list>` - Show build order for specific versions (comma-separated)
+- `--latest-only` - Show build order for versions marked `latest: true`
+- `--platform <string>` - Filter to specific platform (multi-platform services only)
+
 **Use cases:**
 
 - Debugging dependency resolution
 - Understanding build order before building
 - Verifying dependency graph construction
+- Auditing dependency chains across multiple versions
+- Previewing build order for release planning
 
 ### `--fail-fast`
 

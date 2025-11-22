@@ -112,22 +112,114 @@ Source repositories are defined in the `sources` section and auto-generate build
 }
 ```
 
+### Local Folder Sources (Development Only)
+
+For local development, you can use local filesystem directories as sources instead of Git repositories. This allows you to test changes without committing and pushing to Git.
+
+**CRITICAL RESTRICTIONS:**
+
+- **Development only** - Local sources are **REJECTED** in CI/production builds
+- **Mutually exclusive** - A source cannot have both `path` and `url`/`ref` fields
+- **Path validation** - Paths must exist, be directories, and be within the repository root
+
+**Configuration:**
+
+Local sources use the `path` field instead of `url`/`ref`:
+
+```nuon
+{
+  "sources": {
+    "reva": {
+      "path": "../reva"  // Relative to repository root
+      // Auto-generates: REVA_PATH and REVA_MODE="local"
+    }
+  }
+}
+```
+
+**Path Resolution:**
+
+- **Relative paths** - Resolved relative to repository root
+- **Absolute paths** - Must be within repository root (path traversal prevention)
+- **Validation** - Paths are validated to ensure they exist, are directories, and are within the repository
+
+**Example - Local Development:**
+
+```nuon
+// services/my-service.nuon
+{
+  "sources": {
+    "reva": {
+      "path": "../reva"  // Local development directory
+    }
+  }
+}
+```
+
+**Example - Environment Variable Override:**
+
+You can override local source paths using environment variables:
+
+```bash
+export REVA_PATH="/path/to/local/reva"
+nu scripts/build.nu --service my-service
+```
+
+**Where to Define Local Sources:**
+
+Local sources can be defined in the same locations as Git sources:
+
+- **Base config** (single-platform services only)
+- **`versions.nuon.defaults`** (default configuration for all versions)
+- **`versions.nuon` version overrides** (version-specific paths)
+- **`versions.nuon` platform override blocks** (platform-specific paths)
+
+**Important Notes:**
+
+- Local sources are automatically copied to `.build-sources/{source_key}/` in the build context
+- Build args use paths relative to the build context root (e.g., `.build-sources/reva/`)
+- Local sources do not generate SHA build args (no Git repository to extract from)
+- Local sources do not generate source revision labels (no Git metadata available)
+- Cache busting for services with only local sources uses random UUID (always-bust behavior)
+
+**When to Use Local vs Git Sources:**
+
+- **Use local sources** for:
+
+  - Local development and testing
+  - Iterative development without committing changes
+  - Testing uncommitted modifications
+
+- **Use Git sources** for:
+  - CI/production builds
+  - Reproducible builds
+  - Version tracking and labels
+
 ## Source Build Arguments Convention
 
 Source repositories automatically generate build arguments using a convention-based system. The build system creates build args from source keys without requiring explicit `build_arg` fields.
 
+The build arguments generated depend on the source type:
+
+- **Git sources** (using `url`/`ref` fields) generate: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
+- **Local sources** (using `path` field) generate: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`
+
 ### Naming Convention
 
-| Element           | Pattern                                                | Example                             |
-| ----------------- | ------------------------------------------------------ | ----------------------------------- |
-| **Source key**    | `^[a-z0-9_]+$` (lowercase, alphanumeric + underscores) | `nushell`, `web_extensions`         |
-| **REF build arg** | `{SOURCE_KEY}_REF` (uppercase)                         | `NUSHELL_REF`, `WEB_EXTENSIONS_REF` |
-| **URL build arg** | `{SOURCE_KEY}_URL` (uppercase)                         | `NUSHELL_URL`, `WEB_EXTENSIONS_URL` |
-| **SHA build arg** | `{SOURCE_KEY}_SHA` (uppercase)                         | `NUSHELL_SHA`, `WEB_EXTENSIONS_SHA` |
+| Element            | Pattern                                                | Example                               |
+| ------------------ | ------------------------------------------------------ | ------------------------------------- |
+| **Source key**     | `^[a-z0-9_]+$` (lowercase, alphanumeric + underscores) | `nushell`, `web_extensions`           |
+| **REF build arg**  | `{SOURCE_KEY}_REF` (uppercase, Git only)               | `NUSHELL_REF`, `WEB_EXTENSIONS_REF`   |
+| **URL build arg**  | `{SOURCE_KEY}_URL` (uppercase, Git only)               | `NUSHELL_URL`, `WEB_EXTENSIONS_URL`   |
+| **SHA build arg**  | `{SOURCE_KEY}_SHA` (uppercase, Git only)               | `NUSHELL_SHA`, `WEB_EXTENSIONS_SHA`   |
+| **PATH build arg** | `{SOURCE_KEY}_PATH` (uppercase, local only)            | `NUSHELL_PATH`, `WEB_EXTENSIONS_PATH` |
+| **MODE build arg** | `{SOURCE_KEY}_MODE` (uppercase, local only)            | `NUSHELL_MODE`, `WEB_EXTENSIONS_MODE` |
 
 ### Build Argument Generation
 
-The build script automatically generates three build arguments per source:
+#### Git Sources
+
+For Git sources (using `url`/`ref` fields), the build script automatically generates three build arguments:
 
 1. **`{SOURCE_KEY}_REF`** - The version/branch/tag reference
 2. **`{SOURCE_KEY}_URL`** - The repository URL
@@ -136,10 +228,27 @@ The build script automatically generates three build arguments per source:
 **Example:**
 
 ```text
-Source key: "web_extensions"
+Source key: "web_extensions" (Git source)
   ->
 Generates: WEB_EXTENSIONS_REF, WEB_EXTENSIONS_URL, and WEB_EXTENSIONS_SHA
 ```
+
+#### Local Sources
+
+For local sources (using `path` field), the build script automatically generates two build arguments:
+
+1. **`{SOURCE_KEY}_PATH`** - The path to the source directory (relative to build context root, e.g., `.build-sources/reva/`)
+2. **`{SOURCE_KEY}_MODE`** - Always set to `"local"` to indicate local source mode
+
+**Example:**
+
+```text
+Source key: "reva" (local source with path="../reva")
+  ->
+Generates: REVA_PATH=".build-sources/reva/" and REVA_MODE="local"
+```
+
+**Note:** Local sources do not generate SHA build args (no Git repository to extract from).
 
 ### Source Key Naming Rules
 
@@ -306,6 +415,42 @@ Version manifests can override source refs:
   ]
 }
 ```
+
+**Source Replacement Behavior:**
+
+Source overrides in version manifests use **per-key replacement** instead of deep merge. When a source key appears in overrides, it completely replaces the default source for that key. This is necessary because source fields are mutually exclusive: a source cannot have both `path` (local) and `url`/`ref` (Git) at the same time.
+
+**Example: Local Source Override**
+
+```nuon
+{
+  "default": "local",
+  "defaults": {
+    "sources": {
+      "gaia": {
+        "url": "https://github.com/example/gaia",
+        "ref": "v1.0.0"
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "local",
+      "overrides": {
+        "sources": {
+          "gaia": {
+            "path": ".repos/gaia"  // Completely replaces default source
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+**Result:** The `local` version has `sources.gaia` with only `{path: ".repos/gaia"}` - the `url` and `ref` fields from defaults are removed, not merged.
+
+**Important:** Sources from defaults that are **not** in overrides are preserved. Only source keys explicitly defined in overrides are replaced.
 
 ### Environment Variable Overrides
 

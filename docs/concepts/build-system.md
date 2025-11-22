@@ -28,12 +28,15 @@ The DockyPody build system orchestrates the container image build process, handl
 When injecting build arguments, the build system applies them in this order (later steps override earlier ones):
 
 1. **Base arguments** (COMMIT_SHA, VERSION)
-2. **Source arguments** (auto-generated from `sources` section: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`)
+2. **Source arguments** (auto-generated from `sources` section)
+   - **Git sources**: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
+   - **Local sources**: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`
 3. **External image arguments** (from `external_images` section)
 4. **Config `build_args` section** (from service config)
 5. **Environment variables** (can override config values for testing/debugging)
    - Environment variables can override config values (sources, external images, config `build_args`)
    - Example: `export REVAD_REF="custom"` overrides the auto-generated `REVAD_REF` from sources config
+   - Example: `export REVA_PATH="/custom/path"` overrides the local source path from config
    - Example: `export BASE_BUILD_IMAGE="custom"` overrides the external image from config
    - **Important:** Environment variables CANNOT override dependency values (dependencies are applied after this step)
 6. **Dependency resolution** (HIGHEST PRIORITY - overrides environment variables)
@@ -121,11 +124,15 @@ The build system supports deterministic cache invalidation through the `CACHEBUS
 
 By default, each service computes its own cache bust value using this fallback chain:
 
-1. **Services with sources:** SHA256 hash of all source refs (first 16 characters)
+1. **Services with Git sources:** SHA256 hash of all source refs/SHAs (first 16 characters)
    - Source keys are sorted before hashing for consistency
-   - Example: `reva:v3.3.2,nushell:0.108.0` → `a1b2c3d4e5f6g7h8`
-2. **Services without sources:** Git commit SHA (as-is, full SHA)
-3. **Local builds (no Git):** `"local"`
+   - Only Git sources are included (local sources are filtered out)
+   - Example: `reva:v3.3.2,nushell:0.108.0` -> `a1b2c3d4e5f6g7h8`
+2. **Services with only local sources:** Random UUID (always-bust behavior)
+   - Local sources trigger always-bust cache behavior
+   - Ensures builds pick up changes in local directories
+3. **Services without sources:** Git commit SHA (as-is, full SHA)
+4. **Local builds (no Git):** `"local"`
 
 ### Global Override
 
@@ -148,7 +155,13 @@ nu scripts/build.nu --service cernbox-web
 1. `--cache-bust` flag (global override)
 2. `--no-cache` flag (generates random UUID)
 3. `CACHEBUST` environment variable
-4. Per-service computation (fallback chain: sources hash → Git SHA → "local")
+4. Per-service computation (fallback chain: Git sources hash -> random UUID for local-only -> Git SHA -> "local")
+
+**Local Source Behavior:**
+
+- Services with **only local sources** use random UUID (always-bust behavior)
+- Services with **mixed local/Git sources** use Git sources only for cache bust computation
+- Local sources are explicitly filtered out before cache bust computation
 
 ### Dockerfile Usage
 
@@ -173,6 +186,55 @@ RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=
 ```
 
 When CACHEBUST changes (SHA change, ref change, or manual override), Docker uses a new cache mount, ensuring fresh content after force-pushes. Build system always provides non-empty CACHEBUST value. CACHEBUST is computed as SHA256 hash of all source SHAs/refs (first 16 characters), using hybrid approach: SHA if available from extraction, ref if SHA extraction fails.
+
+## Local Source Restrictions
+
+Local folder sources (using `path` field) are restricted to development builds only.
+
+### CI/Production Build Rejection
+
+**CRITICAL:** Local sources are **automatically rejected** in CI/production builds.
+
+The build system detects the build environment:
+
+- **Local builds** (`build_type == "local"`): Local sources are allowed
+- **CI/production builds** (`build_type != "local"`): Local sources are rejected with an error
+
+**Error message:**
+
+```text
+Error: Local sources are not allowed in CI builds. Use git sources instead.
+Local sources found: [reva, custom_lib]
+```
+
+**Detection:**
+
+The build system detects local sources by:
+
+1. Checking for `path` field in source configuration
+2. Checking for `{SOURCE_KEY}_PATH` environment variable
+
+If either is present, the source is treated as local and rejected in non-local builds.
+
+### Build Context Preparation
+
+For local sources, the build system automatically:
+
+1. **Validates paths** - Ensures paths exist, are directories, and are within repository root
+2. **Copies to build context** - Copies local source directories to `.build-sources/{source_key}/` in the build context
+3. **Resolves paths** - Build args use paths relative to build context root (e.g., `.build-sources/reva/`)
+
+**Note:** Copied sources are left in `.build-sources/` after build for debugging (consistent with TLS helper pattern).
+
+### SHA and Label Generation
+
+Local sources have different behavior for metadata generation:
+
+- **SHA extraction**: Skipped (no Git repository to extract from)
+- **Source revision labels**: Not generated (no Git metadata available)
+- **Cache busting**: Uses random UUID (always-bust behavior)
+
+Only Git sources generate SHA build args and source revision labels.
 
 ## Build Order Resolution
 
@@ -207,10 +269,17 @@ If circular dependencies are detected, the build system:
 Use `--show-build-order` flag to see build order without building:
 
 ```bash
+# Single version (default)
 nu scripts/build.nu --service cernbox-web --show-build-order
+
+# All versions
+nu scripts/build.nu --service cernbox-web --show-build-order --all-versions
+
+# Specific versions
+nu scripts/build.nu --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
 ```
 
-**Output:**
+**Output (single version):**
 
 ```text
 === Build Order ===
@@ -224,7 +293,7 @@ nu scripts/build.nu --service cernbox-web --show-build-order
 
 By default, the build system automatically builds missing dependencies.
 
-### Default Behavior
+### Default Auto-Build Behavior
 
 When building a service:
 
@@ -275,7 +344,7 @@ This ensures accurate metadata for recursive builds.
 
 The build system supports continue-on-failure for multi-version builds.
 
-### Default Behavior
+### Default Failure Handling Behavior
 
 - **Single service builds:** Fail fast (errors propagate immediately)
 - **Multi-version builds:** Continue-on-failure (collect all failures, report summary)
@@ -484,16 +553,16 @@ When using `--all-services`:
 
 ```text
 scripts/
-├── build.nu                    # Main entrypoint
-└── lib/
-    ├── meta.nu                 # Build context detection
-    ├── manifest.nu             # Version manifest loading
-    ├── matrix.nu               # CI matrix generation
-    ├── dependencies.nu         # Dependency resolution
-    ├── buildx.nu               # Docker buildx wrapper
-    └── registry/
-        ├── registry-info.nu    # Registry path construction
-        └── registry.nu         # Registry authentication
+- build.nu                    # Main entrypoint
+- lib/
+  - meta.nu                 # Build context detection
+  - manifest.nu             # Version manifest loading
+  - matrix.nu               # CI matrix generation
+  - dependencies.nu         # Dependency resolution
+  - buildx.nu               # Docker buildx wrapper
+  - registry/
+    - registry-info.nu    # Registry path construction
+    - registry.nu         # Registry authentication
 ```
 
 ## Error Handling
@@ -529,8 +598,47 @@ Final Config
 ### Merge Rules
 
 1. **Dockerfile**: Replaced entirely (platform config wins)
-2. **Records**: Deep-merged recursively (nested records merged, keys combined)
-3. **Lists, strings, numbers**: Replaced entirely (platform config wins, same as dockerfile)
+2. **Sources**: Per-key replacement (not deep-merge) - see [Source Replacement](#source-replacement) below
+3. **Records**: Deep-merged recursively (nested records merged, keys combined)
+4. **Lists, strings, numbers**: Replaced entirely (platform config wins, same as dockerfile)
+
+### Source Replacement
+
+Source configurations use **per-key replacement** instead of deep merge. This is because source fields are mutually exclusive: a source cannot have both `path` (local) and `url`/`ref` (Git) at the same time.
+
+**How it works:**
+
+- When a source key appears in overrides, it **completely replaces** the default source for that key
+- Sources from defaults that are **not** in overrides are **preserved**
+- This applies to both global and platform-specific source overrides
+
+**Example:**
+
+```nuon
+// Defaults
+defaults: {
+  sources: {
+    gaia: { url: "...", ref: "v1.0.0" }
+  }
+}
+
+// Override
+overrides: {
+  sources: {
+    gaia: { path: ".repos/gaia" }  // Replaces entire source, not merged
+  }
+}
+
+// Result: sources.gaia has only {path: ".repos/gaia"} (no url/ref)
+```
+
+**Rationale:**
+
+The `path` field (local source) and `url`/`ref` fields (Git source) are mutually exclusive. Deep merging would incorrectly combine them, creating invalid configurations that fail validation. Per-key replacement ensures only one source type exists per source key.
+
+**Extensibility Pattern:**
+
+If other mutually exclusive field combinations are needed in the future, they should follow the same per-key replacement pattern. The implementation in `scripts/lib/manifest.nu` can be extended to handle additional field types that require replacement instead of merge.
 
 For complete details on multi-platform builds, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
 

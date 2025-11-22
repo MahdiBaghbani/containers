@@ -1,19 +1,23 @@
 {
   "default": "v26.4.2",
-  
+
   "defaults": {
     "external_images": {
       "runtime": {
-        "tag": "26.4.2"
+        "name": "quay.io/keycloak/keycloak",
+        "tag": "26.4.2",
+        "build_arg": "KEYCLOAK_BASE_IMAGE"
       }
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-rhel"
+        "service": "common-tools",
+        "version": "v1.0.0-rhel",
+        "build_arg": "COMMON_TOOLS_IMAGE"
       }
     }
   },
-  
+
   "versions": [
     {
       "name": "v26.4.2",

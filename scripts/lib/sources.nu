@@ -107,23 +107,37 @@ export def extract-source-shas [
     # Use reduce to accumulate shas and cache (for loops don't work with mut variables in Nushell)
     let result = ($sources | columns | reduce --fold {shas: {}, cache: $cache} {|source_key, acc|
         let source = ($sources | get $source_key)
-        let url = (try { $source.url } catch { "" })
-        let ref = (try { $source.ref } catch { "" })
-
-        if ($url | str length) > 0 and ($ref | str length) > 0 {
-            let sha_result = (extract-source-sha $url $ref $service $source_key $acc.cache)
-            let sha_key = ($"($source_key | str upcase)_SHA")
-            {
-                shas: ($acc.shas | upsert $sha_key $sha_result.sha),
-                cache: $sha_result.cache
-            }
-        } else {
-            let ref_display = (if ($ref | str length) > 0 { $ref } else { "unknown" })
-            print $"WARNING: [($service)] Source '($source_key)' missing url or ref. Skipping SHA extraction."
+        
+        # CRITICAL: Check for path field FIRST - skip SHA extraction for local sources
+        # This provides defense-in-depth: even if validation missed a mutual exclusivity violation,
+        # we still skip SHA extraction for sources with path field
+        if "path" in ($source | columns) {
+            # Local source - skip SHA extraction, return empty SHA
             let sha_key = ($"($source_key | str upcase)_SHA")
             {
                 shas: ($acc.shas | upsert $sha_key ""),
                 cache: $acc.cache
+            }
+        } else {
+            # Git source - proceed with SHA extraction
+            let url = (try { $source.url } catch { "" })
+            let ref = (try { $source.ref } catch { "" })
+
+            if ($url | str length) > 0 and ($ref | str length) > 0 {
+                let sha_result = (extract-source-sha $url $ref $service $source_key $acc.cache)
+                let sha_key = ($"($source_key | str upcase)_SHA")
+                {
+                    shas: ($acc.shas | upsert $sha_key $sha_result.sha),
+                    cache: $sha_result.cache
+                }
+            } else {
+                let ref_display = (if ($ref | str length) > 0 { $ref } else { "unknown" })
+                print $"WARNING: [($service)] Source '($source_key)' missing url or ref. Skipping SHA extraction."
+                let sha_key = ($"($source_key | str upcase)_SHA")
+                {
+                    shas: ($acc.shas | upsert $sha_key ""),
+                    cache: $acc.cache
+                }
             }
         }
     })

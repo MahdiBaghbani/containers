@@ -27,15 +27,15 @@ ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
 FROM ${BASE_BUILD_IMAGE} AS build
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean; \
-    apt-get update; \
-    DEBIAN_FRONTEND=noninteractive \
-    apt-get install \
-    --no-install-recommends \
-    --assume-yes \
-    git \
-    ca-certificates;
+  --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+  rm -f /etc/apt/apt.conf.d/docker-clean; \
+  apt-get update; \
+  DEBIAN_FRONTEND=noninteractive \
+  apt-get install \
+  --no-install-recommends \
+  --assume-yes \
+  git \
+  ca-certificates;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -43,20 +43,30 @@ WORKDIR /
 
 ARG GAIA_URL="https://github.com/cs3org/gaia"
 ARG GAIA_REF="master"
+ARG GAIA_SHA=""
+ARG GAIA_PATH=""
+ARG GAIA_MODE=""
 ARG CACHEBUST="default"
 
+# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=gaia-git-${CACHEBUST:-${GAIA_REF}},target=/src/gaia-git-cache,sharing=shared \
-    mkdir -p /src/gaia-git-cache && \
-    if [ ! -d /src/gaia-git-cache/.git ]; then \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${GAIA_REF}" ${GAIA_URL} /src/gaia-git-cache; \
-    fi && \
-    cp -a /src/gaia-git-cache/. /gaia-git
+  --mount=type=bind,source=${GAIA_PATH:-.},target=/tmp/local-gaia,ro \
+  if [ "$GAIA_MODE" = "local" ]; then \
+  mkdir -p /gaia-git && \
+  cp -a /tmp/local-gaia/. /gaia-git; \
+  else \
+  mkdir -p /src/gaia-git-cache && \
+  if [ ! -d /src/gaia-git-cache/.git ]; then \
+  git clone --depth 1 --recursive --shallow-submodules --branch "${GAIA_REF}" ${GAIA_URL} /src/gaia-git-cache; \
+  fi && \
+  cp -a /src/gaia-git-cache/. /gaia-git; \
+  fi
 
 WORKDIR /gaia-git
 RUN --mount=type=cache,id=gaia-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-    go mod download
+  go mod download
 RUN --mount=type=cache,id=gaia-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-    go build -o /gaia .
+  go build -o /gaia .
 
 ####################################
 ###  Compress binary with UPX    ###
@@ -69,9 +79,9 @@ COPY --from=build /gaia /tmp/binaries/gaia
 
 ARG PACK_WITH_UPX="true"
 RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
-    strip -s /tmp/binaries/gaia || true; \
-    upx -qq --best --lzma /tmp/binaries/gaia && upx -t /tmp/binaries/gaia; \
-    fi
+  strip -s /tmp/binaries/gaia || true; \
+  upx -qq --best --lzma /tmp/binaries/gaia && upx -t /tmp/binaries/gaia; \
+  fi
 
 ###################################
 ###   Production Runtime        ###

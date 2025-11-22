@@ -548,5 +548,360 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test18)
   
+  # Test 19: Source replacement - Git source overridden with local source
+  let test19 = (run-test "Source replacement: Git source to local source" {
+    let manifest = {
+      default: "local",
+      defaults: {
+        sources: {
+          gaia: {
+            url: "https://github.com/example/gaia",
+            ref: "v1.0.0"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "local",
+          overrides: {
+            sources: {
+              gaia: {
+                path: ".repos/gaia"
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    let gaia_source = ($result.overrides.sources.gaia)
+    
+    # Verify path is present
+    if not ("path" in ($gaia_source | columns)) {
+      error make {msg: "path field should be present in overridden source"}
+    }
+    if ($gaia_source.path) != ".repos/gaia" {
+      error make {msg: $"path should be '.repos/gaia', got '($gaia_source.path)'"}
+    }
+    
+    # Verify url and ref are NOT present (replaced, not merged)
+    if "url" in ($gaia_source | columns) {
+      error make {msg: "url field should not be present (source should be replaced, not merged)"}
+    }
+    if "ref" in ($gaia_source | columns) {
+      error make {msg: "ref field should not be present (source should be replaced, not merged)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test19)
+  
+  # Test 20: Source preservation - omitted sources from defaults preserved
+  let test20 = (run-test "Source preservation: omitted sources preserved from defaults" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          gaia: {
+            url: "https://github.com/example/gaia",
+            ref: "v1.0.0"
+          },
+          nushell: {
+            url: "https://github.com/nushell/nushell",
+            ref: "0.108.0"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              gaia: {
+                path: ".repos/gaia"
+              }
+              # nushell omitted - should be preserved from defaults
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify gaia is replaced
+    if not ("path" in ($result.overrides.sources.gaia | columns)) {
+      error make {msg: "gaia source should have path field"}
+    }
+    
+    # Verify nushell is preserved from defaults
+    if not ("nushell" in ($result.overrides.sources | columns)) {
+      error make {msg: "nushell source should be preserved from defaults"}
+    }
+    if ($result.overrides.sources.nushell.url) != "https://github.com/nushell/nushell" {
+      error make {msg: $"nushell source should preserve url from defaults, got '($result.overrides.sources.nushell.url)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test20)
+  
+  # Test 21: Empty overrides with source defaults - sources inherited
+  let test21 = (run-test "Empty overrides: source defaults inherited" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          gaia: {
+            url: "https://github.com/example/gaia",
+            ref: "v1.0.0"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {}  # Empty overrides
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify sources are inherited from defaults
+    if not ("sources" in ($result.overrides | columns)) {
+      error make {msg: "sources should be inherited from defaults when overrides are empty"}
+    }
+    if ($result.overrides.sources.gaia.url) != "https://github.com/example/gaia" {
+      error make {msg: $"gaia source should inherit url from defaults, got '($result.overrides.sources.gaia.url)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test21)
+  
+  # Test 22: Other fields merge normally (dependencies, external_images)
+  let test22 = (run-test "Other fields merge: dependencies and external_images use deep-merge" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          gaia: { url: "https://github.com/example/gaia", ref: "v1.0.0" }
+        },
+        dependencies: {
+          common-tools: { service: "common-tools", version: "v1.0.0" }
+        },
+        external_images: {
+          build: { tag: "1.25-trixie" },
+          runtime: { tag: "3.22" }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              gaia: { path: ".repos/gaia" }  # Source replaced
+            },
+            dependencies: {
+              common-tools: { service: "common-tools", version: "v1.1.0" }  # Dependency merged/overridden
+            },
+            external_images: {
+              build: { tag: "1.26-trixie" }  # External image merged (runtime should be preserved)
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify source is replaced (not merged)
+    if "url" in ($result.overrides.sources.gaia | columns) {
+      error make {msg: "source should be replaced, not merged"}
+    }
+    
+    # Verify dependencies are merged/overridden (not replaced)
+    if ($result.overrides.dependencies.common-tools.version) != "v1.1.0" {
+      error make {msg: $"dependency version should be overridden, got '($result.overrides.dependencies.common-tools.version)'"}
+    }
+    
+    # Verify external_images are merged (runtime preserved from defaults)
+    if ($result.overrides.external_images.build.tag) != "1.26-trixie" {
+      error make {msg: $"build tag should be overridden, got '($result.overrides.external_images.build.tag)'"}
+    }
+    if ($result.overrides.external_images.runtime.tag) != "3.22" {
+      error make {msg: $"runtime tag should be preserved from defaults, got '($result.overrides.external_images.runtime.tag)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test22)
+  
+  # Test 23: Platform-specific source replacement
+  let test23 = (run-test "Platform-specific source replacement" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          gaia: {
+            url: "https://github.com/example/gaia",
+            ref: "v1.0.0"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            platforms: {
+              debian: {
+                sources: {
+                  gaia: {
+                    path: ".repos/gaia"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify platform source is replaced
+    let platform_source = ($result.overrides.platforms.debian.sources.gaia)
+    if not ("path" in ($platform_source | columns)) {
+      error make {msg: "platform source should have path field"}
+    }
+    if "url" in ($platform_source | columns) {
+      error make {msg: "platform source should not have url field (replaced, not merged)"}
+    }
+    
+    # Verify global defaults unchanged (platform override doesn't affect global)
+    # Note: In this case, global defaults are in defaults, not in overrides
+    # The global overrides.sources should still have the default if no global override
+    true
+  } $verbose_flag)
+  $results = ($results | append $test23)
+  
+  # Test 24: Platform-specific sources in defaults
+  let test24 = (run-test "Platform-specific sources in defaults" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          gaia: {
+            url: "https://github.com/example/gaia",
+            ref: "v1.0.0"
+          }
+        },
+        platforms: {
+          debian: {
+            sources: {
+              gaia: {
+                url: "https://github.com/example/gaia-debian",
+                ref: "v1.0.0-debian"
+              }
+            }
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            platforms: {
+              debian: {
+                sources: {
+                  gaia: {
+                    path: ".repos/gaia-debian"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify platform source is replaced (not merged with platform defaults)
+    let platform_source = ($result.overrides.platforms.debian.sources.gaia)
+    if not ("path" in ($platform_source | columns)) {
+      error make {msg: "platform source should have path field"}
+    }
+    if ($platform_source.path) != ".repos/gaia-debian" {
+      error make {msg: $"platform path should be '.repos/gaia-debian', got '($platform_source.path)'"}
+    }
+    if "url" in ($platform_source | columns) {
+      error make {msg: "platform source should not have url field (replaced, not merged)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test24)
+  
+  # Test 25: Mixed global and platform-specific source overrides
+  let test25 = (run-test "Mixed: global and platform-specific source overrides" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          gaia: {
+            url: "https://github.com/example/gaia",
+            ref: "v1.0.0"
+          },
+          nushell: {
+            url: "https://github.com/nushell/nushell",
+            ref: "0.108.0"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              gaia: {
+                path: ".repos/gaia"
+              }
+            },
+            platforms: {
+              debian: {
+                sources: {
+                  nushell: {
+                    path: ".repos/nushell-debian"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify global gaia is replaced
+    if not ("path" in ($result.overrides.sources.gaia | columns)) {
+      error make {msg: "global gaia source should have path field"}
+    }
+    
+    # Verify global nushell is preserved (not in global overrides)
+    if ($result.overrides.sources.nushell.url) != "https://github.com/nushell/nushell" {
+      error make {msg: "global nushell should be preserved from defaults"}
+    }
+    
+    # Verify platform nushell is replaced
+    let platform_source = ($result.overrides.platforms.debian.sources.nushell)
+    if not ("path" in ($platform_source | columns)) {
+      error make {msg: "platform nushell source should have path field"}
+    }
+    if ($platform_source.path) != ".repos/nushell-debian" {
+      error make {msg: $"platform nushell path should be '.repos/nushell-debian', got '($platform_source.path)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test25)
+  
   print-test-summary $results
 }

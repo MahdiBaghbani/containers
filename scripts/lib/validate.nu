@@ -15,7 +15,60 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use ./common.nu [find-duplicates validate-platform-name-format get-tls-mode]
+use ./common.nu [find-duplicates validate-platform-name-format get-tls-mode get-repo-root]
+
+# Validate local source path (for local folder sources feature)
+# Checks path exists, is directory, and is within repo root (prevents path traversal)
+export def validate-local-path [path: string, repo_root: string] {
+    mut errors = []
+    
+    # Resolve path relative to repo root
+    let resolved_path = (if ($path | path expand | str starts-with "/") {
+        # Absolute path - validate it's within repo root
+        let abs_path = ($path | path expand)
+        let repo_root_expanded = ($repo_root | path expand)
+        if not ($abs_path | str starts-with $repo_root_expanded) {
+            $errors = ($errors | append $"Path '($path)' is outside repository root '($repo_root)'")
+            return {valid: false, errors: $errors}
+        }
+        $abs_path
+    } else {
+        # Relative path - resolve relative to repo root
+        ($repo_root | path join $path | path expand)
+    })
+    
+    # Check path exists
+    if not ($resolved_path | path exists) {
+        $errors = ($errors | append $"Path '($path)' does not exist")
+        return {valid: false, errors: $errors}
+    }
+    
+    # Check is directory
+    let path_type = (try {
+        ($resolved_path | path type)
+    } catch {
+        "unknown"
+    })
+    
+    if $path_type != "dir" {
+        $errors = ($errors | append $"Path '($path)' is not a directory (type: ($path_type))")
+        return {valid: false, errors: $errors}
+    }
+    
+    # Validate path traversal prevention (reject .. outside repo root)
+    # resolved_path is already expanded, just normalize repo_root for comparison
+    let normalized_repo = ($repo_root | path expand)
+    if not ($resolved_path | str starts-with $normalized_repo) {
+        let error_msg = $"Path '($path)' resolves outside repository root - path traversal detected"
+        $errors = ($errors | append $error_msg)
+        return {valid: false, errors: $errors}
+    }
+    
+    {
+        valid: true,
+        errors: []
+    }
+}
 
 # Validate platform config structure (infrastructure only - no version control fields)
 export def validate-platform-config [
@@ -800,7 +853,7 @@ export def validate-merged-config [
         }
     }
     
-    # Validate sources have url and ref
+    # Validate sources have either path (local) or url/ref (git) - mutually exclusive
     if "sources" in ($merged_config | columns) {
         let sources = $merged_config.sources
         
@@ -808,6 +861,7 @@ export def validate-merged-config [
         if not ($sources_type | str starts-with "record") {
             $errors = ($errors | append $"($context): sources: Must be a record.")
         } else {
+            let repo_root = (get-repo-root)
             for source_key in ($sources | columns) {
                 let source = ($sources | get $source_key)
                 
@@ -817,12 +871,37 @@ export def validate-merged-config [
                     continue
                 }
                 
-                if not ("url" in ($source | columns)) {
-                    $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'url'. Define in base config \(single-platform\) or versions.nuon overrides \(multi-platform\).")
+                let has_path = ("path" in ($source | columns))
+                let has_url = ("url" in ($source | columns))
+                let has_ref = ("ref" in ($source | columns))
+                
+                # Mutual exclusivity: cannot have both path and url/ref
+                if $has_path and ($has_url or $has_ref) {
+                    $errors = ($errors | append $"($context): sources.($source_key): Cannot have both 'path' and 'url'/'ref' fields. They are mutually exclusive.")
+                    continue
                 }
                 
-                if not ("ref" in ($source | columns)) {
-                    $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'ref'. Define in base config \(single-platform\) or versions.nuon overrides \(multi-platform\).")
+                # Must have either path OR (url AND ref)
+                if $has_path {
+                    # Local source - validate path
+                    let path_value = (try { $source.path } catch { "" })
+                    if ($path_value | str length) == 0 {
+                        $errors = ($errors | append $"($context): sources.($source_key): 'path' field is empty")
+                    } else {
+                        let path_validation = (validate-local-path $path_value $repo_root)
+                        if not $path_validation.valid {
+                            let formatted_errors = ($path_validation.errors | each {|err| $"($context): sources.($source_key): ($err)"})
+                            $errors = ($errors | append $formatted_errors)
+                        }
+                    }
+                } else {
+                    # Git source - must have both url and ref
+                    if not $has_url {
+                        $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'url'. Define in base config \(single-platform\) or versions.nuon overrides \(multi-platform\).")
+                    }
+                    if not $has_ref {
+                        $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'ref'. Define in base config \(single-platform\) or versions.nuon overrides \(multi-platform\).")
+                    }
                 }
             }
         }
@@ -932,6 +1011,7 @@ export def validate-service-config [
       $errors = ($errors | append $"($service_ctx): sources: Section forbidden when platforms.nuon exists. Define in versions.nuon overrides only.")
     } else {
       let sources = $config.sources
+      let repo_root = (get-repo-root)
       for source_key in ($sources | columns) {
         let source = ($sources | get $source_key)
         
@@ -939,11 +1019,37 @@ export def validate-service-config [
           $errors = ($errors | append $"Source key '($source_key)' must be lowercase alphanumeric with underscores only \(pattern: ^[a-z0-9_]+$\)")
         }
         
-        if not ("url" in ($source | columns)) {
-          $errors = ($errors | append $"Source '($source_key)' missing required field: 'url'")
+        let has_path = ("path" in ($source | columns))
+        let has_url = ("url" in ($source | columns))
+        let has_ref = ("ref" in ($source | columns))
+        
+        # Mutual exclusivity: cannot have both path and url/ref
+        if $has_path and ($has_url or $has_ref) {
+          $errors = ($errors | append $"Source '($source_key)' cannot have both 'path' and 'url'/'ref' fields. They are mutually exclusive.")
+          continue
         }
-        if not ("ref" in ($source | columns)) {
-          $errors = ($errors | append $"Source '($source_key)' missing required field: 'ref'")
+        
+        # Must have either path OR (url AND ref)
+        if $has_path {
+          # Local source - validate path
+          let path_value = (try { $source.path } catch { "" })
+          if ($path_value | str length) == 0 {
+            $errors = ($errors | append $"Source '($source_key)': 'path' field is empty")
+          } else {
+            let path_validation = (validate-local-path $path_value $repo_root)
+            if not $path_validation.valid {
+              let formatted_errors = ($path_validation.errors | each {|err| $"Source '($source_key)': ($err)"})
+              $errors = ($errors | append $formatted_errors)
+            }
+          }
+        } else {
+          # Git source - must have both url and ref
+          if not $has_url {
+            $errors = ($errors | append $"Source '($source_key)' missing required field: 'url'")
+          }
+          if not $has_ref {
+            $errors = ($errors | append $"Source '($source_key)' missing required field: 'ref'")
+          }
         }
         
         if "build_arg" in ($source | columns) {
@@ -953,6 +1059,8 @@ export def validate-service-config [
     }
   } else if not $has_platforms {
     # Sources are required in base config for single-platform (versions.nuon can override, but base must have as fallback)
+    # However, validation allows path OR url/ref, so we check if sources exist (even if empty, that's handled above)
+    # This requirement ensures base config has a fallback; versions.nuon can override
     $errors = ($errors | append "Missing required field: 'sources' (required for single-platform services, versions.nuon can override but base must have as fallback)")
   }
   

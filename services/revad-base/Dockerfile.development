@@ -54,14 +54,24 @@ WORKDIR /
 
 ARG REVAD_URL="https://github.com/cs3org/reva"
 ARG REVAD_REF="v3.3.2"
+ARG REVAD_SHA=""
+ARG REVAD_PATH=""
+ARG REVAD_MODE=""
 ARG CACHEBUST="default"
 
+# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=revad-base-revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
+    --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
+    if [ "$REVAD_MODE" = "local" ]; then \
+    mkdir -p /revad-git && \
+    cp -a /src/local-revad/. /revad-git; \
+    else \
     mkdir -p /src/reva-git-cache && \
     if [ ! -d /src/reva-git-cache/.git ]; then \
     git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_REF}" ${REVAD_URL} /src/reva-git-cache; \
     fi && \
-    cp -a /src/reva-git-cache/. /revad-git
+    cp -a /src/reva-git-cache/. /revad-git; \
+    fi
 
 WORKDIR /revad-git
 RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
