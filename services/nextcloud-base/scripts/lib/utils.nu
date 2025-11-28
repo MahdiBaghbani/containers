@@ -31,8 +31,8 @@ export def detect_user_group [] {
   
   if $uid == 0 {
     # Root user - use Apache environment variables or default to www-data
-    let apache_user = (try { $env.APACHE_RUN_USER? } catch { "www-data" })
-    let apache_group = (try { $env.APACHE_RUN_GROUP? } catch { "www-data" })
+    let apache_user = ($env.APACHE_RUN_USER? | default "www-data")
+    let apache_group = ($env.APACHE_RUN_GROUP? | default "www-data")
     
     # Strip '#' prefix from user/group (Apache syntax support)
     $user = ($apache_user | str replace --regex "^#" "")
