@@ -1,0 +1,94 @@
+name: nextcloud-1-test
+
+networks:
+  traefik-net:
+    external: true
+
+services:
+  nextcloud-1-test-db:
+    image: "mariadb:${IMAGE_MARIADB}"
+    container_name: nextcloud-1-test-db
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      traefik-net:
+        ipv4_address: 172.16.86.2
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      MYSQL_USER: "${MYSQL_USER}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/data/mariadb:/var/lib/mysql"
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
+
+  nextcloud-1-test-redis:
+    image: "valkey/valkey:${IMAGE_VALKEY}"
+    container_name: nextcloud-1-test-redis
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      traefik-net:
+        ipv4_address: 172.16.86.3
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/data/valkey:/data"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  nextcloud-1-test:
+    image: "nextcloud:${IMAGE_NEXTCLOUD}"
+    container_name: nextcloud-1-test
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      traefik-net:
+        ipv4_address: 172.16.86.4
+    environment:
+      APACHE_SERVER_NAME: "${NEXTCLOUD_DOMAIN}"
+      NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD_ADMIN_USER}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD_ADMIN_PASSWORD}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "${NEXTCLOUD_TRUSTED_DOMAINS}"
+      NEXTCLOUD_DATA_DIR: "${NEXTCLOUD_DATA_DIR:-/var/www/html/data}"
+      MYSQL_HOST: "${MYSQL_HOST:-nextcloud-1-test-db}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      MYSQL_USER: "${MYSQL_USER}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+      REDIS_HOST: "${REDIS_HOST:-nextcloud-1-test-redis}"
+      REDIS_HOST_PORT: "${REDIS_HOST_PORT:-6379}"
+      REDIS_HOST_PASSWORD: "${REDIS_HOST_PASSWORD:-}"
+      # Reverse proxy configuration
+      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
+      OVERWRITEPROTOCOL: "${OVERWRITEPROTOCOL:-}"
+      OVERWRITECLIURL: "${OVERWRITECLIURL:-}"
+      OVERWRITEHOST: "${OVERWRITEHOST:-}"
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/data/nextcloud:/var/www/html"
+    depends_on:
+      nextcloud-1-test-db:
+        condition: service_started
+      nextcloud-1-test-redis:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      - "traefik.http.routers.nextcloud-redirect.entrypoints=http"
+      - "traefik.http.routers.nextcloud-redirect.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
+      - "traefik.http.routers.nextcloud-redirect.middlewares=force-https@file"
+      - "traefik.http.routers.nextcloud-redirect.service=noop@internal"
+      - "traefik.http.routers.nextcloud.entrypoints=https"
+      - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
+      - "traefik.http.routers.nextcloud.tls.certResolver=letsencrypt-cloudflare-global"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"

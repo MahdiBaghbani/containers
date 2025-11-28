@@ -66,32 +66,43 @@ export def run_custom_post_install [user: string] {
 }
 
 # Setup log files with proper permissions
-def setup_log_files [] {
+# Only removes logs on first install, preserves on subsequent starts
+export def setup_log_files [] {
   let apache_log_access = "/var/log/apache2/access.log"
   let apache_log_error = "/var/log/apache2/error.log"
   let nextcloud_log = "/var/www/html/data/nextcloud.log"
-  
-  # Remove old log files if they exist
+
+  # Check if this is first install (config.php doesn't exist)
+  let is_first_install = not ("/var/www/html/config/config.php" | path exists)
+
+  if $is_first_install {
+    # First install: remove old log files if they exist
+    for log_file in [$apache_log_access, $apache_log_error, $nextcloud_log] {
+      if ($log_file | path exists) {
+        print $"Removing old log file: ($log_file)"
+        ^rm -f $log_file
+      }
+    }
+  } else {
+    # Subsequent start: preserve logs, only create if missing
+    print "Preserving existing log files (not first install)"
+  }
+
+  # Create log files if they don't exist
   for log_file in [$apache_log_access, $apache_log_error, $nextcloud_log] {
-    if ($log_file | path exists) {
-      print $"Removing old log file: ($log_file)"
-      ^rm -f $log_file
+    if not ($log_file | path exists) {
+      print $"Creating log file: ($log_file)"
+      ^touch $log_file
     }
   }
-  
-  # Create new empty log files
-  print "Creating new log files..."
-  ^touch $apache_log_access
-  ^touch $apache_log_error
-  ^touch $nextcloud_log
-  
+
   # Set ownership and permissions (www-data:root with g=u)
   print "Setting log file permissions..."
-  
+
   # Apache logs
   ^chown -R www-data:root /var/log/apache2
   ^chmod -R g=u /var/log/apache2
-  
+
   # Nextcloud data directory (including logs)
   ^chown -R www-data:root /var/www/html/data
   ^chmod -R g=u /var/www/html/data

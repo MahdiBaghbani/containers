@@ -100,6 +100,45 @@ export def sync_source [user: string, group: string] {
   ^rsync ...$rsync_opts --include "/version.php" --exclude "/*" $source_dir $target_dir
 }
 
+# Wait for database to be ready before installation
+def wait_for_database [db_type: string, host: string, max_attempts: int = 30] {
+  print $"Waiting for ($db_type) database at ($host) to be ready..."
+  
+  mut attempt = 0
+  while $attempt < $max_attempts {
+    let check_result = if $db_type == "mysql" {
+      # Use PHP to check MySQL connectivity
+      let mysql_user = (file_env "MYSQL_USER" "")
+      let mysql_password = (file_env "MYSQL_PASSWORD" "")
+      let mysql_db = (file_env "MYSQL_DATABASE" "")
+      ^php -r $"new PDO\('mysql:host=($host);dbname=($mysql_db)', '($mysql_user)', '($mysql_password)'\); echo 'ok';" | complete
+    } else if $db_type == "pgsql" {
+      # Use PHP to check PostgreSQL connectivity
+      let pg_user = (file_env "POSTGRES_USER" "")
+      let pg_password = (file_env "POSTGRES_PASSWORD" "")
+      let pg_db = (file_env "POSTGRES_DB" "")
+      ^php -r $"new PDO\('pgsql:host=($host);dbname=($pg_db)', '($pg_user)', '($pg_password)'\); echo 'ok';" | complete
+    } else {
+      # SQLite doesn't need connectivity check
+      { exit_code: 0, stdout: "ok" }
+    }
+    
+    if $check_result.exit_code == 0 and ($check_result.stdout | str contains "ok") {
+      print $"($db_type) database is ready"
+      return true
+    }
+    
+    $attempt = ($attempt + 1)
+    if $attempt < $max_attempts {
+      print $"Database not ready, waiting... \(attempt ($attempt)/($max_attempts)\)"
+      sleep 2sec
+    }
+  }
+  
+  print $"Warning: Could not verify database connectivity after ($max_attempts) attempts"
+  return false
+}
+
 # Install Nextcloud with provided admin credentials and database config
 export def install_nextcloud [user: string] {
   print "New nextcloud instance"
@@ -132,6 +171,10 @@ export def install_nextcloud [user: string] {
     $install = true
   }
   
+  # Database type tracking for wait logic
+  mut db_type = ""
+  mut db_host = ""
+  
   # Check MySQL
   let mysql_db = (file_env "MYSQL_DATABASE" "")
   let mysql_user = (file_env "MYSQL_USER" "")
@@ -142,6 +185,8 @@ export def install_nextcloud [user: string] {
     print "Installing with MySQL database"
     $install_options = ($install_options | append ["--database" "mysql" "--database-name" $mysql_db "--database-user" $mysql_user "--database-pass" $mysql_password "--database-host" $mysql_host])
     $install = true
+    $db_type = "mysql"
+    $db_host = $mysql_host
   }
   
   # Check PostgreSQL
@@ -154,11 +199,18 @@ export def install_nextcloud [user: string] {
     print "Installing with PostgreSQL database"
     $install_options = ($install_options | append ["--database" "pgsql" "--database-name" $postgres_db "--database-user" $postgres_user "--database-pass" $postgres_password "--database-host" $postgres_host])
     $install = true
+    $db_type = "pgsql"
+    $db_host = $postgres_host
   }
   
   if not $install {
     print "Next step: Access your instance to finish the web-based installation!"
     return
+  }
+  
+  # Wait for database to be ready (if external database)
+  if $db_type != "" and $db_host != "" {
+    wait_for_database $db_type $db_host
   }
   
   # Build install command
@@ -200,6 +252,26 @@ export def install_nextcloud [user: string] {
       $idx = ($idx + 1)
     }
   }
+  
+  # Post-install configurations (matches legacy init.sh)
+  print "Running post-install database maintenance..."
+  run_as $user "php /var/www/html/occ db:add-missing-indices" | ignore
+  run_as $user "php /var/www/html/occ maintenance:repair --include-expensive" | ignore
+  run_as $user "php /var/www/html/occ config:system:set maintenance_window_start --type=integer --value=1" | ignore
+  
+  # Enable local remote servers for OCM/federation
+  print "Enabling local remote servers..."
+  run_as $user "php /var/www/html/occ config:system:set allow_local_remote_servers --type=boolean --value=true" | ignore
+  
+  # Disable first run wizard
+  print "Disabling first run wizard..."
+  run_as $user "php /var/www/html/occ app:disable firstrunwizard" | ignore
+  
+  # Enable notifications app (required for files_reminders) # TODO(Mahdi): maybe later?
+  # print "Enabling notifications app..."
+  # run_as $user "php /var/www/html/occ app:enable notifications" | ignore
+  
+  print "Nextcloud installation completed successfully"
 }
 
 # Upgrade Nextcloud to new version

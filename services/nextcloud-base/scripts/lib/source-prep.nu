@@ -135,21 +135,28 @@ export def copy_source_to_html [user: string, group: string] {
 
 # Prepare directories and permissions after source copy
 # Creates data and custom_apps directories, sets occ executable
-export def prepare_directories [] {
+export def prepare_directories [user: string, group: string] {
   let html_dir = "/var/www/html"
+  let uid = (^id -u | into int)
   
-  # Create data directory
+  # Create data directory with correct ownership
   let data_dir = $"($html_dir)/data"
   if not ($data_dir | path exists) {
     print $"Creating data directory: ($data_dir)"
     ^mkdir -p $data_dir
+    if $uid == 0 {
+      ^chown $"($user):($group)" $data_dir
+    }
   }
   
-  # Create custom_apps directory
+  # Create custom_apps directory with correct ownership
   let custom_apps_dir = $"($html_dir)/custom_apps"
   if not ($custom_apps_dir | path exists) {
     print $"Creating custom_apps directory: ($custom_apps_dir)"
     ^mkdir -p $custom_apps_dir
+    if $uid == 0 {
+      ^chown $"($user):($group)" $custom_apps_dir
+    }
   }
   
   # Make occ executable
@@ -172,5 +179,5 @@ export def prepare_source [user: string, group: string] {
   }
   
   # Always prepare directories (idempotent)
-  prepare_directories
+  prepare_directories $user $group
 }

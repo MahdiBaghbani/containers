@@ -1,0 +1,19 @@
+{
+  "default": "debian",
+  
+  "defaults": {
+    "dependencies": {
+      "nextcloud-base": {
+        "service": "nextcloud-base",
+        "build_arg": "NEXTCLOUD_BASE_IMAGE"
+      }
+    }
+  },
+  
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/nextcloud/Dockerfile"
+    }
+  ]
+}

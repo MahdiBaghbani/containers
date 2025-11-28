@@ -48,7 +48,6 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    git \
     vim \
     curl \
     bzip2 \
@@ -249,16 +248,27 @@ RUN { \
     } > /etc/apache2/conf-available/apache-limits.conf; \
     a2enconf apache-limits
 
+# Set default ServerName to suppress Apache warning
+# Can be overridden at runtime via APACHE_SERVER_NAME environment variable
+RUN echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf; \
+    a2enconf servername
+
 # Install Composer
 RUN --mount=type=cache,id=nextcloud-composer-cache,target=/root/.composer/cache,sharing=locked \
     curl --silent --show-error https://getcomposer.org/installer -o /root/composer-setup.php && \
     php /root/composer-setup.php --install-dir=/usr/local/bin --filename=composer && \
     rm /root/composer-setup.php
 
-# Copy entrypoint scripts
+# Copy entrypoint scripts and libraries
+COPY ./scripts/upgrade.exclude /upgrade.exclude
 COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
 COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 RUN mkdir -p /usr/bin/lib
+COPY --chmod=755 ./scripts/lib/*.nu /usr/bin/lib/
+
+# Copy config files
+RUN mkdir -p /usr/src/nextcloud/config
+COPY ./config/*.php /usr/src/nextcloud/config/
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
 

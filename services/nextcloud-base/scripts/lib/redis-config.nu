@@ -21,6 +21,31 @@
 
 use ./utils.nu [file_env]
 
+# Wait for Redis to be ready
+def wait_for_redis [host: string, port: string, max_attempts: int = 15] {
+  print $"Waiting for Redis at ($host):($port) to be ready..."
+  
+  mut attempt = 0
+  while $attempt < $max_attempts {
+    # Use PHP to check Redis connectivity
+    let check_result = (^php -r $"$r = new Redis\(\); if \($r->connect\('($host)', ($port), 2\)\) { echo 'ok'; }" | complete)
+    
+    if $check_result.exit_code == 0 and ($check_result.stdout | str contains "ok") {
+      print "Redis is ready"
+      return true
+    }
+    
+    $attempt = ($attempt + 1)
+    if $attempt < $max_attempts {
+      print $"Redis not ready, waiting... \(attempt ($attempt)/($max_attempts)\)"
+      sleep 2sec
+    }
+  }
+  
+  print "Warning: Could not verify Redis connectivity, continuing anyway"
+  return false
+}
+
 # Configure Redis as PHP session handler
 # Supports Unix socket and TCP connections with authentication
 export def configure_redis [] {
@@ -32,6 +57,12 @@ export def configure_redis [] {
   }
   
   print "Configuring Redis as session handler"
+  
+  # Wait for Redis to be available (TCP connections only)
+  if not ($redis_host | str starts-with "/") {
+    let redis_port = (try { $env.REDIS_HOST_PORT? } catch { "6379" })
+    wait_for_redis $redis_host $redis_port
+  }
   
   # Get Redis credentials using file_env (Docker secrets support)
   let redis_password = (file_env "REDIS_HOST_PASSWORD" "")

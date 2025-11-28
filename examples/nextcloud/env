@@ -1,0 +1,42 @@
+# Image versions (platform suffixes may be required - edit manually)
+IMAGE_VALKEY=9.0-alpine
+IMAGE_MARIADB=11.8
+IMAGE_NEXTCLOUD=v32.0.2-debian
+
+# Nextcloud Settings
+# External domain (Traefik routing + browser access)
+NEXTCLOUD_DOMAIN=1.nextcloud.cloud.test.azadehafzar.io
+
+# Internal service names (Docker networking)
+MYSQL_HOST=nextcloud-1-test-db
+REDIS_HOST=nextcloud-1-test-redis
+
+# Nextcloud Admin Configuration
+NEXTCLOUD_ADMIN_USER=admin
+NEXTCLOUD_ADMIN_PASSWORD=admin
+NEXTCLOUD_TRUSTED_DOMAINS=1.nextcloud.cloud.test.azadehafzar.io
+NEXTCLOUD_DATA_DIR=/var/www/html/data
+
+# Database Configuration (MariaDB/MySQL)
+MYSQL_ROOT_PASSWORD=rootpassword
+MYSQL_DATABASE=nextcloud
+MYSQL_USER=nextcloud
+MYSQL_PASSWORD=nextcloudpassword
+
+# Redis Configuration (optional but recommended for caching)
+REDIS_HOST_PORT=6379
+REDIS_HOST_PASSWORD=
+
+# Reverse Proxy Configuration (for Traefik)
+# Trusted proxy IPs/CIDR ranges (space-separated)
+TRUSTED_PROXIES=172.16.0.0/12
+# Protocol override (https when behind TLS-terminating proxy)
+OVERWRITEPROTOCOL=https
+# Full URL for CLI operations
+OVERWRITECLIURL=https://1.nextcloud.cloud.test.azadehafzar.io
+# Host override (optional, usually not needed with trusted_proxies)
+OVERWRITEHOST=
+
+# Logging
+LOG_LEVEL=debug
+LOG_PRETTY=true

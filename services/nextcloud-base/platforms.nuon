@@ -1,6 +1,6 @@
 {
   "default": "debian",
-  
+
   "defaults": {
     "dependencies": {
       "common-tools": {
@@ -15,7 +15,7 @@
       }
     }
   },
-  
+
   "platforms": [
     {
       "name": "debian",

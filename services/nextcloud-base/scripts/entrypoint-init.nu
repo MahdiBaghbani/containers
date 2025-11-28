@@ -25,7 +25,7 @@ use ./lib/redis-config.nu [configure_redis]
 use ./lib/source-prep.nu [prepare_source]
 use ./lib/nextcloud-init.nu [version_greater get_installed_version get_image_version sync_source install_nextcloud upgrade_nextcloud]
 use ./lib/hooks.nu [run_path]
-use ./lib/post-install.nu [run_custom_post_install]
+use ./lib/post-install.nu [run_custom_post_install, setup_log_files]
 
 def main [...cmd_args: string] {
   print "Nextcloud entrypoint initialization started"
@@ -58,13 +58,14 @@ def main [...cmd_args: string] {
   # Step 3: Redis configuration
   configure_redis
   
-  # Step 4: Source preparation (CI mount, copy, directories)
-  prepare_source $user_info.user $user_info.group
-  
-  # Step 5: Version detection and upgrade/install logic
-  
+  # Step 4: Version detection BEFORE source preparation
+  # Critical: Must read installed_version before copying files, otherwise
+  # version.php from source will be detected and installation will be skipped
   let installed_version = (get_installed_version)
   let image_version = (get_image_version)
+  
+  # Step 5: Source preparation (CI mount, copy, directories)
+  prepare_source $user_info.user $user_info.group
   
   print $"Installed version: ($installed_version)"
   print $"Image version: ($image_version)"
@@ -126,10 +127,14 @@ def main [...cmd_args: string] {
   
   # Step 7: Warn about config file differences
   check_config_differences
-  
-  # Step 8: Run before-starting hooks
+
+  # Step 8: Ensure log files exist (unconditionally, before tailing)
+  # This ensures logs exist on every start (install, upgrade, or up-to-date)
+  setup_log_files
+
+  # Step 9: Run before-starting hooks (includes log tailing hook)
   run_path "before-starting" $user_info.user
-  
+
   print "Nextcloud entrypoint initialization completed"
 }
 

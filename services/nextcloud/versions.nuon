@@ -1,0 +1,42 @@
+{
+  "default": "v32.0.2",
+
+  "defaults": {
+    "sources": {
+      "nextcloud": {
+        "url": "https://github.com/nextcloud/server",
+        "ref": "v32.0.2"
+      }
+    },
+    "dependencies": {
+      "nextcloud-base": {
+        "version": "8.3-apache"
+      }
+    }
+  },
+
+  "versions": [
+    {
+      "name": "master",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "ref": "master"
+          }
+        }
+      }
+    },
+    {
+      "name": "v32.0.2",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "ref": "v32.0.2"
+          }
+        }
+      }
+    }
+  ]
+}

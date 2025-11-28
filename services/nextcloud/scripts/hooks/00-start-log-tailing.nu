@@ -1,4 +1,5 @@
-#!/usr/bin/env sh
+#!/usr/bin/env nu
+
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Open Cloud Mesh Containers: container build scripts and images
 # Copyright (C) 2025 Open Cloud Mesh Contributors
@@ -16,15 +17,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Run initialization via Nushell script
-# This performs all container setup tasks before starting the main process
-# Don't use set -e here - we want to continue even if initialization has warnings
-# Pass command arguments so initialization can check if we're running apache/php-fpm
-nu /usr/bin/entrypoint-init.nu "$@" || {
-  echo "Warning: Initialization script exited with error, but continuing to run CMD..."
-}
+# Default log tailing hook for Nextcloud containers
+# This hook starts tail processes for Apache and Nextcloud logs
+# Users can override by mounting a custom hook or disable by mounting empty directory
 
-# Exec the CMD arguments directly
-# Nushell has limited ability to parse complex command-line arguments,
-# so we use exec to pass them through to the actual command unchanged
-exec "$@"
+use /usr/bin/lib/log-tailing.nu [start_log_tailing]
+
+start_log_tailing

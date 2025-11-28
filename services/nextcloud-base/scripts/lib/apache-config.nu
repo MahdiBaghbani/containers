@@ -32,5 +32,13 @@ export def configure_apache [cmd_args: list<string>] {
       print "Disabling Apache remoteip module"
       ^a2disconf remoteip
     }
+    
+    # Set ServerName from environment variable if provided
+    let server_name = (try { $env.APACHE_SERVER_NAME? } catch { null })
+    
+    if $server_name != null and ($server_name | str length) > 0 {
+      print $"Setting Apache ServerName to: ($server_name)"
+      $"ServerName ($server_name)" | save -f /etc/apache2/conf-available/servername.conf
+    }
   }
 }
