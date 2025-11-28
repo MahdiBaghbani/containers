@@ -53,8 +53,37 @@ Local folder sources, multi-stage builds, and the buildx workflow impose a few h
    - Ensures smaller layers and aligns with security guidance.
 
 6. **Use multi-stage builds with explicit COPY scopes.**
+
    - Builder → compression → runtime is the expected pattern.
    - Never leak build secrets into runtime layers; copy only the final artifacts.
+
+7. **Quote shell variables when calling nushell scripts.**
+
+   When calling nushell scripts from shell (e.g., in RUN commands), shell variables must be properly quoted to ensure nushell receives strings, not booleans or numbers.
+
+   - **WRONG**:
+
+     ```dockerfile
+     nu /tmp/copy-tls.nu \
+     --enabled "$TLS_ENABLED" \
+     --mode "$TLS_MODE"
+     ```
+
+     When `$TLS_ENABLED` expands to `true`, nushell receives the boolean `true` instead of the string `"true"`, causing "expected string" parse errors.
+
+   - **CORRECT**:
+
+     ```dockerfile
+     nu /tmp/copy-tls.nu \
+     --enabled "'$TLS_ENABLED'" \
+     --mode "'$TLS_MODE'"
+     ```
+
+     The pattern `"'$VAR'"` means: outer double quotes for shell expansion, inner single quotes passed as literal to nushell. When `$TLS_ENABLED` is `true`, shell expands to `'true'` and nushell receives the string `"true"`.
+
+   - **Why**: Nushell is strongly typed. If a script parameter is `--enabled: string`, it must receive a string, not a boolean. Shell variables expand to unquoted values that nushell interprets as their native types.
+
+   - **Pattern**: Always use `"'$SHELL_VAR'"` when passing shell variables to nushell scripts that expect string parameters.
 
 ## Common Mistakes to Avoid
 
@@ -64,6 +93,7 @@ Local folder sources, multi-stage builds, and the buildx workflow impose a few h
 - **Not using `set -euo pipefail` equivalents**: when writing long `RUN` scripts, prefer `bash -eu -o pipefail -c '...'` to surface failures early.
 - **Leaving cache mounts on unrelated layers**: only the Git clone step should mount the Git cache; other commands should stay deterministic.
 - **Mixing `cp` semantics**: use `cp -a /src/. /dest` to preserve permissions; `cp -r ${PATH}*` drops dotfiles.
+- **Passing shell variables to nushell without proper quoting**: nushell is strongly typed. When calling nushell scripts from shell, use `"'$VAR'"` pattern to ensure string parameters receive strings, not booleans or numbers. See "Calling Nushell Scripts" below.
 
 ## Verification Checklist
 

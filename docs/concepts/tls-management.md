@@ -181,11 +181,9 @@ COPY --chmod=755 --from=common-tools-runtime /usr/local/bin/nu /usr/local/bin/nu
 # Copy TLS directories and helper script
 # NOTE: Build system automatically copies canonical copy-tls.nu to service context via prepare-tls-context
 # NOTE: For ca-only mode, copy-tls.nu is NOT copied (optimization)
-# Dockerfile COPY cannot be conditional - if files don't exist, COPY fails
-# Solution: Use RUN step with shell to copy conditionally (loses some layer caching, but necessary)
-RUN mkdir -p /tmp/tls-source /tmp && \
-    if [ -d ./tls ]; then cp -r ./tls/* /tmp/tls-source/ 2>/dev/null || true; fi && \
-    if [ -f ./scripts/tls/copy-tls.nu ]; then cp ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu; fi
+# Use COPY commands directly - never use cp in RUN for build context files
+COPY ./tls /tmp/tls-source/
+COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
 
 # Selective TLS certificate copying
 # NOTE: ca-only mode does NOT call copy-tls.nu (CA bundle handled by COPY --from above)
@@ -198,10 +196,10 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
             echo "Error: copy-tls.nu not found. This should not happen for non-ca-only modes." && exit 1; \
         fi && \
         nu /tmp/copy-tls.nu \
-        --enabled "$TLS_ENABLED" \
-        --mode "$TLS_MODE" \
-        --ca-name "$TLS_CA_NAME" \
-        --cert-name "$TLS_CERT_NAME" \
+        --enabled "'$TLS_ENABLED'" \
+        --mode "'$TLS_MODE'" \
+        --ca-name "'$TLS_CA_NAME'" \
+        --cert-name "'$TLS_CERT_NAME'" \
         --source-certs /tmp/tls-source/certificates/ \
         --dest /tls/ && \
         rm -rf /tmp/tls-source /tmp/copy-tls.nu; \
