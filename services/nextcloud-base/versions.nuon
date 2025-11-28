@@ -1,0 +1,23 @@
+{
+  "default": "8.3-apache",
+
+  "defaults": {
+    "external_images": {
+      "runtime": {
+        "tag": "8.3-apache-trixie"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      }
+    }
+  },
+
+  "versions": [
+    {
+      "name": "8.3-apache",
+      "latest": true
+    }
+  ]
+}

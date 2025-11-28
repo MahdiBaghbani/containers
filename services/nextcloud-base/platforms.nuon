@@ -1,0 +1,25 @@
+{
+  "default": "debian",
+  
+  "defaults": {
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      }
+    },
+    "external_images": {
+      "runtime": {
+        "name": "php",
+        "build_arg": "BASE_RUNTIME_IMAGE"
+      }
+    }
+  },
+  
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/nextcloud-base/Dockerfile"
+    }
+  ]
+}
