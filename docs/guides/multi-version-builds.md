@@ -178,17 +178,52 @@ The `overrides` section can override any field from the base service config:
 - Overrides are **deep merged** with base config
 - Specific fields override; missing fields use base config values
 
-**Source Replacement (Special Behavior):**
+**Source Merging (Special Behavior):**
 
-Source configurations use **per-key replacement** instead of deep merge. This is because source fields are mutually exclusive: a source cannot have both `path` (local) and `url`/`ref` (Git) at the same time.
+Source configurations use **type-aware merging** that supports partial Git source overrides:
 
-**How Source Replacement Works:**
-
-- When a source key appears in overrides, it **completely replaces** the default source for that key
+- **Git sources (url/ref)**: Support field-level merging
+  - Partial overrides (only `ref` or only `url`) preserve missing field from defaults
+  - Complete overrides (both `url` and `ref`) replace entire source
+- **Local sources (path)**: Always replaced entirely
+- **Type switches** (Git to local or vice versa): Complete replacement
 - Sources from defaults that are **not** in overrides are **preserved**
 - This applies to both global and platform-specific source overrides
 
-**Example: Git Source to Local Source**
+**Example: Partial Git Override (Reducing Duplication)**
+
+```nuon
+{
+  "default": "v3.3.2",
+  "defaults": {
+    "sources": {
+      "reva": {
+        "url": "https://github.com/cs3org/reva"
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "master",
+      "overrides": {
+        "sources": {
+          "reva": { "ref": "master" }  // url from defaults
+        }
+      }
+    },
+    {
+      "name": "v3.3.2",
+      "overrides": {
+        "sources": {
+          "reva": { "ref": "v3.3.2" }  // url from defaults
+        }
+      }
+    }
+  ]
+}
+```
+
+**Example: Git Source to Local Source (Type Switch)**
 
 ```nuon
 {

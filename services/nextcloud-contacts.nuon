@@ -1,0 +1,13 @@
+{
+  "name": "nextcloud-contacts",
+  "context": "services/nextcloud-contacts",
+  "labels": {
+    "org.opencontainers.image.title": "Nextcloud Contacts App",
+    "org.opencontainers.image.description": "Nextcloud server with Contacts app pre-installed",
+    "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.source": "https://github.com/nextcloud/contacts",
+    "org.opencontainers.image.authors": "Open Cloud Mesh Contributors",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  }
+}

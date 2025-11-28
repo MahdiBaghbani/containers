@@ -1,0 +1,13 @@
+{
+  "name": "nextcloud",
+  "context": "services/nextcloud",
+  "labels": {
+    "org.opencontainers.image.title": "Nextcloud Server",
+    "org.opencontainers.image.description": "Nextcloud server with source files and runtime configuration",
+    "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.source": "https://github.com/nextcloud/server",
+    "org.opencontainers.image.authors": "Open Cloud Mesh Contributors",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  }
+}

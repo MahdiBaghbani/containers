@@ -50,18 +50,85 @@ export def get-default-version [
   }
 }
 
-# Replace sources per key (override completely replaces default for each key)
-# Sources from defaults that are NOT in overrides are preserved
-def replace-sources-per-key [
+# Merge Git source with field-level merging
+# Complete override (both url+ref) -> replace; partial -> merge fields
+def merge-git-source [
+  default_source: record,
+  override_source: record
+] {
+  # Empty override: preserve defaults (no-op)
+  if ($override_source | is-empty) {
+    return $default_source
+  }
+
+  # Detect override mode (complete vs partial)
+  let override_has_url = ("url" in ($override_source | columns))
+  let override_has_ref = ("ref" in ($override_source | columns))
+  let is_complete_override = ($override_has_url and $override_has_ref)
+
+  if $is_complete_override {
+    # Complete override: full replacement (backward compatible)
+    $override_source
+  } else {
+    # Partial override: field-level merge
+    mut merged = $default_source
+
+    if $override_has_url {
+      $merged = ($merged | upsert url ($override_source | get url))
+    }
+    if $override_has_ref {
+      $merged = ($merged | upsert ref ($override_source | get ref))
+    }
+
+    $merged
+  }
+}
+
+# Merge local source (always replace - path is single field)
+def merge-local-source [
+  default_source: record,
+  override_source: record
+] {
+  $override_source
+}
+
+# Merge sources per key with type-aware field-level merging
+# Type switch (local<->git) -> full replacement; same type -> type-specific merge
+def merge-sources-per-key [
   default_sources: record,
   override_sources: record
 ] {
   mut result = $default_sources
-  
+
   for key in ($override_sources | columns) {
-    $result = ($result | upsert $key ($override_sources | get $key))
+    let default_source = (try { $default_sources | get $key } catch { {} })
+    let override_source = ($override_sources | get $key)
+
+    # Detect source types
+    let default_has_path = ("path" in ($default_source | columns))
+    let default_has_git = (("url" in ($default_source | columns)) or ("ref" in ($default_source | columns)))
+    let override_has_path = ("path" in ($override_source | columns))
+    let override_has_git = (("url" in ($override_source | columns)) or ("ref" in ($override_source | columns)))
+
+    # Route to appropriate merge function
+    if ($override_has_path and $default_has_git) or ($override_has_git and $default_has_path) {
+      # Type switch: full replacement
+      $result = ($result | upsert $key $override_source)
+    } else if $override_has_git and $default_has_git {
+      # Both Git: use Git merge with mode detection
+      $result = ($result | upsert $key (merge-git-source $default_source $override_source))
+    } else if $override_has_path and $default_has_path {
+      # Both Local: use local merge (replacement)
+      $result = ($result | upsert $key (merge-local-source $default_source $override_source))
+    } else if ($override_source | is-empty) and $default_has_git {
+      # Empty override with Git default: preserve default via merge-git-source
+      $result = ($result | upsert $key (merge-git-source $default_source $override_source))
+    } else {
+      # No default or override only: use override
+      $result = ($result | upsert $key $override_source)
+    }
   }
-  
+
   $result
 }
 
@@ -103,7 +170,7 @@ export def apply-version-defaults [
     # Extract and replace sources per key
     let default_sources = (try { $global_defaults.sources } catch { {} })
     let override_sources = (try { $global_overrides.sources } catch { {} })
-    let merged_sources = (replace-sources-per-key $default_sources $override_sources)
+    let merged_sources = (merge-sources-per-key $default_sources $override_sources)
     
     # Merge everything else (excluding sources)
     let defaults_other = (if "sources" in ($global_defaults | columns) {
@@ -136,7 +203,7 @@ export def apply-version-defaults [
         # Extract and replace platform sources per key
         let platform_default_sources = (try { $platform_defaults.sources } catch { {} })
         let platform_override_sources = (try { $platform_overrides.sources } catch { {} })
-        let merged_platform_sources = (replace-sources-per-key $platform_default_sources $platform_override_sources)
+        let merged_platform_sources = (merge-sources-per-key $platform_default_sources $platform_override_sources)
         
         # Merge everything else (excluding sources)
         let platform_defaults_other = (if "sources" in ($platform_defaults | columns) {

@@ -602,17 +602,41 @@ Final Config
 3. **Records**: Deep-merged recursively (nested records merged, keys combined)
 4. **Lists, strings, numbers**: Replaced entirely (platform config wins, same as dockerfile)
 
-### Source Replacement
+### Source Merging
 
-Source configurations use **per-key replacement** instead of deep merge. This is because source fields are mutually exclusive: a source cannot have both `path` (local) and `url`/`ref` (Git) at the same time.
+Source configurations use **type-aware merging** that supports partial Git source overrides while preserving type safety.
 
 **How it works:**
 
-- When a source key appears in overrides, it **completely replaces** the default source for that key
+- **Git sources (url/ref)**: Field-level merging with mode detection
+  - **Partial override** (only `ref` or only `url`): Missing field preserved from defaults
+  - **Complete override** (both `url` and `ref`): Entire source replaced (backward compatible)
+- **Local sources (path)**: Always replaced entirely (path is a single field)
+- **Type switches** (Git to local or vice versa): Complete replacement (no merging of incompatible types)
 - Sources from defaults that are **not** in overrides are **preserved**
 - This applies to both global and platform-specific source overrides
 
-**Example:**
+**Example: Partial Git Override**
+
+```nuon
+// Defaults
+defaults: {
+  sources: {
+    reva: { url: "https://github.com/cs3org/reva", ref: "v3.3.2" }
+  }
+}
+
+// Override (partial - only ref)
+overrides: {
+  sources: {
+    reva: { ref: "master" }  // url preserved from defaults
+  }
+}
+
+// Result: sources.reva has {url: "https://github.com/cs3org/reva", ref: "master"}
+```
+
+**Example: Type Switch (Git to Local)**
 
 ```nuon
 // Defaults
@@ -622,10 +646,10 @@ defaults: {
   }
 }
 
-// Override
+// Override (type switch)
 overrides: {
   sources: {
-    gaia: { path: ".repos/gaia" }  // Replaces entire source, not merged
+    gaia: { path: ".repos/gaia" }  // Replaces entire source (type switch)
   }
 }
 
@@ -634,11 +658,9 @@ overrides: {
 
 **Rationale:**
 
-The `path` field (local source) and `url`/`ref` fields (Git source) are mutually exclusive. Deep merging would incorrectly combine them, creating invalid configurations that fail validation. Per-key replacement ensures only one source type exists per source key.
-
-**Extensibility Pattern:**
-
-If other mutually exclusive field combinations are needed in the future, they should follow the same per-key replacement pattern. The implementation in `scripts/lib/manifest.nu` can be extended to handle additional field types that require replacement instead of merge.
+- Partial Git overrides reduce duplication when multiple versions share the same repository URL but different refs
+- Type switches (local to Git or vice versa) require complete replacement because `path` and `url`/`ref` are mutually exclusive
+- The implementation in `scripts/lib/manifest.nu` detects source types and routes to appropriate merge functions
 
 For complete details on multi-platform builds, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
 

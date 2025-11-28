@@ -2,6 +2,15 @@
   "default": "v1.0.0",
   
   "defaults": {
+    "sources": {
+      "web": {
+        "url": "https://github.com/cernbox/web"
+      },
+      "web_extensions": {
+        "url": "https://github.com/cernbox/web-extensions",
+        "ref": "main"
+      }
+    },
     "external_images": {
       "build": {
         "tag": "20-trixie-slim"
@@ -29,10 +38,6 @@
           "web": {
             "url": "https://github.com/MahdiBaghbani/web",
             "ref": "cernbox/feature/ocm-wayf"
-          },
-          "web_extensions": {
-            "url": "https://github.com/cernbox/web-extensions",
-            "ref": "main"
           }
         }
       }
@@ -43,12 +48,7 @@
       "overrides": {
         "sources": {
           "web": {
-            "url": "https://github.com/cernbox/web",
             "ref": "cernbox"
-          },
-          "web_extensions": {
-            "url": "https://github.com/cernbox/web-extensions",
-            "ref": "main"
           }
         }
       }

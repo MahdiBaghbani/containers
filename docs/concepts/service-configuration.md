@@ -416,11 +416,44 @@ Version manifests can override source refs:
 }
 ```
 
-**Source Replacement Behavior:**
+**Source Merging Behavior:**
 
-Source overrides in version manifests use **per-key replacement** instead of deep merge. When a source key appears in overrides, it completely replaces the default source for that key. This is necessary because source fields are mutually exclusive: a source cannot have both `path` (local) and `url`/`ref` (Git) at the same time.
+Source overrides in version manifests use **type-aware merging**:
 
-**Example: Local Source Override**
+- **Git sources (url/ref)**: Support field-level merging. Partial overrides (only `ref` or only `url`) preserve the missing field from defaults. Complete overrides (both `url` and `ref`) replace the entire source.
+- **Local sources (path)**: Always replace entirely (path is a single field).
+- **Type switches**: When switching between Git and local sources, the override completely replaces the default (no merging of incompatible fields).
+
+**Example: Partial Git Source Override**
+
+```nuon
+{
+  "default": "master",
+  "defaults": {
+    "sources": {
+      "reva": {
+        "url": "https://github.com/cs3org/reva",
+        "ref": "v3.3.2"
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "master",
+      "overrides": {
+        "sources": {
+          "reva": {
+            "ref": "master"  // Only ref - url preserved from defaults
+          }
+        }
+      }
+    }
+  ]
+}
+// Result: reva has {url: "https://github.com/cs3org/reva", ref: "master"}
+```
+
+**Example: Local Source Override (Type Switch)**
 
 ```nuon
 {
@@ -439,7 +472,7 @@ Source overrides in version manifests use **per-key replacement** instead of dee
       "overrides": {
         "sources": {
           "gaia": {
-            "path": ".repos/gaia"  // Completely replaces default source
+            "path": ".repos/gaia"  // Type switch - completely replaces default
           }
         }
       }

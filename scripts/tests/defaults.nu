@@ -903,5 +903,235 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test25)
   
+  # Test 26: Partial Git Source Override (ref only) - url should be preserved from defaults
+  let test26 = (run-test "Partial Git source override: ref only preserves url from defaults" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          server: {
+            url: "https://github.com/nextcloud/server",
+            ref: "v32.0.2"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              server: {
+                ref: "master"  # Only ref, no url
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify url is preserved from defaults
+    if not ("url" in ($result.overrides.sources.server | columns)) {
+      error make {msg: "url should be preserved from defaults when override only has ref"}
+    }
+    if ($result.overrides.sources.server.url) != "https://github.com/nextcloud/server" {
+      error make {msg: $"url should be 'https://github.com/nextcloud/server', got '($result.overrides.sources.server.url)'"}
+    }
+    
+    # Verify ref is overridden
+    if ($result.overrides.sources.server.ref) != "master" {
+      error make {msg: $"ref should be 'master', got '($result.overrides.sources.server.ref)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test26)
+  
+  # Test 27: Partial Git Source Override (url only) - ref should be preserved from defaults
+  let test27 = (run-test "Partial Git source override: url only preserves ref from defaults" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          reva: {
+            url: "https://github.com/cs3org/reva",
+            ref: "v3.3.2"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              reva: {
+                url: "https://github.com/MahdiBaghbani/reva-opencloud"  # Only url, no ref
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify url is overridden
+    if ($result.overrides.sources.reva.url) != "https://github.com/MahdiBaghbani/reva-opencloud" {
+      error make {msg: $"url should be 'https://github.com/MahdiBaghbani/reva-opencloud', got '($result.overrides.sources.reva.url)'"}
+    }
+    
+    # Verify ref is preserved from defaults
+    if not ("ref" in ($result.overrides.sources.reva | columns)) {
+      error make {msg: "ref should be preserved from defaults when override only has url"}
+    }
+    if ($result.overrides.sources.reva.ref) != "v3.3.2" {
+      error make {msg: $"ref should be 'v3.3.2', got '($result.overrides.sources.reva.ref)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test27)
+  
+  # Test 28: Complete Git Source Override (backward compatibility)
+  let test28 = (run-test "Complete Git source override: both url and ref override wins" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          reva: {
+            url: "https://github.com/cs3org/reva",
+            ref: "v3.3.2"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              reva: {
+                url: "https://github.com/cs3org/reva",
+                ref: "master"  # Both url and ref present
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify complete override wins
+    if ($result.overrides.sources.reva.url) != "https://github.com/cs3org/reva" {
+      error make {msg: $"url should be 'https://github.com/cs3org/reva', got '($result.overrides.sources.reva.url)'"}
+    }
+    if ($result.overrides.sources.reva.ref) != "master" {
+      error make {msg: $"ref should be 'master', got '($result.overrides.sources.reva.ref)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test28)
+  
+  # Test 29: Platform-Specific Partial Git Source Override
+  let test29 = (run-test "Platform-specific partial Git source override: ref only preserves url" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          server: {
+            url: "https://github.com/nextcloud/server",
+            ref: "v32.0.2"
+          }
+        },
+        platforms: {
+          debian: {
+            sources: {
+              server: {
+                url: "https://github.com/nextcloud/server",
+                ref: "v32.0.2"
+              }
+            }
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            platforms: {
+              debian: {
+                sources: {
+                  server: {
+                    ref: "master"  # Only ref, no url
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify platform source url is preserved from platform defaults
+    let platform_source = ($result.overrides.platforms.debian.sources.server)
+    if not ("url" in ($platform_source | columns)) {
+      error make {msg: "platform source url should be preserved from defaults when override only has ref"}
+    }
+    if ($platform_source.url) != "https://github.com/nextcloud/server" {
+      error make {msg: $"platform url should be 'https://github.com/nextcloud/server', got '($platform_source.url)'"}
+    }
+    
+    # Verify platform ref is overridden
+    if ($platform_source.ref) != "master" {
+      error make {msg: $"platform ref should be 'master', got '($platform_source.ref)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test29)
+  
+  # Test 30: Empty Override Preserves Defaults
+  let test30 = (run-test "Empty source override preserves all fields from defaults" {
+    let manifest = {
+      default: "v1.0.0",
+      defaults: {
+        sources: {
+          server: {
+            url: "https://github.com/nextcloud/server",
+            ref: "v32.0.2"
+          }
+        }
+      },
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              server: {}  # Empty override
+            }
+          }
+        }
+      ]
+    }
+    let version_spec = $manifest.versions.0
+    let result = (apply-version-defaults $manifest $version_spec)
+    
+    # Verify all fields preserved from defaults
+    if not ("url" in ($result.overrides.sources.server | columns)) {
+      error make {msg: "url should be preserved from defaults when override is empty"}
+    }
+    if ($result.overrides.sources.server.url) != "https://github.com/nextcloud/server" {
+      error make {msg: $"url should be 'https://github.com/nextcloud/server', got '($result.overrides.sources.server.url)'"}
+    }
+    if not ("ref" in ($result.overrides.sources.server | columns)) {
+      error make {msg: "ref should be preserved from defaults when override is empty"}
+    }
+    if ($result.overrides.sources.server.ref) != "v32.0.2" {
+      error make {msg: $"ref should be 'v32.0.2', got '($result.overrides.sources.server.ref)'"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test30)
+  
   print-test-summary $results
 }

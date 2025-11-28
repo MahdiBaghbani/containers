@@ -148,9 +148,9 @@ RUN mkdir -p /revalocalstorage/data/marie && \
     mkdir -p /revalocalstorage/.shadow/versions/richard && \
     mkdir -p /revalocalstorage/.shadow/references/richard
 
-##############################
+###############################
 ###   Development Runtime   ###
-##############################
+###############################
 FROM ${REVAD_BASE_IMAGE}
 
 COPY --from=directory /revalocalstorage /revalocalstorage

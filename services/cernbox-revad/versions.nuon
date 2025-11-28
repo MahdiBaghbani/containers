@@ -2,6 +2,15 @@
   "default": "v3.3.2",
 
   "defaults": {
+    "sources": {
+      "reva": {
+        "url": "https://github.com/cs3org/reva"
+      },
+      "reva_plugins": {
+        "url": "https://github.com/cernbox/reva-plugins",
+        "ref": "master"
+      }
+    },
     "external_images": {
       "build": {
         "tag": "1.25-trixie"
@@ -27,10 +36,6 @@
           "reva": {
             "url": "https://github.com/MahdiBaghbani/reva-opencloud",
             "ref": "feature/multi-reva-setup-with-localhome"
-          },
-          "reva_plugins": {
-            "url": "https://github.com/cernbox/reva-plugins",
-            "ref": "master"
           }
         },
         "platforms": {
@@ -57,11 +62,6 @@
       "overrides": {
         "sources": {
           "reva": {
-            "url": "https://github.com/cs3org/reva",
-            "ref": "master"
-          },
-          "reva_plugins": {
-            "url": "https://github.com/cernbox/reva-plugins",
             "ref": "master"
           }
         },
@@ -89,12 +89,7 @@
       "overrides": {
         "sources": {
           "reva": {
-            "url": "https://github.com/cs3org/reva",
             "ref": "v3.3.2"
-          },
-          "reva_plugins": {
-            "url": "https://github.com/cernbox/reva-plugins",
-            "ref": "master"
           }
         },
         "platforms": {
