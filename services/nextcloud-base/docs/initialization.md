@@ -138,6 +138,93 @@ export def prepare_directories []
 2. Create `/var/www/html/custom_apps` (if missing)
 3. Make `/var/www/html/occ` executable
 
+## Apps Mounting Strategy
+
+Child images (e.g., `nextcloud-contacts`) can bake Nextcloud apps into the image at `/usr/src/apps/{app-name}`. These apps are merged into the Nextcloud source at runtime, surviving CI mounts to `/usr/src/nextcloud`.
+
+### App Location
+
+**Baked apps location:** `/usr/src/apps/{app-name}`
+
+This location is independent of `/usr/src/nextcloud`, allowing:
+
+- CI users to mount their own Nextcloud source at `/usr/src/nextcloud`
+- Baked apps to still be available (merged in at runtime)
+- Users to override specific apps by mounting to `/usr/src/apps/{app-name}`
+
+### Merge Behavior
+
+```nu
+# Merge apps from /usr/src/apps/ into /usr/src/nextcloud/apps/
+export def merge_apps [user: string, group: string]
+```
+
+**Why `apps/` instead of `custom_apps/`:** Nextcloud checks `apps/` before `custom_apps/` when looking for apps. More importantly, `occ app:enable` downloads from the app store if the app isn't found in `apps/`. By merging to `apps/`, we ensure Nextcloud finds our baked apps before trying the app store.
+
+**Merge Logic:**
+
+1. Check if `/usr/src/apps/` exists (return early if not)
+2. Ensure `/usr/src/nextcloud/apps/` exists
+3. For each app directory in `/usr/src/apps/`:
+   - Skip if app already exists in target (allows user override)
+   - Validate app structure (must have `appinfo/info.xml`)
+   - Copy app to `/usr/src/nextcloud/apps/{app-name}`
+   - Set ownership if running as root
+
+### Override Precedence
+
+Apps can be overridden at multiple levels:
+
+| Priority | Location | Description |
+|----------|----------|-------------|
+| 1 (highest) | `/var/www/html/apps/{app}` | Direct runtime mount |
+| 2 | `/usr/src/nextcloud/apps/{app}` | User's Nextcloud source includes app |
+| 3 | `/usr/src/apps/{app}` | User-mounted app override |
+| 4 (lowest) | `/usr/src/apps/{app}` (baked) | Image-baked app |
+
+### CI Mount Scenarios
+
+#### Scenario 1: Default (no mounts)
+
+- Uses baked Nextcloud source
+- Uses baked apps from `/usr/src/apps/`
+- Apps merged into Nextcloud at runtime
+
+#### Scenario 2: Mount `/usr/src/nextcloud` only
+
+- Uses user's Nextcloud source
+- Baked apps still merged into user's Nextcloud `apps/`
+- User can include apps in their Nextcloud source to override baked ones
+
+#### Scenario 3: Mount `/usr/src/apps/{app}` only
+
+- Uses baked Nextcloud source
+- User's app version used instead of baked app
+- Good for testing app changes
+
+#### Scenario 4: Mount both
+
+- Uses user's Nextcloud source
+- Uses user's app version
+- Full control over all components
+
+#### Scenario 5: Mount `/var/www/html/apps/{app}`
+
+- Direct runtime override
+- Skips merge process entirely
+- Most direct but volatile (lost on container restart unless persisted)
+
+### Hook Range Conventions
+
+Apps should use hooks with numbers in the `51-99` range:
+
+| Range | Purpose |
+|-------|---------|
+| `00-50` | Reserved for system/nextcloud-base hooks |
+| `51-99` | Available for app-specific hooks |
+
+Example: `99-enable-contacts.nu` runs after all system hooks.
+
 ## Version Management
 
 ### Version Detection

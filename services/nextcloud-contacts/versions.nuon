@@ -1,0 +1,61 @@
+{
+  "default": "v8.1.0-nc-v32.0.2",
+
+  "defaults": {
+    "sources": {
+      "contacts": {
+        "url": "https://github.com/nextcloud/contacts"
+      }
+    },
+    "external_images": {
+      "build": {
+        "tag": "20-trixie-slim"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      },
+      "nextcloud": {
+        "version": "v32.0.2-debian"
+      }
+    }
+  },
+
+  "versions": [
+    {
+      "name": "v8.1.0-ocm-nc-v32.0.2",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "url": "https://github.com/sara-nl/nextcloud-contacts",
+            "ref": "invite-for-cloudid-exchange"
+          }
+        }
+      }
+    },
+    {
+      "name": "v8.1.0-nc-v32.0.2",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "ref": "v8.1.0"
+          }
+        }
+      }
+    },
+    {
+      "name": "main-nc-v32.0.2",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "ref": "main"
+          }
+        }
+      }
+    }
+  ]
+}

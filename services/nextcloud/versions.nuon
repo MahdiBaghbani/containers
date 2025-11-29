@@ -10,7 +10,7 @@
     },
     "dependencies": {
       "nextcloud-base": {
-        "version": "8.3-apache"
+        "version": "8.3-apache-debian"
       }
     }
   },

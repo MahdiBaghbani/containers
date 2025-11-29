@@ -1,0 +1,29 @@
+{
+  "default": "debian",
+
+  "defaults": {
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      },
+      "nextcloud": {
+        "service": "nextcloud",
+        "build_arg": "NEXTCLOUD_IMAGE"
+      }
+    },
+    "external_images": {
+      "build": {
+        "name": "node",
+        "build_arg": "BASE_BUILD_IMAGE"
+      }
+    }
+  },
+
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/nextcloud-contacts/Dockerfile"
+    }
+  ]
+}

@@ -21,26 +21,21 @@
 
 use ./utils.nu [directory_empty]
 
-# Detect if /usr/src/nextcloud is mounted and needs copying
-# Returns true if source should be copied to target
 export def detect_source_mount [] {
   let source_dir = "/usr/src/nextcloud"
   let target_dir = "/var/www/html"
   
-  # Check if source directory exists and is populated
   if not ($source_dir | path exists) {
     print "Source directory does not exist, skipping mount detection"
     return false
   }
   
-  # Check if source directory is readable
   let source_readable = (^test -r $source_dir | complete | get exit_code) == 0
   if not $source_readable {
     print "Warning: Source directory is not readable"
     return false
   }
   
-  # Check for key Nextcloud files in source (more comprehensive)
   let required_files = [
     $"($source_dir)/version.php"
     $"($source_dir)/index.php"
@@ -60,20 +55,17 @@ export def detect_source_mount [] {
     return false
   }
   
-  # Check if target directory exists
   if not ($target_dir | path exists) {
     print "Target directory does not exist, creating..."
     ^mkdir -p $target_dir
     return true
   }
   
-  # Check if target is empty or missing Nextcloud files
   if (directory_empty $target_dir) {
     print "Target directory is empty, copy needed"
     return true
   }
   
-  # Check for critical Nextcloud files in target
   let target_has_version = ($"($target_dir)/version.php" | path exists)
   let target_has_index = ($"($target_dir)/index.php" | path exists)
   
@@ -86,19 +78,15 @@ export def detect_source_mount [] {
   return false
 }
 
-# Copy source from /usr/src/nextcloud to /var/www/html using rsync
-# Handles both root and non-root execution with error handling
 export def copy_source_to_html [user: string, group: string] {
   let source_dir = "/usr/src/nextcloud/"
   let target_dir = "/var/www/html/"
   
-  # Verify source directory is readable
   if not ($source_dir | path exists) {
     print $"Error: Source directory does not exist: ($source_dir)"
     exit 1
   }
   
-  # Check if source directory is empty
   if (directory_empty $source_dir) {
     print $"Error: Source directory is empty: ($source_dir)"
     exit 1
@@ -108,23 +96,18 @@ export def copy_source_to_html [user: string, group: string] {
   
   let uid = (^id -u | into int)
   
-  # Execute rsync with appropriate options
   let result = if $uid == 0 {
-    # Root - use rsync with chown
     ^rsync -rlDog --chown $"($user):($group)" $source_dir $target_dir | complete
   } else {
-    # Non-root - rsync without chown
     ^rsync -rlD $source_dir $target_dir | complete
   }
   
-  # Check rsync exit code
   if $result.exit_code != 0 {
     print $"Error: rsync failed with exit code ($result.exit_code)"
     print $result.stderr
     exit 1
   }
   
-  # Verify target directory now has content
   if (directory_empty $target_dir) {
     print $"Error: Target directory is empty after copy: ($target_dir)"
     exit 1
@@ -133,13 +116,10 @@ export def copy_source_to_html [user: string, group: string] {
   print "Source copy completed successfully"
 }
 
-# Prepare directories and permissions after source copy
-# Creates data and custom_apps directories, sets occ executable
 export def prepare_directories [user: string, group: string] {
   let html_dir = "/var/www/html"
   let uid = (^id -u | into int)
   
-  # Create data directory with correct ownership
   let data_dir = $"($html_dir)/data"
   if not ($data_dir | path exists) {
     print $"Creating data directory: ($data_dir)"
@@ -149,7 +129,6 @@ export def prepare_directories [user: string, group: string] {
     }
   }
   
-  # Create custom_apps directory with correct ownership
   let custom_apps_dir = $"($html_dir)/custom_apps"
   if not ($custom_apps_dir | path exists) {
     print $"Creating custom_apps directory: ($custom_apps_dir)"
@@ -159,7 +138,6 @@ export def prepare_directories [user: string, group: string] {
     }
   }
   
-  # Make occ executable
   let occ_path = $"($html_dir)/occ"
   if ($occ_path | path exists) {
     print $"Setting occ executable: ($occ_path)"
@@ -167,10 +145,7 @@ export def prepare_directories [user: string, group: string] {
   }
 }
 
-# Orchestrate all source preparation steps
-# Main entry point for source preparation module
 export def prepare_source [user: string, group: string] {
-  # Check if source mount needs to be copied
   if (detect_source_mount) {
     print "Detected mounted source at /usr/src/nextcloud"
     copy_source_to_html $user $group
@@ -178,6 +153,57 @@ export def prepare_source [user: string, group: string] {
     print "Source already present in /var/www/html or no mount detected"
   }
   
-  # Always prepare directories (idempotent)
   prepare_directories $user $group
+}
+
+# Merges apps from /usr/src/apps/ into /usr/src/nextcloud/apps/
+# Uses apps/ instead of custom_apps/ so Nextcloud finds them before trying app store
+# Skips apps that already exist in target (allows user Nextcloud source to include apps)
+export def merge_apps [user: string, group: string] {
+  let apps_dir = "/usr/src/apps"
+  let nextcloud_apps_dir = "/usr/src/nextcloud/apps"
+
+  if not ($apps_dir | path exists) {
+    return
+  }
+
+  if not ($nextcloud_apps_dir | path exists) {
+    print $"Creating apps directory: ($nextcloud_apps_dir)"
+    ^mkdir -p $nextcloud_apps_dir
+    let uid = (^id -u | into int)
+    if $uid == 0 {
+      ^chown $"($user):($group)" $nextcloud_apps_dir
+    }
+  }
+
+  let apps = (ls $apps_dir | where type == dir)
+
+  if ($apps | length) == 0 {
+    return
+  }
+
+  for app in $apps {
+    let app_name = ($app.name | path basename)
+    let source_app_dir = $app.name
+    let target_app_dir = $"($nextcloud_apps_dir)/($app_name)"
+
+    if ($target_app_dir | path exists) {
+      print $"Skipping ($app_name): already exists in Nextcloud apps"
+      continue
+    }
+
+    let info_xml = $"($source_app_dir)/appinfo/info.xml"
+    if not ($info_xml | path exists) {
+      print $"Warning: Skipping ($app_name): missing appinfo/info.xml"
+      continue
+    }
+
+    print $"Merging app: ($app_name)"
+    ^cp -a $"($source_app_dir)/." $target_app_dir
+
+    let uid = (^id -u | into int)
+    if $uid == 0 {
+      ^chown -R $"($user):($group)" $target_app_dir
+    }
+  }
 }
