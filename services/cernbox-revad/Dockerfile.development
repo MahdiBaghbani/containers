@@ -44,8 +44,9 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --assume-yes \
     git \
     bash \
-    ca-certificates \
-    binutils;
+    binutils \
+    musl-tools \
+    ca-certificates;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -77,7 +78,7 @@ RUN --mount=type=cache,id=cernbox-revad-go-mod-cache,target=/go/pkg/mod,sharing=
     gaia build \
     --with github.com/cernbox/reva-plugins=/reva-plugins-git \
     --with github.com/cs3org/reva/v3=/reva-git \
-    --static \
+    --static-musl \
     --output /revad
 
 RUN ldd /revad 2>&1 | grep -q "not a dynamic executable" || \

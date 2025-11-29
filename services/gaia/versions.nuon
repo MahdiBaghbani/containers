@@ -4,8 +4,8 @@
   "defaults": {
     "sources": {
       "gaia": {
-        "url": "https://github.com/MahdiBaghbani/gaia",
-        "ref": "mahdi/feature/build-static"
+        "url": "https://github.com/cs3org/gaia",
+        "ref": "master"
       }
     },
     "external_images": {
