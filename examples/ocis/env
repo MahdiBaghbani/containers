@@ -1,0 +1,29 @@
+IMAGE_OCIS=7.1.4
+
+## oCIS Settings ##
+OCIS_DOMAIN=3.ocis.cloud.test.azadehafzar.io
+OCIS_ADMIN_PASSWORD=admin
+
+# Define the oCIS loglevel used.
+LOG_LEVEL=debug
+# Define the kind of logging.
+# The default log can be read by machines.
+# Set this to true to make the log human readable.
+LOG_PRETTY=true
+
+# Demo users should not be created on a production instance,
+# because their passwords are public. Defaults to "false".
+# If demo users is set to "true", the following user accounts are created automatically:
+# alan, mary, margaret, dennis and lynn - the password is 'demo' for all.
+DEMO_USERS=true
+
+START_ADDITIONAL_SERVICES="ocm"
+
+# This specifies to start all services except idm and idp. These are replaced by external services.
+EXCLUDE_RUN_SERVICES=""
+
+# Optional: Directory Service URLs (for directory_service_urls field in ScienceMesh)
+# Space-separated list of directory service URLs for ScienceMesh WAYF handler
+# Independent of MESHDIR_URL/MESHDIR_DOMAIN (mesh_directory_url field)
+# Invalid URLs are automatically removed with warnings
+# OCM_DIRECTORY_SERVICE_URLS="https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download https://another.example.com/dir"

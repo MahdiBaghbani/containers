@@ -1,0 +1,90 @@
+name: ocis-3-test
+
+networks:
+  traefik-net:
+    external: true
+
+services:
+  ocis-3-test:
+    #image: "ghcr.io/2403905/ocis-ocm:dev"
+    image: "docker.io/owncloud/ocis:dev"
+    container_name: ocis-3-test
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      traefik-net:
+        ipv4_address: 172.16.80.8
+    entrypoint:
+      - /bin/sh
+    # run ocis init to initialize a configuration file with random secrets
+    # it will fail on subsequent runs, because the config file already exists
+    # therefore we ignore the error and then start the ocis server
+    command: ["-c", "ocis init || true; ocis server"]
+    environment:
+      OCIS_URL: "https://${OCIS_DOMAIN}"
+      OCIS_LOG_LEVEL: "${LOG_LEVEL}"
+      OCIS_LOG_COLOR: "${LOG_PRETTY}"
+      OCIS_LOG_PRETTY: "${LOG_PRETTY}"
+      # INSECURE: needed if oCIS / Traefik is using self generated certificates
+      OCIS_INSECURE: "false"
+      # enable services that are not started automatically
+      OCIS_ADD_RUN_SERVICES: ${START_ADDITIONAL_SERVICES}
+      # This specifies to start all services except these.
+      OC_EXCLUDE_RUN_SERVICES: ${EXCLUDE_RUN_SERVICES}
+      # do not use SSL between Traefik and oCIS
+      PROXY_TLS: "false"
+
+      # basic auth (not recommended, but needed for eg. WebDav clients that do not support OpenID Connect)
+      PROXY_ENABLE_BASIC_AUTH: "false"
+
+      # demo users
+      IDM_ADMIN_PASSWORD: "${OCIS_ADMIN_PASSWORD}"
+      IDM_CREATE_DEMO_USERS: "${DEMO_USERS}"
+
+      # proxy
+      # bind to all interfaces, so traefik can connect
+      PROXY_HTTP_ADDR: "0.0.0.0:9200"
+
+      # expose nats and the reva gateway for the collaboration service
+      NATS_NATS_HOST: "0.0.0.0"
+      NATS_NATS_PORT: "9233"
+
+      # make the registry available to the app provider containers
+      MICRO_REGISTRY_ADDRESS: 127.0.0.1:9233
+
+      # reva gateway
+      GATEWAY_GRPC_ADDR: 0.0.0.0:9142
+
+      # OCM Specific
+      WEB_UI_CONFIG_FILE: "/etc/ocis/web-ui-config.json"
+      FRONTEND_OCS_INCLUDE_OCM_SHAREES: true
+      FRONTEND_OCS_LIST_OCM_SHARES: true
+      FRONTEND_ENABLE_FEDERATED_SHARING_INCOMING: true
+      FRONTEND_ENABLE_FEDERATED_SHARING_OUTGOING: true
+      GRAPH_INCLUDE_OCM_SHAREES: true
+      OCM_OCM_INVITE_MANAGER_INSECURE: true
+      OCM_OCM_SHARE_PROVIDER_INSECURE: true
+      OCM_OCM_STORAGE_PROVIDER_INSECURE: true
+      OCM_DIRECTORY_SERVICE_URLS: "https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download"
+      OCM_OCM_PROVIDER_AUTHORIZER_PROVIDERS_FILE: "/etc/ocis/ocmproviders.json"
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      # make sure these have uid=1000 and gid=1000
+      - "${PWD}/volumes/config/ocis:/etc/ocis"
+      - "${PWD}/volumes/data/ocis:/var/lib/ocis"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-net"
+      # http redirect to https
+      - "traefik.http.routers.ocis-3-test-redirect.entrypoints=http"
+      - "traefik.http.routers.ocis-3-test-redirect.rule=Host(`${OCIS_DOMAIN}`)"
+      - "traefik.http.routers.ocis-3-test-redirect.middlewares=force-https@file"
+      - "traefik.http.routers.ocis-3-test-redirect.service=noop@internal"
+      # https
+      - "traefik.http.routers.ocis-3-test.entrypoints=https"
+      - "traefik.http.routers.ocis-3-test.rule=Host(`${OCIS_DOMAIN}`)"
+      - "traefik.http.routers.ocis-3-test.tls.certResolver=letsencrypt-cloudflare-global"
+      - "traefik.http.routers.ocis-3-test.service=ocis-3-test"
+      - "traefik.http.services.ocis-3-test.loadbalancer.server.port=9200"
