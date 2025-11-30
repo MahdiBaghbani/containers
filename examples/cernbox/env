@@ -8,8 +8,9 @@ IMAGE_IDP=v26.4.2
 CERNBOX_DOMAIN=1.cernbox.cloud.test.azadehafzar.io
 IDP_DOMAIN=1.idp.cloud.test.azadehafzar.io
 
-# Internal service names (Docker networking)
-REVAD_DOMAIN=cernbox-1-test-revad
+# OCM provider domain (must match what remote servers know you as - the public domain)
+# Internal container communication uses explicit host vars (REVAD_GATEWAY_HOST, etc.)
+REVAD_DOMAIN=1.cernbox.cloud.test.azadehafzar.io
 IDP_HOST=cernbox-1-test-idp
 
 # Container mode (REQUIRED) - determines which services run in container
@@ -106,6 +107,12 @@ REVAD_JWT_SECRET=reva-secret
 # Optional: Mesh Directory configuration (for ScienceMesh)
 # MESHDIR_DOMAIN=meshdir.docker
 # MESHDIR_URL=https://meshdir.docker/meshdir
+
+# Optional: Directory Service URLs (new, for directory_service_urls field)
+# Space-separated list of directory service URLs for ScienceMesh WAYF handler
+# Independent of MESHDIR_URL/MESHDIR_DOMAIN (mesh_directory_url field)
+# Invalid URLs are automatically removed with warnings
+OCM_DIRECTORY_SERVICE_URLS="https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download"
 
 # Optional: Rclone endpoint (for DataTX transfers)
 # RCLONE_ENDPOINT=http://rclone.docker

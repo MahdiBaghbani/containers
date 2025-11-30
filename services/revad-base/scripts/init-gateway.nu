@@ -21,7 +21,7 @@
 # Processes gateway configuration file with gateway-specific placeholders
 
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
-use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
+use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders, validate-and-filter-urls]
 use ./lib/merge-partials.nu [merge_partial_configs]
 
 const CONFIG_DIR = "/configs/revad"
@@ -110,6 +110,15 @@ export def init_gateway [] {
     $"https://($meshdir_domain)/meshdir"
   })
   
+  # Process OCM_DIRECTORY_SERVICE_URLS for directory_service_urls field
+  # This is independent of mesh_directory_url (both can be set simultaneously)
+  let ocm_dir_urls_env = (get_env_or_default "OCM_DIRECTORY_SERVICE_URLS" "")
+  let directory_service_urls = (if ($ocm_dir_urls_env | str length) > 0 {
+    validate-and-filter-urls $ocm_dir_urls_env
+  } else {
+    ""
+  })
+  
   # Get identity provider URL
   let idp_domain = (get_env_or_default "IDP_DOMAIN" "idp.docker")
   let idp_url = (get_env_or_default "IDP_URL" $"https://($idp_domain)")
@@ -161,6 +170,7 @@ export def init_gateway [] {
     "machine-api-key": $machine_api_key
     "ocmshares-json-file": $ocmshares_json_file
     "mesh-directory-url": $mesh_directory_url
+    "directory-service-urls": $directory_service_urls
     "idp-url": $idp_url
     "rclone-endpoint": $rclone_endpoint
     "config-dir": $revad_config_dir

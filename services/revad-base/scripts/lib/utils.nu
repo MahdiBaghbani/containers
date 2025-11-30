@@ -81,6 +81,99 @@ export def get_env_or_default [var_name: string, default_value: string = ""] {
   (try { $env | get $var_name } catch { $default_value }) | default $default_value
 }
 
+# Validate URL format (basic validation: scheme and hostname)
+# Returns true if URL appears valid, false otherwise
+# Does not check reachability, only format
+export def validate-url [url: string] {
+  # Trim whitespace
+  let url_trimmed = ($url | str trim)
+  
+  # Must start with http:// or https://
+  if not (($url_trimmed | str starts-with "http://") or ($url_trimmed | str starts-with "https://")) {
+    return false
+  }
+  
+  # Extract hostname part (after scheme, before path)
+  let after_scheme = (if ($url_trimmed | str starts-with "https://") {
+    ($url_trimmed | str substring 8..)
+  } else {
+    ($url_trimmed | str substring 7..)
+  })
+  
+  # Must have at least one character after scheme
+  if ($after_scheme | str length) == 0 {
+    return false
+  }
+  
+  # Extract hostname (before first / or end of string)
+  let hostname = (if ($after_scheme | str contains "/") {
+    ($after_scheme | split row "/" | get 0)
+  } else {
+    $after_scheme
+  })
+  
+  # Hostname must be non-empty
+  if ($hostname | str length) == 0 {
+    return false
+  }
+  
+  # Remove port if present (hostname:port)
+  let hostname_no_port = (if ($hostname | str contains ":") {
+    ($hostname | split row ":" | get 0)
+  } else {
+    $hostname
+  })
+  
+  # Basic hostname validation: must contain dot (for domain) or be "localhost"
+  # This is a simple check - more complex validation would require regex or external library
+  if $hostname_no_port == "localhost" {
+    return true
+  }
+  
+  if ($hostname_no_port | str contains ".") {
+    return true
+  }
+  
+  false
+}
+
+# Validate and filter space-separated directory service URLs
+# Removes invalid URLs with warnings, returns space-separated valid URLs
+# Returns empty string if all URLs are invalid
+export def validate-and-filter-urls [urls: string] {
+  # Trim leading/trailing whitespace
+  let urls_trimmed = ($urls | str trim)
+  
+  # If empty after trim, return empty
+  if ($urls_trimmed | str length) == 0 {
+    return ""
+  }
+  
+  # Normalize multiple spaces to single space, then split
+  let urls_normalized = ($urls_trimmed | str replace -a "  " " " | str trim)
+  let url_list = ($urls_normalized | split row " ")
+  
+  # Filter and validate each URL using reduce
+  # Use reduce to accumulate valid URLs and track invalid count
+  let result = ($url_list | reduce --fold {valid: [], invalid: 0} {|url, acc|
+    if (validate-url $url) {
+      {valid: ($acc.valid | append $url), invalid: $acc.invalid}
+    } else {
+      print $"Warning: Invalid directory service URL '($url)', skipping"
+      {valid: $acc.valid, invalid: ($acc.invalid + 1)}
+    }
+  })
+  
+  # If all invalid, log warning and return empty
+  if ($result.invalid == ($url_list | length)) and ($result.invalid > 0) {
+    print "Warning: All directory service URLs invalid, setting directory_service_urls to empty"
+    return ""
+  }
+  
+  # Join valid URLs with single space
+  ($result.valid | str join " ")
+}
+
 # Process all placeholders in a file
 # Replaces {{placeholder:name.subname:default-value}} with actual values
 # Uses placeholder_map to resolve values

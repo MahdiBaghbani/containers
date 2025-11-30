@@ -112,6 +112,28 @@ REVAD_CONFIG_DIR=/etc/revad
 
 Each service type has specific environment variables. See platform-specific documentation (e.g., CERNBox) for complete variable lists.
 
+#### Gateway Service Variables
+
+Gateway containers support additional environment variables for ScienceMesh configuration:
+
+```bash
+# Mesh Directory URL (for mesh_directory_url field)
+# Option 1: Explicit URL
+MESHDIR_URL=https://meshdir.docker/meshdir
+
+# Option 2: Construct from domain
+MESHDIR_DOMAIN=meshdir.docker
+# Results in: https://meshdir.docker/meshdir
+
+# Directory Service URLs (for directory_service_urls field)
+# Space-separated list of directory service URLs for ScienceMesh WAYF handler
+# Independent of MESHDIR_URL/MESHDIR_DOMAIN (mesh_directory_url field)
+# Invalid URLs are automatically removed with warnings
+OCM_DIRECTORY_SERVICE_URLS="https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download https://another.example.com/dir"
+```
+
+**Note**: `directory_service_urls` and `mesh_directory_url` are independent fields. Both can be set simultaneously. The `directory_service_urls` field supports multiple space-separated URLs, while `mesh_directory_url` is a single URL.
+
 ## Configuration Directory Structure
 
 ### Image Structure
