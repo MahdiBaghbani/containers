@@ -56,16 +56,26 @@ WORKDIR /
 
 ARG REVA_URL="https://github.com/cs3org/reva"
 ARG REVA_REF="v3.3.2"
+ARG REVA_SHA=""
+ARG REVA_PATH=""
+ARG REVA_MODE=""
 ARG REVA_PLUGINS_URL="https://github.com/cernbox/reva-plugins"
 ARG REVA_PLUGINS_REF="master"
 ARG CACHEBUST="default"
 
+# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=cernbox-revad-reva-git-${CACHEBUST:-${REVA_REF}},target=/src/reva-git-cache,sharing=shared \
-    mkdir -p /src/reva-git-cache && \
-    if [ ! -d /src/reva-git-cache/.git ]; then \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${REVA_REF}" ${REVA_URL} /src/reva-git-cache; \
-    fi && \
-    cp -a /src/reva-git-cache/. /reva-git
+    --mount=type=bind,source=${REVA_PATH:-.},target=/tmp/local-reva,ro \
+    if [ "$REVA_MODE" = "local" ]; then \
+      mkdir -p /reva-git && \
+      cp -a /tmp/local-reva/. /reva-git; \
+    else \
+      mkdir -p /src/reva-git-cache && \
+      if [ ! -d /src/reva-git-cache/.git ]; then \
+        git clone --depth 1 --recursive --shallow-submodules --branch "${REVA_REF}" ${REVA_URL} /src/reva-git-cache; \
+      fi && \
+      cp -a /src/reva-git-cache/. /reva-git; \
+    fi
 
 RUN --mount=type=cache,id=cernbox-revad-reva-plugins-git-${CACHEBUST:-${REVA_PLUGINS_REF}},target=/src/reva-plugins-git-cache,sharing=shared \
     mkdir -p /src/reva-plugins-git-cache && \
