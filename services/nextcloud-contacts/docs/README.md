@@ -92,10 +92,11 @@ This service inherits all environment variables from `nextcloud-base`. See [next
 The OCM Invites feature allows exchanging cloud IDs through OCM invitation workflow:
 
 - Button to invite remote users to exchange cloudIDs
+- **Email is optional** - invites can be shared manually via link
 - Button to manually accept invite to exchange cloudIDs
 - WAYF page allowing the receiver of the invite to open and accept the invitation
 - Listing of open invitations
-- Option to resend, revoke open invitations
+- Option to resend (only for invites with email), revoke open invitations
 
 ### Enabling OCM Invites
 

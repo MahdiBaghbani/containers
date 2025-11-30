@@ -1,8 +1,8 @@
 #!/usr/bin/env nu
 
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Open Cloud Mesh Containers: container build scripts and images
-# Copyright (C) 2025 Open Cloud Mesh Contributors
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -58,11 +58,50 @@ export def run_custom_post_install [user: string] {
     print "Note: firstrunwizard app disable returned non-zero exit code (may already be disabled)"
   }
   
-  # Step 6: Create and configure log files
+  # Step 6: Set admin user email (required for OCM invite acceptance)
+  print "Setting admin user email..."
+  set_admin_email $user
+  
+  # Step 7: Create and configure log files
   print "Setting up log files..."
   setup_log_files
   
   print "Custom post-installation logic completed"
+}
+
+# Set admin user email address
+# Uses NEXTCLOUD_ADMIN_EMAIL env var, or constructs from admin user and trusted domain
+export def set_admin_email [user: string] {
+  # Get admin username from env
+  let admin_user = (try { $env.NEXTCLOUD_ADMIN_USER? } catch { "admin" })
+  
+  # Check for explicit admin email env var
+  let admin_email = (try { $env.NEXTCLOUD_ADMIN_EMAIL? } catch { null })
+  
+  mut email_to_set = ""
+  
+  if $admin_email != null and $admin_email != "" {
+    $email_to_set = $admin_email
+  } else {
+    # Construct email from admin user and first trusted domain
+    let trusted_domains = (try { $env.NEXTCLOUD_TRUSTED_DOMAINS? } catch { null })
+    if $trusted_domains != null and $trusted_domains != "" {
+      let first_domain = ($trusted_domains | split row " " | where $it != "" | first)
+      $email_to_set = $"($admin_user)@($first_domain)"
+    } else {
+      # Fallback to localhost
+      $email_to_set = $"($admin_user)@localhost"
+    }
+  }
+  
+  print $"Setting admin email to: ($email_to_set)"
+  let result = (run_as $user $"php /var/www/html/occ user:setting ($admin_user) settings email ($email_to_set)" | complete)
+  
+  if $result.exit_code != 0 {
+    print $"Warning: Failed to set admin email: ($result.stderr)"
+  } else {
+    print "Admin email set successfully"
+  }
 }
 
 # Setup log files with proper permissions
