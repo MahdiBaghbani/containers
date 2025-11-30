@@ -6,7 +6,7 @@
     "org.opencontainers.image.description": "Base image for Nextcloud with PHP, Apache, and required extensions",
     "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
     "org.opencontainers.image.source": "https://github.com/nextcloud/server",
-    "org.opencontainers.image.authors": "Open Cloud Mesh Contributors",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
     "org.opencontainers.image.vendor": "Open Cloud Mesh",
     "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
   },

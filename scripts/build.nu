@@ -1,8 +1,8 @@
 #! /usr/bin/env nu
 
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Open Cloud Mesh Containers: container build scripts and images
-# Copyright (C) 2025 Open Cloud Mesh Contributors
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
