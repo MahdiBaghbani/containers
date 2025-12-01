@@ -43,7 +43,7 @@ For Git sources, the build system generates three build arguments:
 
 ### Build Arguments
 
-1. **`{SOURCE_KEY}_REF`** - The version/branch/tag reference (e.g., `v3.3.2`, `main`)
+1. **`{SOURCE_KEY}_REF`** - The version/branch/tag reference (e.g., `v3.3.3`, `main`)
 2. **`{SOURCE_KEY}_URL`** - The repository URL (e.g., `https://github.com/cs3org/reva`)
 3. **`{SOURCE_KEY}_SHA`** - The short commit SHA (7 characters) extracted from the ref
 
@@ -54,7 +54,7 @@ For Git sources, the build system generates three build arguments:
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     }
   }
 }
@@ -62,7 +62,7 @@ For Git sources, the build system generates three build arguments:
 
 **Generated build args:**
 
-- `REVA_REF="v3.3.2"`
+- `REVA_REF="v3.3.3"`
 - `REVA_URL="https://github.com/cs3org/reva"`
 - `REVA_SHA="a1b2c3d"` (extracted from ref)
 
@@ -70,7 +70,7 @@ For Git sources, the build system generates three build arguments:
 
 ```dockerfile
 ARG REVA_URL="https://github.com/cs3org/reva"
-ARG REVA_REF="v3.3.2"
+ARG REVA_REF="v3.3.3"
 ARG REVA_SHA=""
 
 RUN git clone --branch ${REVA_REF} ${REVA_URL} /reva-git
@@ -181,7 +181,7 @@ You can mix Git and local sources in the same service configuration:
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     },
     "custom_lib": {
       "path": "../custom-lib"
@@ -203,7 +203,7 @@ Dockerfiles MUST declare ARGs with sensible defaults for both source types:
 
 ```dockerfile
 ARG REVA_URL="https://github.com/cs3org/reva"
-ARG REVA_REF="v3.3.2"
+ARG REVA_REF="v3.3.3"
 ARG REVA_SHA=""
 ```
 
@@ -220,7 +220,7 @@ For Dockerfiles that support both Git and local sources:
 
 ```dockerfile
 ARG REVA_URL="https://github.com/cs3org/reva"
-ARG REVA_REF="v3.3.2"
+ARG REVA_REF="v3.3.3"
 ARG REVA_SHA=""
 ARG REVA_PATH=""
 ARG REVA_MODE=""

@@ -1,10 +1,11 @@
 {
-  "default": "v1.0.0",
-  
+  "default": "v1.0.13",
+
   "defaults": {
     "sources": {
       "web": {
-        "url": "https://github.com/cernbox/web"
+        "url": "https://github.com/cernbox/web",
+        "ref": "v1.0.13"
       },
       "web_extensions": {
         "url": "https://github.com/cernbox/web-extensions",
@@ -28,7 +29,7 @@
       }
     }
   },
-  
+
   "versions": [
     {
       "name": "testing",
@@ -43,12 +44,23 @@
       }
     },
     {
-      "name": "v1.0.0",
-      "latest": true,
+      "name": "master",
+      "latest": false,
       "overrides": {
         "sources": {
           "web": {
             "ref": "cernbox"
+          }
+        }
+      }
+    },
+    {
+      "name": "v1.0.13",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "web": {
+            "ref": "v1.0.13"
           }
         }
       }

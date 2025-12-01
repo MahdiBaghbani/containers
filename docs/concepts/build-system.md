@@ -83,7 +83,7 @@ When injecting build arguments, the build system applies them in this order (lat
 {
   "dependencies": {
     "revad-base": {
-      "version": "v3.3.2",
+      "version": "v3.3.3",
       "build_arg": "REVAD_BASE_IMAGE"
     }
   },
@@ -105,16 +105,16 @@ export REVAD_BASE_IMAGE="revad-base:env-override"
 ARG REVAD_BASE_IMAGE="revad-base:latest"
 ```
 
-**Final Build Arg Value:** `REVAD_BASE_IMAGE="revad-base:v3.3.2"`
+**Final Build Arg Value:** `REVAD_BASE_IMAGE="revad-base:v3.3.3"`
 
 #### Explanation
 
 1. Dockerfile default: `revad-base:latest` (lowest priority, ignored)
 2. Config `build_args`: `revad-base:custom` (overridden by env)
 3. Environment variable: `revad-base:env-override` (overridden by dependency - dependencies win)
-4. Dependency resolution: `revad-base:v3.3.2` (highest priority - wins, overrides env var)
+4. Dependency resolution: `revad-base:v3.3.3` (highest priority - wins, overrides env var)
 
-The dependency resolution step constructs the image reference from the resolved dependency version (`v3.3.2`) and overrides all previous values, including environment variables.
+The dependency resolution step constructs the image reference from the resolved dependency version (`v3.3.3`) and overrides all previous values, including environment variables.
 
 ## Cache Busting
 
@@ -127,7 +127,7 @@ By default, each service computes its own cache bust value using this fallback c
 1. **Services with Git sources:** SHA256 hash of all source refs/SHAs (first 16 characters)
    - Source keys are sorted before hashing for consistency
    - Only Git sources are included (local sources are filtered out)
-   - Example: `reva:v3.3.2,nushell:0.108.0` -> `a1b2c3d4e5f6g7h8`
+   - Example: `reva:v3.3.3,nushell:0.108.0` -> `a1b2c3d4e5f6g7h8`
 2. **Services with only local sources:** Random UUID (always-bust behavior)
    - Local sources trigger always-bust cache behavior
    - Ensures builds pick up changes in local directories
@@ -180,7 +180,7 @@ Cache mounts for git clones and source downloads use CACHEBUST in their mount ID
 
 ```dockerfile
 ARG CACHEBUST="default"
-ARG SOURCE_REF="v3.3.2"
+ARG SOURCE_REF="v3.3.3"
 RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=/cache,sharing=shared \
     git clone --branch "${SOURCE_REF}" ${SOURCE_URL} /cache
 ```
@@ -284,7 +284,7 @@ nu scripts/build.nu --service cernbox-web --show-build-order --versions v1.0.0,v
 ```text
 === Build Order ===
 
-1. revad-base:v3.3.2
+1. revad-base:v3.3.3
 2. cernbox-revad:v1.0.0
 3. cernbox-web:v1.0.0
 ```
@@ -369,7 +369,7 @@ FAILED: 1
 SKIPPED: 0
 
 SUCCESS:
-  - revad-base:v3.3.2
+  - revad-base:v3.3.3
   - revad-base:v3.4.0
 
 FAILED:
@@ -400,7 +400,7 @@ When auto-building dependencies:
 
 - **Dependency build failures cause immediate stop** (fail fast, regardless of `--fail-fast` flag)
 - Error message includes context (which service was being built, which dependency failed)
-- Example: `Failed to build dependency 'revad-base:v3.3.2' while building 'cernbox-web:v1.0.0'`
+- Example: `Failed to build dependency 'revad-base:v3.3.3' while building 'cernbox-web:v1.0.0'`
 - The `--fail-fast` flag only applies to multi-version builds of the target service, not dependency builds
 
 ## Building All Services
@@ -622,7 +622,7 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 // Defaults
 defaults: {
   sources: {
-    reva: { url: "https://github.com/cs3org/reva", ref: "v3.3.2" }
+    reva: { url: "https://github.com/cs3org/reva", ref: "v3.3.3" }
   }
 }
 

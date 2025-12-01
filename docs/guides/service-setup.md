@@ -117,7 +117,7 @@ nu scripts/build.nu --service my-service
   "dockerfile": "services/cernbox-revad/Dockerfile",
   "dependencies": {
     "revad-base": {
-      "version": "v3.3.2",
+      "version": "v3.3.3",
       "build_arg": "REVAD_BASE_IMAGE"
     }
   }
@@ -128,14 +128,14 @@ nu scripts/build.nu --service my-service
 
 ```nuon
 {
-  "default": "v3.3.2",
+  "default": "v3.3.3",
   "versions": [
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "latest": true,
       "overrides": {
         "dependencies": {
-          "revad-base": {"version": "v3.3.2"}
+          "revad-base": {"version": "v3.3.3"}
         }
       }
     }
@@ -160,14 +160,14 @@ COPY ./configs/cernbox /configs/revad
 nu scripts/build.nu --service cernbox-revad
 
 # Build specific version
-nu scripts/build.nu --service cernbox-revad --version v3.3.2
+nu scripts/build.nu --service cernbox-revad --version v3.3.3
 ```
 
 **Dependency resolution:**
 
-- Service version: `v3.3.2`
-- Dependency resolves to: `revad-base:v3.3.2` (explicit in manifest)
-- Build arg: `REVAD_BASE_IMAGE=revad-base:v3.3.2`
+- Service version: `v3.3.3`
+- Dependency resolves to: `revad-base:v3.3.3` (explicit in manifest)
+- Build arg: `REVAD_BASE_IMAGE=revad-base:v3.3.3`
 
 ## Multiple Dependencies from Same Service
 
@@ -221,7 +221,7 @@ To support both Git and local sources, declare ARGs for both modes and use condi
 ```dockerfile
 # Git source args (for CI/production)
 ARG REVAD_URL="https://github.com/cs3org/reva"
-ARG REVAD_REF="v3.3.2"
+ARG REVAD_REF="v3.3.3"
 ARG REVAD_SHA=""
 
 # Local source args (for development)
@@ -257,7 +257,7 @@ For better performance with Git sources, you can combine cache mounts with condi
 
 ```dockerfile
 ARG REVAD_URL="https://github.com/cs3org/reva"
-ARG REVAD_REF="v3.3.2"
+ARG REVAD_REF="v3.3.3"
 ARG REVAD_PATH=""
 ARG REVAD_MODE=""
 ARG CACHEBUST="default"

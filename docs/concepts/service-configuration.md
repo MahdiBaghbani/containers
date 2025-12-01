@@ -83,7 +83,7 @@ Source repositories are defined in the `sources` section and auto-generate build
   "sources": {
     "revad": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
       // Auto-generates: REVAD_REF, REVAD_URL, and REVAD_SHA
     }
   }
@@ -105,7 +105,7 @@ Source repositories are defined in the `sources` section and auto-generate build
     "sources": {
       "reva": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "v3.3.2"
+        "ref": "v3.3.3"
       }
     }
   }
@@ -278,7 +278,7 @@ Dockerfiles MUST declare ARGs with sensible defaults:
 ```dockerfile
 # Example: For source key "revad", declare REVAD_URL and REVAD_REF
 ARG REVAD_URL="https://github.com/cs3org/reva"
-ARG REVAD_REF="v3.3.2"
+ARG REVAD_REF="v3.3.3"
 
 RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /destination
 ```
@@ -291,7 +291,7 @@ When using cache mounts for git clones, include CACHEBUST in the mount ID:
 
 ```dockerfile
 ARG CACHEBUST="default"
-ARG SOURCE_REF="v3.3.2"
+ARG SOURCE_REF="v3.3.3"
 RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=/cache,sharing=shared \
     git clone --branch "${SOURCE_REF}" ${SOURCE_URL} /cache
 ```
@@ -308,22 +308,22 @@ The nested syntax `${CACHEBUST:-${SOURCE_REF}}` provides fallback safety (tested
 "sources": {
   "revad": {
     "url": "https://github.com/cs3org/reva",
-    "ref": "v3.3.2"
+    "ref": "v3.3.3"
   }
 }
 ```
 
 **Generated Build Args:**
 
-- `REVAD_REF=v3.3.2`
+- `REVAD_REF=v3.3.3`
 - `REVAD_URL=https://github.com/cs3org/reva`
-- `REVAD_SHA=2912f0a` (extracted from tag `v3.3.2`)
+- `REVAD_SHA=2912f0a` (extracted from tag `v3.3.3`)
 
 **Dockerfile:**
 
 ```dockerfile
 ARG REVAD_URL="https://github.com/cs3org/reva"
-ARG REVAD_REF="v3.3.2"
+ARG REVAD_REF="v3.3.3"
 
 RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git
 ```
@@ -364,7 +364,7 @@ RUN git clone --branch ${WEB_EXTENSIONS_REF} ${WEB_EXTENSIONS_URL} /web-extensio
 "sources": {
   "revad": {
     "url": "https://github.com/cs3org/reva",
-    "ref": "v3.3.2"
+    "ref": "v3.3.3"
   },
   "nushell": {
     "url": "https://github.com/nushell/nushell",
@@ -379,7 +379,7 @@ RUN git clone --branch ${WEB_EXTENSIONS_REF} ${WEB_EXTENSIONS_URL} /web-extensio
 
 **Generated Build Args:**
 
-- `REVAD_REF=v3.3.2`, `REVAD_URL=https://github.com/cs3org/reva`, `REVAD_SHA=2912f0a`
+- `REVAD_REF=v3.3.3`, `REVAD_URL=https://github.com/cs3org/reva`, `REVAD_SHA=2912f0a`
 - `NUSHELL_REF=0.108.0`, `NUSHELL_URL=https://github.com/nushell/nushell`, `NUSHELL_SHA=da141be`
 - `UPX_REF=v5.0.2`, `UPX_URL=https://github.com/upx/upx`, `UPX_SHA=1234567`
 
@@ -393,11 +393,11 @@ Version manifests can override source refs:
 {
   "versions": [
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "v3.3.2"  // Override ref only, URL stays from base config
+            "ref": "v3.3.3"  // Override ref only, URL stays from base config
           }
         }
       }
@@ -433,7 +433,7 @@ Source overrides in version manifests use **type-aware merging**:
     "sources": {
       "reva": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "v3.3.2"
+        "ref": "v3.3.3"
       }
     }
   },
@@ -590,14 +590,14 @@ Validation ensures the convention is followed everywhere.
 // Bad
 "revad": {
   "url": "...",
-  "ref": "v3.3.2",
+  "ref": "v3.3.3",
   "build_arg": "REVAD_BRANCH"  // ERROR Remove this
 }
 
 // Good
 "revad": {
   "url": "...",
-  "ref": "v3.3.2"
+  "ref": "v3.3.3"
 }
 ```
 
@@ -609,11 +609,11 @@ Validation ensures the convention is followed everywhere.
 
 ```dockerfile
 # Bad
-ARG REVAD_BRANCH="v3.3.2"
+ARG REVAD_BRANCH="v3.3.3"
 RUN git clone --branch ${REVAD_BRANCH} ...
 
 # Good
-ARG REVAD_REF="v3.3.2"
+ARG REVAD_REF="v3.3.3"
 RUN git clone --branch ${REVAD_REF} ...
 ```
 
@@ -702,7 +702,7 @@ Internal service dependencies are defined in the `dependencies` section. The `ve
   "overrides": {
     "dependencies": {
       "revad-base": {
-        "version": "v3.3.2"
+        "version": "v3.3.3"
       }
     }
   }
@@ -779,7 +779,7 @@ For each source, two labels are automatically generated:
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     },
     "nushell": {
       "url": "https://github.com/nushell/nushell",
@@ -791,9 +791,9 @@ For each source, two labels are automatically generated:
 
 **Generated Labels:**
 
-- `org.opencontainers.image.source.reva.revision=2912f0a` (extracted from tag `v3.3.2`)
+- `org.opencontainers.image.source.reva.revision=2912f0a` (extracted from tag `v3.3.3`)
 - `org.opencloudmesh.source.reva.revision=2912f0a`
-- `org.opencloudmesh.source.reva.ref=v3.3.2`
+- `org.opencloudmesh.source.reva.ref=v3.3.3`
 - `org.opencloudmesh.source.reva.url=https://github.com/cs3org/reva`
 - `org.opencontainers.image.source.nushell.revision=da141be` (extracted from tag `0.108.0`)
 - `org.opencloudmesh.source.nushell.revision=da141be`
@@ -804,8 +804,8 @@ For each source, two labels are automatically generated:
 
 When SHA extraction fails (network error, git unavailable, invalid ref), labels include a `missing:` prefix:
 
-- `org.opencontainers.image.source.reva.revision=missing:v3.3.2`
-- `org.opencloudmesh.source.reva.revision=missing:v3.3.2`
+- `org.opencontainers.image.source.reva.revision=missing:v3.3.3`
+- `org.opencloudmesh.source.reva.revision=missing:v3.3.3`
 
 This clearly indicates that SHA extraction failed and the ref value is used instead.
 
@@ -818,7 +818,7 @@ You can override auto-generated source revision labels by defining them manually
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     }
   },
   "labels": {
@@ -844,7 +844,7 @@ WARNING: [my-service] User-defined label 'org.opencontainers.image.source.reva.r
 #### Label Format
 
 - **SHA Value**: 7-character hexadecimal string (e.g., `2912f0a`)
-- **Missing SHA**: `missing:{ref}` format (e.g., `missing:v3.3.2`)
+- **Missing SHA**: `missing:{ref}` format (e.g., `missing:v3.3.3`)
 - **Source Key**: Lowercase alphanumeric with underscores (matches source key from config)
 
 For complete details on SHA extraction and caching, see [Source Build Arguments Convention](#source-build-arguments-convention) above.

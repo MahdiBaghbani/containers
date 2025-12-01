@@ -31,7 +31,7 @@ Cache mounts use `CACHEBUST` in mount IDs to ensure cache invalidation when sour
 
 ```dockerfile
 ARG CACHEBUST="default"
-ARG SOURCE_REF="v3.3.2"
+ARG SOURCE_REF="v3.3.3"
 RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=/cache,sharing=shared \
     git clone --branch "${SOURCE_REF}" ${SOURCE_URL} /cache
 ```
@@ -159,7 +159,7 @@ Build arguments are injected by the build system:
 
 ```dockerfile
 ARG CACHEBUST="default"
-ARG REVAD_REF="v3.3.2"
+ARG REVAD_REF="v3.3.3"
 ARG REVAD_URL="https://github.com/cs3org/reva"
 ```
 

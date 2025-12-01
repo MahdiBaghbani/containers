@@ -1,12 +1,13 @@
 {
-  "default": "v3.3.2",
+  "default": "v3.3.3",
 
   "defaults": {
     "sources": {
-      "reva": {
-        "url": "https://github.com/cs3org/reva"
+      "revad": {
+        "url": "https://github.com/cs3org/reva",
+        "ref": "v3.3.3"
       },
-      "reva_plugins": {
+      "revad_plugins": {
         "url": "https://github.com/cernbox/reva-plugins",
         "ref": "master"
       }
@@ -33,7 +34,7 @@
       "latest": false,
       "overrides": {
         "sources": {
-          "reva": {
+          "revad": {
             "url": "https://github.com/MahdiBaghbani/reva-opencloud",
             "ref": "feature/multi-reva-setup-with-localhome"
           }
@@ -61,7 +62,7 @@
       "latest": false,
       "overrides": {
         "sources": {
-          "reva": {
+          "revad": {
             "ref": "master"
           }
         },
@@ -84,26 +85,26 @@
       }
     },
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "latest": true,
       "overrides": {
         "sources": {
-          "reva": {
-            "ref": "v3.3.2"
+          "revad": {
+            "ref": "v3.3.3"
           }
         },
         "platforms": {
           "production": {
             "dependencies": {
               "revad-base": {
-                "version": "v3.3.2-production"
+                "version": "v3.3.3-production"
               }
             }
           },
           "development": {
             "dependencies": {
               "revad-base": {
-                "version": "v3.3.2-development"
+                "version": "v3.3.3-development"
               }
             }
           }

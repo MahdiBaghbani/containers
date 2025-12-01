@@ -1,10 +1,11 @@
 {
-  "default": "v3.3.2",
-  
+  "default": "v3.3.3",
+
   "defaults": {
     "sources": {
       "revad": {
-        "url": "https://github.com/cs3org/reva"
+        "url": "https://github.com/cs3org/reva",
+        "ref": "v3.3.3"
       }
     },
     "external_images": {
@@ -34,7 +35,7 @@
       }
     }
   },
-  
+
   "versions": [
     {
       "name": "mahdi_fix_localhome",
@@ -60,12 +61,12 @@
       }
     },
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "latest": true,
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "v3.3.2"
+            "ref": "v3.3.3"
           }
         }
       }

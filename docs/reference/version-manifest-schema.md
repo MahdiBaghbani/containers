@@ -91,10 +91,10 @@ Version Overrides (with version defaults already merged)
 
 ```nuon
 {
-  "default": "v3.3.2",
+  "default": "v3.3.3",
   "versions": [
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "overrides": {
         "external_images": {
           "build": { "tag": "1.25-trixie" }
@@ -137,7 +137,7 @@ Version Overrides (with version defaults already merged)
 
 ```nuon
 {
-  "default": "v3.3.2",
+  "default": "v3.3.3",
   "defaults": {
     "external_images": {
       "build": { "tag": "1.25-trixie" }
@@ -155,7 +155,7 @@ Version Overrides (with version defaults already merged)
   },
   "versions": [
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "overrides": {}
     },
     {
@@ -275,7 +275,7 @@ If you specify `--version v1.0.0-debian` on the command line, the build system w
 ### Tag Generation Rules
 
 - Final tags = `[name]` + (if `latest: true` then `["latest"]`) + `tags`
-- Example: `name: "v3.3.2"`, `latest: true`, `tags: ["v3.3", "v3"]` -> Final: `["v3.3.2", "latest", "v3.3", "v3"]`
+- Example: `name: "v3.3.3"`, `latest: true`, `tags: ["v3.3", "v3"]` -> Final: `["v3.3.3", "latest", "v3.3", "v3"]`
 - The `name` and `"latest"` are automatically generated - do NOT include them in the `tags` array
 - All tags must be globally unique across all versions in the manifest
 
@@ -324,7 +324,7 @@ When a service has a `platforms.nuon` manifest, you can override configuration p
         },
         "dependencies": {
           "revad-base": {
-            "version": "v3.3.2"
+            "version": "v3.3.3"
           }
         },
         // Platform-specific overrides (override global for specific platforms)
@@ -391,7 +391,7 @@ Platform-specific overrides win over global overrides for the same field. All fi
         },
         "dependencies": {
           "revad-base": {
-            "version": "v3.3.2"
+            "version": "v3.3.3"
           }
         }
       }

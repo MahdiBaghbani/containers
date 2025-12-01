@@ -59,7 +59,7 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     }
   }
 }
@@ -69,7 +69,7 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
   "overrides": {
     "sources": {
       "reva": {
-        "ref": "v3.3.2-custom"
+        "ref": "v3.3.3-custom"
       }
     }
   }
@@ -91,7 +91,7 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
     "sources": {
       "reva": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "v3.3.2"
+        "ref": "v3.3.3"
       }
     }
   }
@@ -111,7 +111,7 @@ Git sources use `url` and `ref` fields:
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     }
   }
 }
@@ -272,7 +272,7 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
     "overrides": {
       "dependencies": {
         "revad-base": {
-          "version": "v3.3.2"
+          "version": "v3.3.3"
         }
       }
     }
@@ -377,7 +377,7 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
   "sources": {
     "reva": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     }
   },
 
@@ -426,7 +426,7 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
       },
       "dependencies": {
         "revad-base": {
-          "version": "v3.3.2"
+          "version": "v3.3.3"
         }
       }
     }
@@ -476,7 +476,7 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
       "sources": {
         "reva": {
           "url": "https://github.com/cs3org/reva",
-          "ref": "v3.3.2"
+          "ref": "v3.3.3"
         }
       },
       "external_images": {
@@ -486,7 +486,7 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
       },
       "dependencies": {
         "revad-base": {
-          "version": "v3.3.2"
+          "version": "v3.3.3"
         }
       }
     }
@@ -547,7 +547,7 @@ Service depending on multiple services with different versions:
   "overrides": {
     "dependencies": {
       "revad-base": {
-        "version": "v3.3.2"
+        "version": "v3.3.3"
       },
       "common-tools-builder": {
         "version": "v1.0.0-debian"
@@ -562,7 +562,7 @@ Service depending on multiple services with different versions:
 
 ### Dependency Resolution
 
-- `revad-base` resolves to `revad-base:v3.3.2` (version from overrides)
+- `revad-base` resolves to `revad-base:v3.3.3` (version from overrides)
 - `common-tools-builder` resolves to `common-tools:v1.0.0-debian` (version from overrides)
 - `common-tools-runtime` resolves to `common-tools:v1.0.0-alpine` (version from overrides)
 

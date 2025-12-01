@@ -46,7 +46,7 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
 WORKDIR /
 
 ARG REVAD_URL="https://github.com/cs3org/reva"
-ARG REVAD_REF="v3.3.2"
+ARG REVAD_REF="v3.3.3"
 ARG REVAD_SHA=""
 ARG REVAD_PATH=""
 ARG REVAD_MODE=""

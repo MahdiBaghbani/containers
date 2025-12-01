@@ -31,16 +31,6 @@
 
   "versions": [
     {
-      "name": "local",
-      "overrides": {
-        "sources": {
-          "gaia": {
-            "path": ".repos/gaia"
-          }
-        }
-      }
-    },
-    {
       "name": "master",
       "latest": true
     }

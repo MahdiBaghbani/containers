@@ -103,7 +103,7 @@ nu scripts/build.nu --all-services --show-build-order
 Build a specific version from the manifest:
 
 ```bash
-nu scripts/build.nu --service revad-base --version v3.3.2
+nu scripts/build.nu --service revad-base --version v3.3.3
 ```
 
 ### `--all-versions`
@@ -341,7 +341,7 @@ nu scripts/build.nu --service cernbox-web --show-build-order --latest-only
 ```text
 === Build Order ===
 
-1. revad-base:v3.3.2
+1. revad-base:v3.3.3
 2. cernbox-revad:v1.0.0
 3. cernbox-web:v1.0.0
 ```
@@ -352,12 +352,12 @@ nu scripts/build.nu --service cernbox-web --show-build-order --latest-only
 === Build Order ===
 
 Version: v1.0.0
-1. revad-base:v3.3.2
+1. revad-base:v3.3.3
 2. cernbox-revad:v1.0.0
 3. cernbox-web:v1.0.0
 
 Version: v1.1.0
-1. revad-base:v3.3.2
+1. revad-base:v3.3.3
 2. cernbox-revad:v1.1.0
 3. cernbox-web:v1.1.0
 ```
@@ -370,12 +370,12 @@ For multi-platform services, each version/platform combination is displayed sepa
 === Build Order ===
 
 Version: v1.0.0 (production)
-1. revad-base:v3.3.2:production
+1. revad-base:v3.3.3:production
 2. cernbox-revad:v1.0.0:production
 3. cernbox-web:v1.0.0:production
 
 Version: v1.0.0 (development)
-1. revad-base:v3.3.2:development
+1. revad-base:v3.3.3:development
 2. cernbox-revad:v1.0.0:development
 3. cernbox-web:v1.0.0:development
 ```
@@ -424,7 +424,7 @@ nu scripts/build.nu --service revad-base --all-versions --fail-fast
 Push built images to registry:
 
 ```bash
-nu scripts/build.nu --service revad-base --version v3.3.2 --push
+nu scripts/build.nu --service revad-base --version v3.3.3 --push
 ```
 
 ### `--progress <string>`

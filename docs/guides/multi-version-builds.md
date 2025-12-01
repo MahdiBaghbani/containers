@@ -157,7 +157,7 @@ When building with `--version v1.0.0-debian`, the build system detects the platf
 **Tag Generation Rules:**
 
 - Final tags = `[name]` + (if `latest: true` then `["latest"]`) + `tags`
-- Example: `name: "v3.3.2"`, `latest: true`, `tags: ["v3.3", "v3"]` -> Final: `["v3.3.2", "latest", "v3.3", "v3"]`
+- Example: `name: "v3.3.3"`, `latest: true`, `tags: ["v3.3", "v3"]` -> Final: `["v3.3.3", "latest", "v3.3", "v3"]`
 - The `name` and `"latest"` are automatically generated - do NOT include them in the `tags` array
 - All tags must be globally unique across all versions in the manifest
 
@@ -194,7 +194,7 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 
 ```nuon
 {
-  "default": "v3.3.2",
+  "default": "v3.3.3",
   "defaults": {
     "sources": {
       "reva": {
@@ -212,10 +212,10 @@ Source configurations use **type-aware merging** that supports partial Git sourc
       }
     },
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "overrides": {
         "sources": {
-          "reva": { "ref": "v3.3.2" }  // url from defaults
+          "reva": { "ref": "v3.3.3" }  // url from defaults
         }
       }
     }
@@ -326,10 +326,10 @@ When multiple versions share the same configuration values, you can use the opti
 
 ```nuon
 {
-  "default": "v3.3.2",
+  "default": "v3.3.3",
   "versions": [
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "overrides": {
         "external_images": {
           "build": { "tag": "1.25-trixie" }
@@ -358,7 +358,7 @@ When multiple versions share the same configuration values, you can use the opti
 
 ```nuon
 {
-  "default": "v3.3.2",
+  "default": "v3.3.3",
   "defaults": {
     "external_images": {
       "build": { "tag": "1.25-trixie" }
@@ -369,7 +369,7 @@ When multiple versions share the same configuration values, you can use the opti
   },
   "versions": [
     {
-      "name": "v3.3.2",
+      "name": "v3.3.3",
       "overrides": {}
     },
     {
@@ -466,7 +466,7 @@ Tags are auto-generated from the manifest:
 
 Dependencies resolve their version in this order:
 
-1. **Explicit version** in dependency config: `"version": "v3.3.2"` -> always use this
+1. **Explicit version** in dependency config: `"version": "v3.3.3"` -> always use this
 2. **Parent service version** (auto-match) -> inherit from parent if no explicit version
 3. **Error**: If no version can be determined, build fails with clear error message
 
@@ -807,11 +807,11 @@ nu scripts/build.nu --service revad-base --all-versions
     {
       "name": "stable",
       "latest": true,
-      // Tags: ["stable", "latest", "v3.3.2"]
-      "tags": ["v3.3.2"],  // "stable" and "latest" are auto-generated
+      // Tags: ["stable", "latest", "v3.3.3"]
+      "tags": ["v3.3.3"],  // "stable" and "latest" are auto-generated
       "overrides": {
         "sources": {
-          "reva": {"ref": "v3.3.2"}
+          "reva": {"ref": "v3.3.3"}
         }
       }
     },

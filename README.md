@@ -114,7 +114,7 @@ Services are defined in `services/{service-name}.nuon`:
   "sources": {
     "revad": {
       "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.2"
+      "ref": "v3.3.3"
     }
   }
 }

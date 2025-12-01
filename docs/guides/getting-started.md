@@ -49,7 +49,7 @@ This generates:
 nu scripts/build.nu --service revad-base
 
 # Build specific version
-nu scripts/build.nu --service revad-base --version v3.3.2
+nu scripts/build.nu --service revad-base --version v3.3.3
 
 # Build all versions
 nu scripts/build.nu --service revad-base --all-versions

@@ -47,7 +47,7 @@
     "revad": {
       // Git source example - generates: REVAD_REF and REVAD_URL
       "url": "https://github.com/cs3org/reva", // string (required for git sources) - repository URL
-      "ref": "v3.3.2" // string (required for git sources) - branch/tag/commit
+      "ref": "v3.3.3" // string (required for git sources) - branch/tag/commit
       // OR use path for local development:
       // "path": "../reva" // string (required for local sources) - relative or absolute path to local directory (mutually exclusive with url/ref)
     },

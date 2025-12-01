@@ -1,5 +1,5 @@
 {
-  "default": "v8.1.0-nc-v32.0.2",
+  "default": "v8.1.0-nc-master",
 
   "defaults": {
     "sources": {
@@ -17,42 +17,42 @@
         "version": "v1.0.0-debian"
       },
       "nextcloud": {
-        "version": "v32.0.2-debian"
+        "version": "master-debian"
       }
     }
   },
 
   "versions": [
     {
-      "name": "v8.1.0-ocm-nc-v32.0.2",
+      "name": "v8.1.0-ocm-nc-master",
       "latest": false,
       "overrides": {
         "sources": {
           "contacts": {
-            "url": "https://github.com/sara-nl/nextcloud-contacts",
-            "ref": "invite-for-cloudid-exchange"
+            "url": "https://github.com/MahdiBaghbani/nextcloud-contacts",
+            "ref": "mahdi/fix/ui-optional-email"
           }
         }
       }
     },
     {
-      "name": "v8.1.0-nc-v32.0.2",
-      "latest": true,
-      "overrides": {
-        "sources": {
-          "contacts": {
-            "ref": "v8.1.0"
-          }
-        }
-      }
-    },
-    {
-      "name": "main-nc-v32.0.2",
+      "name": "main-nc-master",
       "latest": false,
       "overrides": {
         "sources": {
           "contacts": {
             "ref": "main"
+          }
+        }
+      }
+    },
+    {
+      "name": "v8.1.0-nc-master",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "ref": "v8.1.0"
           }
         }
       }

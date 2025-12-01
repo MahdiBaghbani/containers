@@ -37,7 +37,7 @@ def main [--verbose] {
           name: "v1.0.0",
           overrides: {
             sources: {
-              revad: { ref: "v3.3.2" }
+              revad: { ref: "v3.3.3" }
             }
           }
         }
@@ -45,7 +45,7 @@ def main [--verbose] {
     }
     let version_spec = $manifest.versions.0
     let result = (apply-version-defaults $manifest $version_spec)
-    if ($result.overrides.sources.revad.ref) != "v3.3.2" {
+    if ($result.overrides.sources.revad.ref) != "v3.3.3" {
       error make {msg: "Version spec should be unchanged when no defaults"}
     }
     true
@@ -480,7 +480,7 @@ def main [--verbose] {
       default: "production",
       defaults: {
         sources: {
-          revad: { ref: "v3.3.2" }  # Forbidden in platform defaults
+          revad: { ref: "v3.3.3" }  # Forbidden in platform defaults
         }
       },
       platforms: [
@@ -507,7 +507,7 @@ def main [--verbose] {
     if not ($v_validation.valid and $p_validation.valid) {
       error make {msg: "Existing service should validate without defaults"}
     }
-    let version_spec = (get-version-spec $versions "v3.3.2")
+    let version_spec = (get-version-spec $versions "v3.3.3")
     if not ("overrides" in ($version_spec | columns)) {
       error make {msg: "Version spec should have overrides field"}
     }
@@ -955,7 +955,7 @@ def main [--verbose] {
         sources: {
           reva: {
             url: "https://github.com/cs3org/reva",
-            ref: "v3.3.2"
+            ref: "v3.3.3"
           }
         }
       },
@@ -984,8 +984,8 @@ def main [--verbose] {
     if not ("ref" in ($result.overrides.sources.reva | columns)) {
       error make {msg: "ref should be preserved from defaults when override only has url"}
     }
-    if ($result.overrides.sources.reva.ref) != "v3.3.2" {
-      error make {msg: $"ref should be 'v3.3.2', got '($result.overrides.sources.reva.ref)'"}
+    if ($result.overrides.sources.reva.ref) != "v3.3.3" {
+      error make {msg: $"ref should be 'v3.3.3', got '($result.overrides.sources.reva.ref)'"}
     }
     true
   } $verbose_flag)
@@ -999,7 +999,7 @@ def main [--verbose] {
         sources: {
           reva: {
             url: "https://github.com/cs3org/reva",
-            ref: "v3.3.2"
+            ref: "v3.3.3"
           }
         }
       },

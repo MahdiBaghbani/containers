@@ -296,13 +296,13 @@ def main [--verbose] {
   # Validates that graph construction includes version in node keys
   let test9 = (run-test "Test 9: Build Order - Version-aware graph" {
     with-test-cleanup {
-      let test_env = (setup-test-environment "test-service" "v3.3.2")
+      let test_env = (setup-test-environment "test-service" "v3.3.3")
     
       # Build dependency graph
       let graph = (build-dependency-graph-with-mocks "test-service" $test_env.version_spec $test_env.merged_cfg "" $test_env.platforms $test_env.registry_info.is_local $test_env.registry_info)
     
       # Verify graph contains version in node keys
-      let expected_nodes = ["test-service:v3.3.2"]
+      let expected_nodes = ["test-service:v3.3.3"]
       let expected_edges = []
       assert-graph-structure $graph $expected_nodes $expected_edges
     
@@ -571,13 +571,13 @@ def main [--verbose] {
   # Validates that graph construction works with specific version/platform
   let test19 = (run-test "Test 19: Continue-on-Failure - Version/platform selection" {
     with-test-cleanup {
-      let test_env = (setup-test-environment "test-service" "v3.3.2")
+      let test_env = (setup-test-environment "test-service" "v3.3.3")
     
       # Build dependency graph
       let graph = (build-dependency-graph-with-mocks "test-service" $test_env.version_spec $test_env.merged_cfg "" $test_env.platforms $test_env.registry_info.is_local $test_env.registry_info)
     
       # Verify graph contains version in node keys
-      let expected_nodes = ["test-service:v3.3.2"]
+      let expected_nodes = ["test-service:v3.3.3"]
       let expected_edges = []
       assert-graph-structure $graph $expected_nodes $expected_edges
     
