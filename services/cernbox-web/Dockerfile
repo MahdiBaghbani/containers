@@ -64,14 +64,25 @@ WORKDIR /build
 
 ARG WEB_URL=https://github.com/cernbox/web
 ARG WEB_REF=cernbox
+ARG WEB_PATH=""
+ARG WEB_MODE=""
 ARG CACHEBUST="default"
 
+# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=cernbox-web-web-git-${CACHEBUST:-${WEB_REF}},target=/src/web-git-cache,sharing=shared \
+    --mount=type=bind,source=${WEB_PATH:-.},target=/tmp/local-web,ro \
+    if [ "$WEB_MODE" = "local" ]; then \
+    echo "Building from local source: ${WEB_PATH}" && \
+    mkdir -p /build/web && \
+    cp -a /tmp/local-web/. /build/web; \
+    else \
+    echo "Building from git: ${WEB_URL} @ ${WEB_REF}" && \
     mkdir -p /src/web-git-cache && \
     if [ ! -d /src/web-git-cache/.git ]; then \
     git clone --depth 1 --branch "${WEB_REF}" ${WEB_URL} /src/web-git-cache; \
     fi && \
-    cp -a /src/web-git-cache/. /build/web
+    cp -a /src/web-git-cache/. /build/web; \
+    fi
 
 WORKDIR /build/web
 
