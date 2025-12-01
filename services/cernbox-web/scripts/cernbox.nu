@@ -50,26 +50,27 @@ def main [] {
         try { $env.REVAD_PORT } catch { "443" }
     })
     
-    # REVAD_HOST defaults to CERNBOX_WEB_HOSTNAME but can be overridden
-    let revad_host = (try { $env.REVAD_HOST } catch { $cernbox_web_hostname })
+    # Gateway environment variables
+    let gateway_host = (try { $env.REVAD_GATEWAY_HOST } catch { "cernbox-1-test-revad-gateway" })
+    let gateway_port = (try { $env.REVAD_GATEWAY_PORT } catch { $revad_port })
     
-    # Validate all REVAD_* vars are set
-    if ($revad_protocol | str trim | is-empty) or ($revad_port | str trim | is-empty) or ($revad_host | str trim | is-empty) {
-        print $"Error: Failed to derive REVAD_PROTOCOL, REVAD_PORT, or REVAD_HOST"
-        print $"  REVAD_PROTOCOL=($revad_protocol)"
-        print $"  REVAD_PORT=($revad_port)"
-        print $"  REVAD_HOST=($revad_host)"
-        exit 1
-    }
-    
-    # Export vars for nginx envsubst processing
+    # Export vars for nginx template processing
     $env.REVAD_PROTOCOL = $revad_protocol
-    $env.REVAD_PORT = $revad_port
-    $env.REVAD_HOST = $revad_host
+    $env.REVAD_GATEWAY_HOST = $gateway_host
+    $env.REVAD_GATEWAY_PORT = $gateway_port
     $env.CERNBOX = $cernbox_web_hostname
     
     let idp_domain = (try { $env.IDP_DOMAIN } catch { "idp.docker" })
-    $env.IDP_URL = (try { $env.IDP_URL } catch { $"https://($idp_domain)" })
+    # Construct IDP_URL from IDP_DOMAIN, IDP_PORT, and IDP_PROTOCOL if IDP_URL is not provided
+    $env.IDP_URL = (try { $env.IDP_URL } catch {
+        let idp_port = (try { $env.IDP_PORT } catch {
+            if $revad_tls_enabled == "false" { "80" } else { "443" }
+        })
+        let idp_protocol = (try { $env.IDP_PROTOCOL } catch {
+            if $revad_tls_enabled == "false" { "http" } else { "https" }
+        })
+        $"($idp_protocol)://($idp_domain):($idp_port)"
+    })
     $env.TLS_CRT = (try { $env.TLS_CRT } catch { "/tls/server.crt" })
     $env.TLS_KEY = (try { $env.TLS_KEY } catch { "/tls/server.key" })
     
@@ -88,9 +89,9 @@ def main [] {
     # Use Nushell string substitution instead of envsubst (more reliable and doesn't require external deps)
     let template_content = (open $source_template)
     let processed_content = ($template_content
-        | str replace -a '$REVAD_HOST' $revad_host
-        | str replace -a '$REVAD_PORT' $revad_port
         | str replace -a '$REVAD_PROTOCOL' $revad_protocol
+        | str replace -a '$REVAD_GATEWAY_HOST' $gateway_host
+        | str replace -a '$REVAD_GATEWAY_PORT' $gateway_port
         | str replace -a '$CERNBOX' $cernbox_web_hostname
         | str replace -a '$IDP_URL' (try { $env.IDP_URL } catch { "https://idp.docker" })
         | str replace -a '$TLS_CRT' (try { $env.TLS_CRT } catch { "/tls/server.crt" })
@@ -135,12 +136,6 @@ def main [] {
     let CONFIG_DIR = "/configs/cernbox-web"
     let config_source = $"($CONFIG_DIR)/config.json"
     let config_dest = "/var/www/web/config.json"
-    let web_original = "your.nginx.org"
-    let web_replacement = $cernbox_web_hostname
-    let idp_original = "your-idp.org:your-idp-port"
-    let idp_hostname = (try { $env.CERNBOX_IDP_HOSTNAME } catch { "idp.docker" })
-    let idp_port = (try { $env.CERNBOX_IDP_PORT } catch { "443" })
-    let idp_replacement = $"($idp_hostname):($idp_port)"
     
     if not ($config_dest | path exists) {
         if not ($CONFIG_DIR | path exists) {
@@ -148,8 +143,35 @@ def main [] {
         }
         ^cp $config_source $config_dest
         ^chown nginx:nginx $config_dest
-        ^sed -i $"s#($web_original)#($web_replacement)#g" $config_dest
-        ^sed -i $"s#($idp_original)#($idp_replacement)#g" $config_dest
+        
+        # Replace web server URL (your.nginx.org -> actual hostname)
+        # Use WEB_DOMAIN if available, otherwise use CERNBOX_WEB_HOSTNAME
+        let web_domain = (try { $env.WEB_DOMAIN } catch { $cernbox_web_hostname })
+        # Prioritize WEB_PROTOCOL if set (external protocol, e.g., HTTPS via Traefik)
+        # Fallback to deriving from WEB_TLS_ENABLED if WEB_PROTOCOL not set
+        let web_protocol = (try { $env.WEB_PROTOCOL } catch {
+            (if $web_tls_enabled == "false" { "http" } else { "https" })
+        })
+        let web_url = $"($web_protocol)://($web_domain)"
+        let web_pattern = "https://your.nginx.org"
+        ^sed -i $"s|($web_pattern)|($web_url)|g" $config_dest
+        
+        # Replace IDP URL (your-idp.org:your-idp-port -> actual IDP URL)
+        # Parse IDP_URL to extract hostname:port, or construct from IDP_DOMAIN, IDP_PORT, and IDP_PROTOCOL
+        let idp_url_final = (try { $env.IDP_URL } catch {
+            let idp_domain_final = (try { $env.IDP_DOMAIN } catch { "idp.docker" })
+            let idp_port_final = (try { $env.IDP_PORT } catch { 
+                if $revad_tls_enabled == "false" { "80" } else { "443" }
+            })
+            let idp_protocol_final = (try { $env.IDP_PROTOCOL } catch {
+                if $revad_tls_enabled == "false" { "http" } else { "https" }
+            })
+            $"($idp_protocol_final)://($idp_domain_final):($idp_port_final)"
+        })
+        # Extract hostname:port from IDP_URL (remove protocol)
+        let idp_host_port = ($idp_url_final | str replace -a "https://" "" | str replace -a "http://" "")
+        let idp_pattern = "your-idp.org:your-idp-port"
+        ^sed -i $"s|($idp_pattern)|($idp_host_port)|g" $config_dest
     }
     
     # Replace mesh directory endpoint in built JS files
