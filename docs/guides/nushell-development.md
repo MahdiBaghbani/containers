@@ -693,6 +693,7 @@ export def set-mock-platform-behavior [service: string, has_platforms: bool] {
 16. **Use `any` type for nullable parameters** - `param: any = null` not `param: record = null`
 17. **Use `not ($x in $y)` for membership tests** - `$x not in $y` is a syntax error
 18. **Use explicit closure parameters in `where`** - `where {|item| ...}` is more reliable than `where { ... }` with implicit `$it`
+19. **Save mutable vars before closures** - `let prev = $mut_var` then use `$prev` in `catch { $prev }`
 
 ## Command Execution
 
@@ -893,6 +894,21 @@ ls $dir | where type == file | get name | where {|n| ($n | str ends-with ".toml"
 
 **Key Insight**: The `=~` operator doesn't support escaped regex patterns like `"\.toml$"`. Use closures with string methods (`str ends-with`, `str starts-with`, `str contains`) for file extension filtering.
 
+#### Error: "Capture of mutable variable" in closure?
+
+```nu
+# WRONG - Mutable variable captured in catch closure
+mut cache = {}
+$cache = (try { $result.field } catch { $cache })  # Linting error!
+
+# CORRECT - Save to immutable variable first
+mut cache = {}
+let prev_cache = $cache
+$cache = (try { $result.field } catch { $prev_cache })  # Works!
+```
+
+**Key Insight**: Nushell closures (including `catch` blocks) cannot capture mutable variables. Always save the mutable value to an immutable `let` binding before using it in a closure.
+
 ## Version-Specific Notes
 
 - Some features (like `?` operator) require newer Nushell versions
@@ -915,6 +931,39 @@ $value | into string
 # To record/table
 [[name age]; [Alice 30] [Bob 25]]  # table literal
 {name: "Alice", age: 30}  # record literal
+```
+
+## Critical: Mutable Variable Capture in Closures
+
+**PRODUCTION BUG**: Nushell does not allow capturing mutable variables inside closures (including `catch` blocks).
+
+```nu
+# WRONG - Linting error: "Capture of mutable variable"
+mut cache = {}
+$cache = (try { $result.field } catch { $cache })  # ERROR!
+```
+
+**Solution**: Save the mutable value to an immutable variable before the closure:
+
+```nu
+# CORRECT - Use immutable copy in catch
+mut cache = {}
+let prev_cache = $cache  # Immutable copy
+$cache = (try { $result.field } catch { $prev_cache })  # Works!
+```
+
+**Impact**: This affected production code in `build.nu` where `$sha_cache` was captured in `catch` blocks, causing linting errors.
+
+**Pattern for safe fallback with mutable variables**:
+
+```nu
+mut accumulator = initial_value
+
+for item in $items {
+  let prev_value = $accumulator  # Save before try-catch
+  let result = (some-operation $item)
+  $accumulator = (try { $result.field } catch { $prev_value })  # Use saved value
+}
 ```
 
 ## Test Infrastructure and Isolation

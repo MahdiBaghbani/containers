@@ -478,9 +478,10 @@ export def main [
         let build_label = $"($service):($expanded_version.name)-($expanded_version.platform)"
         print $"\n--- Building ($build_label) ---"
         
+        let prev_cache = $sha_cache
         let result = (try {
           let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
-          $sha_cache = $build_result.sha_cache  # Update cache for next build
+          $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
         } catch {|err|
@@ -520,9 +521,10 @@ export def main [
         let build_label = $"($service):($version_spec.name)"
         print $"\n--- Building ($build_label) ---"
         
+        let prev_cache = $sha_cache
         let result = (try {
           let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
-          $sha_cache = $build_result.sha_cache  # Update cache for next build
+          $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
         } catch {|err|
@@ -607,13 +609,15 @@ export def main [
     }
     
     for expanded_version in $expanded_versions {
+      let prev_cache = $sha_cache
       let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
-      $sha_cache = $build_result.sha_cache  # Update cache for next build
+      $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
     }
   } else {
     # Single-platform build (no platforms manifest)
+    let prev_cache = $sha_cache
     let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
-    $sha_cache = $build_result.sha_cache  # Update cache (though this is last build, cache update not needed)
+    $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
   }
 }
 
@@ -1016,7 +1020,7 @@ def build-all-services [
             successes: ($acc.successes | append {label: $result.label, success: true}),
             failures: $acc.failures,
             skipped: $acc.skipped,
-            cache: $build_result.sha_cache  # Update cache in accumulator
+            cache: (try { $build_result.sha_cache } catch { $acc.cache })  # Update cache or preserve existing
           }
         } else {
           # If fail-fast, we'll break in the outer function
@@ -1449,9 +1453,10 @@ def build-single-version [
           $"($dep_service):($dep_version_spec.name)"
         })
         
+        let prev_cache = $current_cache
         try {
           let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps)
-          $current_cache = $build_result.sha_cache  # Update cache for next dependency
+          $current_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
           error make {
