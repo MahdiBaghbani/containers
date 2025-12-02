@@ -46,10 +46,8 @@ export def detect-build [] {
     ref: "test-branch",
     sha: "test-sha-1234567890abcdef",
     commit_message: "Test commit message",
-    is_release: false,
-    build_type: "local",
-    platforms: ["linux/amd64"],
-    base_tag: "local"
+    is_local: true,
+    platforms: ["linux/amd64"]
   }
 }
 

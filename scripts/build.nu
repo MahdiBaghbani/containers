@@ -985,9 +985,9 @@ def build-all-services [
           if $tag_deps { $extra_tag } else { "" }
         })
         
-        # Re-detect info and meta for this build
+        # Registry info and meta (meta is computed once per invocation)
         let node_info = (get-registry-info)
-        let node_meta = (detect-build)
+        let node_meta = $meta
         
         # Build label for reporting
         let build_label = (if ($node_platform | str length) > 0 {
@@ -1247,11 +1247,6 @@ def build-single-version [
   
   let cfg = (load-service-config $service $version_spec $current_platform $platforms)
   
-  if $meta.build_type == "skip" {
-    print "No build triggered (no release tag and no dev/stage token)." 
-    return
-  }
-  
   # Reject local sources in CI/production builds (must happen before SHA extraction)
   # Cache source_types for use in build arg generation and other tasks
   let cfg_sources = (try { $cfg.sources } catch { {} })
@@ -1263,7 +1258,7 @@ def build-single-version [
   
   if not ($cfg_sources | is-empty) {
     let local_sources = ($source_types | columns | where {|k| ($source_types | get $k) == "local"})
-    if ($local_sources | length) > 0 and $meta.build_type != "local" {
+    if ($local_sources | length) > 0 and not $meta.is_local {
       error make {
         msg: ($"Error: Local sources are not allowed in CI builds. Use git sources instead.\n" +
               $"Local sources found: [($local_sources | str join ', ')]")
@@ -1298,7 +1293,7 @@ def build-single-version [
     sync-and-validate-ca $service $cfg $ca_name
   }
   
-  let is_local = ($meta.build_type == "local")
+  let is_local = $meta.is_local
   let version_tag = $version_spec.name
   
   # Track cache updates in function scope
@@ -1410,14 +1405,9 @@ def build-single-version [
         let dep_version_name = ($dep_parts | get 1)
         let dep_platform = (if ($dep_parts | length) > 2 { $dep_parts | get 2 } else { "" })
         
-        # Re-detect info and meta for dependency
+        # Registry info and meta (meta is computed once per invocation)
         let dep_info = (get-registry-info)
-        let dep_meta = (detect-build)
-        
-        # Add cache_bust_override to dep_meta if set
-        if ($cache_bust_override | str length) > 0 {
-          # Note: meta is read-only, we'll pass cache_bust_override separately
-        }
+        let dep_meta = $meta
         
         # Resolve dependency version_spec
         let dep_version_spec = (resolve-dependency-version-spec $dep_node $dep_platform)

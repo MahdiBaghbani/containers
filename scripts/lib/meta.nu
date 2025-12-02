@@ -32,7 +32,9 @@ def detect-local-platform [] {
   $platform
 }
 
-# Detect build context (local, CI, release, dev, stage)
+# Detect build environment and provenance
+# Returns metadata for local vs CI detection, commit info, and default platforms
+# See docs/concepts/build-system.md for details
 export def detect-build [] {
   let ref = (try {
     (try { $env.GITHUB_REF } catch { "" }) | default (git rev-parse --abbrev-ref HEAD | str trim)
@@ -51,7 +53,6 @@ export def detect-build [] {
   })
 
   let in_ci = (((try { $env.GITHUB_ACTIONS } catch { "" }) | default "") | str length) > 0
-  let has_git = (($ref | str length) > 0) or (($sha | str length) > 0)
   # is_local depends only on CI environment, not git presence
   # Having a git repo doesn't mean we're in CI - we can build locally in a git repo
   let is_local = not $in_ci
@@ -62,35 +63,17 @@ export def detect-build [] {
       ref: "",
       sha: "",
       commit_message: "",
-      is_release: false,
-      build_type: "local",
-      platforms: [$local_platform],
-      base_tag: "local"
+      is_local: true,
+      platforms: [$local_platform]
     }
   }
 
-  let is_tag = ($ref | str starts-with "refs/tags/")
-  let tag = (if $is_tag { $ref | str replace -a "refs/tags/" "" } else { "" })
-  let is_release = $is_tag and ($tag | str starts-with "v")
-
-  let has_dev = ($msg | str contains "(dev-build)") or ($msg | str contains "[dev-build]")
-  let has_stage = ($msg | str contains "(stage-build)") or ($msg | str contains "[stage-build]")
-
-  let branch = (if $is_tag { "" } else { $ref | str replace -a "refs/heads/" "" })
-
-  let build_type = (if $is_release { "release" } else if $has_stage { "stage" } else if $has_dev { "dev" } else { "skip" })
-
-  let platforms = (if $is_release { ["linux/amd64", "linux/arm64"] } else { ["linux/amd64"] })
-
-  let base_tag = (if $is_release { $tag } else { if $has_stage { $"($branch)-($sha)-stage" } else if $has_dev { $"($branch)-($sha)-dev" } else { "" } })
-
+  # CI mode - use default single platform
   {
     ref: $ref,
     sha: $sha,
     commit_message: $msg,
-    is_release: $is_release,
-    build_type: $build_type,
-    platforms: $platforms,
-    base_tag: $base_tag
+    is_local: false,
+    platforms: ["linux/amd64"]
   }
 }

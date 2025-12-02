@@ -420,7 +420,7 @@ export def generate-build-args [
     use ./build-config.nu [process-sources-to-build-args process-external-images-to-build-args]
     
     let commit_sha = (if ($meta.sha | str length) > 0 { $meta.sha } else { "local" })
-    let version = (if $meta.is_release { $meta.base_tag } else if ($meta.sha | str length) > 0 { $meta.sha } else { $version_tag })
+    let version = $version_tag
     
     mut build_args = {
         COMMIT_SHA: $commit_sha,

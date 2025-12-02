@@ -25,13 +25,13 @@ This section will document CI/CD workflows and automation for the DockyPody buil
 
 ## Topics to Document
 
-- GitHub Actions workflows (`.github/workflows/build-containers.yml`)
+- GitHub Actions workflows (`.github/workflows/build.yml`, `.github/workflows/build-push.yml`)
 - Forgejo Actions workflows (`.forgejo/workflows/build-containers.yml`)
 - CI/CD build triggers and matrix generation
 - Registry authentication in CI environments
 - Multi-arch build strategy in CI
-- Build type detection (dev-build, stage-build, release)
-- Commit message triggers (`(dev-build)`, `(stage-build)`, `[dev-build]`, `[stage-build]`)
+- Explicit workflow control (builds are triggered by workflow dispatch, not inferred from commits)
+- Build vs validation workflows (PR validation does not build images)
 
 ## Related Documentation
 

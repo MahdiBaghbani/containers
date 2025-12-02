@@ -20,18 +20,6 @@
 export const TAG_LATEST = "latest"
 export const TAG_LOCAL = "local"
 
-export const BUILD_TYPE_RELEASE = "release"
-export const BUILD_TYPE_STAGE = "stage"
-export const BUILD_TYPE_DEV = "dev"
-export const BUILD_TYPE_SKIP = "skip"
-export const BUILD_TYPE_LOCAL = "local"
-
-export const MARKER_DEV_BUILD = ["(dev-build)", "[dev-build]"]
-export const MARKER_STAGE_BUILD = ["(stage-build)", "[stage-build]"]
-
-export const PLATFORMS_RELEASE = ["linux/amd64", "linux/arm64"]
-export const PLATFORMS_DEV = ["linux/amd64"]
-
 export const ARCH_MAPPINGS = {
     "x86_64": "linux/amd64",
     "amd64": "linux/amd64",

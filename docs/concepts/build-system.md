@@ -28,6 +28,8 @@ The DockyPody build system orchestrates the container image build process, handl
 When injecting build arguments, the build system applies them in this order (later steps override earlier ones):
 
 1. **Base arguments** (COMMIT_SHA, VERSION)
+   - `COMMIT_SHA`: The DockyPody repository commit that performed the build (or `"local"` for local builds)
+   - `VERSION`: The service version from the version manifest (e.g., `"v1.0.0"`, `"v1.0.0-debian"`)
 2. **Source arguments** (auto-generated from `sources` section)
    - **Git sources**: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
    - **Local sources**: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`
@@ -197,8 +199,8 @@ Local folder sources (using `path` field) are restricted to development builds o
 
 The build system detects the build environment:
 
-- **Local builds** (`build_type == "local"`): Local sources are allowed
-- **CI/production builds** (`build_type != "local"`): Local sources are rejected with an error
+- **Local builds** (`is_local: true`): Local sources are allowed
+- **CI/production builds** (`is_local: false`): Local sources are rejected with an error
 
 **Error message:**
 
