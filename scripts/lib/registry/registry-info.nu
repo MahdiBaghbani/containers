@@ -42,7 +42,25 @@ def parse-origin [origin: string] {
   }
 }
 
+# Detect which CI platform we're running on
+def detect-ci-platform [] {
+  let in_github = (((try { $env.GITHUB_ACTIONS } catch { "" }) | default "") | str length) > 0
+  let has_forgejo_env = (((try { $env.FORGEJO } catch { "" }) | default "") | str length) > 0
+  let has_gitea_env = (((try { $env.GITEA_ACTIONS } catch { "" }) | default "") | str length) > 0
+  let in_forgejo = $has_forgejo_env or $has_gitea_env
+  
+  if $in_github {
+    "github"
+  } else if $in_forgejo {
+    "forgejo"
+  } else {
+    "local"
+  }
+}
+
 export def get-registry-info [] {
+  let ci_platform = (detect-ci-platform)
+  
   let origin = (try {
     git remote get-url origin | str trim
   } catch {
@@ -50,10 +68,11 @@ export def get-registry-info [] {
   })
   if ($origin | str length) == 0 {
     return {
-      forgejo_registry: "local",
-      forgejo_path: "local",
-      github_registry: "local",
-      github_path: "local",
+      ci_platform: $ci_platform,
+      forgejo_registry: "",
+      forgejo_path: "",
+      github_registry: "ghcr.io",
+      github_path: "",
       owner: "local",
       repo: "local"
     }
@@ -63,12 +82,16 @@ export def get-registry-info [] {
   let owner = ($path_parts | get 0)
   let repo = ($path_parts | get 1)
 
-  let forgejo_registry = $parsed.host
+  # For GitHub CI, use GITHUB_REPOSITORY for the path
+  let github_repo = ((try { $env.GITHUB_REPOSITORY } catch { "" }) | default ($"($owner)/($repo)"))
+  
+  # For Forgejo, use the parsed host as registry (only valid when running on Forgejo)
+  # When running on GitHub, forgejo_registry will be github.com which is wrong, but we won't use it
+  let forgejo_registry = (if $ci_platform == "forgejo" { $parsed.host } else { "" })
   let forgejo_path = ($"($owner)/($repo)")
 
-  let github_repo = ((try { $env.GITHUB_REPOSITORY } catch { "" }) | default ($"($owner)/($repo)"))
-
   {
+    ci_platform: $ci_platform,
     forgejo_registry: $forgejo_registry,
     forgejo_path: $forgejo_path,
     github_registry: "ghcr.io",

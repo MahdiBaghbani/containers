@@ -26,8 +26,9 @@ def main [--verbose] {
   let verbose_flag = (try { $verbose } catch { false })
   mut results = []
   
-  # Mock registry info for all tests
+  # Mock registry info for all tests (simulates GitHub CI by default)
   let registry_info = {
+    ci_platform: "github",
     forgejo_registry: "registry.example.com",
     forgejo_path: "ocm",
     github_registry: "ghcr.io",
@@ -99,37 +100,61 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test5)
   
-  # Test 6: Remote registry tag format
-  let test6 = (run-test "Remote registry tag format (Forgejo and GHCR)" {
+  # Test 6: Remote registry tag format (single platform per CI)
+  # GitHub CI should only generate GHCR tags
+  let test6 = (run-test "Remote registry tag format (GitHub CI - GHCR only)" {
     let version_spec = {name: "v1.0.0", latest: true}
     let tags = (generate-tags "my-service" $version_spec false $registry_info "debian" "debian")
-    # Should include both registries for each tag
-    let forgejo_tags = ($tags | where {|t| $t | str starts-with "registry.example.com"})
+    # Should include only GHCR tags (not Forgejo) when ci_platform is "github"
     let ghcr_tags = ($tags | where {|t| $t | str starts-with "ghcr.io"})
-    if ($forgejo_tags | length) == 0 {
-      error make {msg: "No Forgejo registry tags found"}
-    }
+    let forgejo_tags = ($tags | where {|t| $t | str starts-with "registry.example.com"})
     if ($ghcr_tags | length) == 0 {
       error make {msg: "No GHCR registry tags found"}
     }
-    # Should have same number of tags for each registry
-    if ($forgejo_tags | length) != ($ghcr_tags | length) {
-      error make {msg: $"Registry tag count mismatch. Forgejo: (($forgejo_tags | length)), GHCR: (($ghcr_tags | length))"}
+    if ($forgejo_tags | length) > 0 {
+      error make {msg: "Forgejo tags should not be generated in GitHub CI"}
     }
-    # Verify expected tags are present
+    # Verify expected GHCR tags are present
     let expected_base_tags = ["v1.0.0-debian", "v1.0.0", "latest-debian", "latest"]
     for base_tag in $expected_base_tags {
-      let forgejo_tag = $"registry.example.com/ocm/my-service:($base_tag)"
       let ghcr_tag = $"ghcr.io/ocm/my-service:($base_tag)"
-      if not ($forgejo_tag in $forgejo_tags) {
-        error make {msg: $"Missing Forgejo tag: ($forgejo_tag)"}
-      }
       if not ($ghcr_tag in $ghcr_tags) {
         error make {msg: $"Missing GHCR tag: ($ghcr_tag)"}
       }
     }
   } $verbose_flag)
   $results = ($results | append $test6)
+  
+  # Test 6b: Forgejo CI should only generate Forgejo tags
+  let test6b = (run-test "Remote registry tag format (Forgejo CI - Forgejo only)" {
+    let forgejo_registry_info = {
+      ci_platform: "forgejo",
+      forgejo_registry: "registry.example.com",
+      forgejo_path: "ocm",
+      github_registry: "ghcr.io",
+      github_path: "ocm"
+    }
+    let version_spec = {name: "v1.0.0", latest: true}
+    let tags = (generate-tags "my-service" $version_spec false $forgejo_registry_info "debian" "debian")
+    # Should include only Forgejo tags (not GHCR) when ci_platform is "forgejo"
+    let forgejo_tags = ($tags | where {|t| $t | str starts-with "registry.example.com"})
+    let ghcr_tags = ($tags | where {|t| $t | str starts-with "ghcr.io"})
+    if ($forgejo_tags | length) == 0 {
+      error make {msg: "No Forgejo registry tags found"}
+    }
+    if ($ghcr_tags | length) > 0 {
+      error make {msg: "GHCR tags should not be generated in Forgejo CI"}
+    }
+    # Verify expected Forgejo tags are present
+    let expected_base_tags = ["v1.0.0-debian", "v1.0.0", "latest-debian", "latest"]
+    for base_tag in $expected_base_tags {
+      let forgejo_tag = $"registry.example.com/ocm/my-service:($base_tag)"
+      if not ($forgejo_tag in $forgejo_tags) {
+        error make {msg: $"Missing Forgejo tag: ($forgejo_tag)"}
+      }
+    }
+  } $verbose_flag)
+  $results = ($results | append $test6b)
   
   # Test 7: Tag ordering (prefixed first, then unprefixed)
   let test7 = (run-test "Tag ordering (prefixed first, then unprefixed)" {

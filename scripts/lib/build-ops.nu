@@ -295,9 +295,19 @@ export def generate-tags [
     if $is_local {
         $base_tags | each {|t| $"($service):($t)"}
     } else {
-        let base_image_name_forgejo = $"($registry_info.forgejo_registry)/($registry_info.forgejo_path)/($service)"
-        let base_image_name_ghcr = $"($registry_info.github_registry)/($registry_info.github_path)/($service)"
-        $base_tags | each {|t| [$"($base_image_name_forgejo):($t)", $"($base_image_name_ghcr):($t)"]} | flatten
+        # Generate tags only for the current CI platform
+        let ci_platform = (try { $registry_info.ci_platform } catch { "local" })
+        
+        if $ci_platform == "github" {
+            let base_image_name = $"($registry_info.github_registry)/($registry_info.github_path)/($service)"
+            $base_tags | each {|t| $"($base_image_name):($t)"}
+        } else if $ci_platform == "forgejo" {
+            let base_image_name = $"($registry_info.forgejo_registry)/($registry_info.forgejo_path)/($service)"
+            $base_tags | each {|t| $"($base_image_name):($t)"}
+        } else {
+            # Fallback to local tags
+            $base_tags | each {|t| $"($service):($t)"}
+        }
     }
 }
 
