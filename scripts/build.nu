@@ -20,7 +20,7 @@
 use ./lib/meta.nu [detect-build]
 use ./lib/registry/registry-info.nu [get-registry-info]
 use ./lib/registry/registry.nu [login-ghcr login-forgejo]
-use ./lib/buildx.nu [build load-image-into-builder]
+use ./lib/buildx.nu [build verify-image-exists-locally]
 use ./lib/dependencies.nu [resolve-dependencies]
 use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest filter-versions get-version-or-null resolve-version-name get-version-spec apply-version-defaults]
 use ./lib/platforms.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names expand-version-to-platforms strip-platform-suffix]
@@ -1512,10 +1512,9 @@ def build-single-version [
   let deps_resolved = (resolve-dependencies $cfg $version_tag $is_local $info $current_platform $platforms)
   if $is_local {
     for dep_image in ($deps_resolved | values) {
-      print $"Loading dependency image '($dep_image)' into buildx builder..."
-      let loaded = (load-image-into-builder $dep_image)
-      if not $loaded {
-        print $"Warning: Failed to load '($dep_image)' into buildx builder. Build may fail."
+      let exists = (verify-image-exists-locally $dep_image)
+      if not $exists {
+        print $"Warning: Dependency image '($dep_image)' not found locally. Build may fail."
       }
     }
   }

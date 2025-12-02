@@ -15,24 +15,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Ensure buildx builder is set up (default driver for local, docker-container for CI)
+# Ensure buildx builder is set up for local dev builds
+# In CI (GITHUB_ACTIONS set), this is a no-op - the workflow configures the builder
+# Both environments use docker driver with shared daemon store
 def ensure-builder [is_local: bool = false] {
-  if $is_local {
-    ^docker buildx use default | ignore
-  } else {
-    let exists = (try { not ((^docker buildx ls | lines | where ($it | str contains "ocm-builder")) | is-empty) } catch { false })
-    if not $exists {
-      ^docker buildx create --name ocm-builder --driver docker-container | ignore
-    }
-    ^docker buildx use ocm-builder | ignore
+  # In CI, trust the workflow-configured builder (set by docker/setup-buildx-action)
+  let in_ci = (((try { $env.GITHUB_ACTIONS } catch { "" }) | default "") | str length) > 0
+  if $in_ci {
+    return
   }
+  
+  # For local dev builds, ensure we're using the default builder
+  ^docker buildx use default | ignore
 }
 
-# Verify image exists locally (for local builds with default driver)
-export def load-image-into-builder [image_ref: string] {
+# Verify image exists in local Docker daemon
+# Under unified docker driver model, this is the same store Buildx uses
+export def verify-image-exists-locally [image_ref: string] {
   let exists = (try {
     let images = (^docker images --format "{{.Repository}}:{{.Tag}}" | lines)
-    ($images | where $it == $image_ref | length) > 0
+    ($images | where {|img| $img == $image_ref} | length) > 0
   } catch {
     false
   })

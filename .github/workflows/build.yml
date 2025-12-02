@@ -33,11 +33,10 @@ jobs:
           sudo mv /tmp/nu/nu /usr/local/bin/nu
           nu --version
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Show build order
         run: |
@@ -49,4 +48,5 @@ jobs:
           nu scripts/build.nu \
             --all-services \
             --all-versions \
+            --pull=deps,externals \
             --progress plain

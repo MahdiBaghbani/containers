@@ -29,7 +29,7 @@ This section will document CI/CD workflows and automation for the DockyPody buil
 - Forgejo Actions workflows (`.forgejo/workflows/build-containers.yml`)
 - CI/CD build triggers and matrix generation
 - Registry authentication in CI environments
-- Multi-arch build strategy in CI
+- Unified builder model (docker driver in both dev and CI)
 - Explicit workflow control (builds are triggered by workflow dispatch, not inferred from commits)
 - Build vs validation workflows (PR validation does not build images)
 

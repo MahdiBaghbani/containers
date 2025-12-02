@@ -39,7 +39,7 @@ For complete setup instructions, see [Getting Started Guide](docs/guides/getting
 
 ## Key Features
 
-- **Multi-platform builds** - Build for multiple architectures (linux/amd64, linux/arm64)
+- **Multi-platform builds** - Build platform variants (e.g., debian, alpine) with shared configuration
 - **Version management** - Build multiple versions from manifests with automatic tagging
 - **Dependency resolution** - Automatic dependency building with correct build order
 - **Cache optimization** - Deterministic cache busting for efficient rebuilds
@@ -133,6 +133,6 @@ See [CI/CD Workflows](docs/guides/ci-cd.md) for workflow documentation (pending)
 
 ## Conventions
 
-- Release builds: multi-arch (linux/amd64, linux/arm64)
+- Release builds: native runner architecture (linux/amd64 on GitHub-hosted runners)
 - Dev/Stage builds: linux/amd64 only, triggered by commit messages containing `(dev-build)` or `(stage-build)`
 - Registries: GHCR (`ghcr.io`) and Forgejo (domain from git origin)

@@ -59,8 +59,8 @@ docker buildx ls
 # View detailed cache disk usage
 docker buildx du
 
-# View cache for specific builder
-docker buildx du --builder ocm-builder
+# View cache for default builder
+docker buildx du --builder default
 ```
 
 ### Prune Cache
@@ -121,17 +121,13 @@ docker buildx prune --min-free-space 5GB
 docker buildx ls
 ```
 
-### Create Builder (if needed)
+### Use Default Builder
+
+Both dev and CI use the default Buildx builder with docker driver, which shares the Docker daemon's image store.
 
 ```bash
-docker buildx create --name ocm-builder --use
+docker buildx use default
 docker buildx inspect --bootstrap
-```
-
-### Use Specific Builder
-
-```bash
-docker buildx use ocm-builder
 ```
 
 ## Multi-Stage Builds

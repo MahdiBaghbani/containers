@@ -178,8 +178,18 @@ def construct-image-ref [
 ] {
   if $is_local {
     return $"($service):($tag)"
+  }
+  
+  # Use ci_platform to select correct registry (matches pull.nu behavior)
+  let ci_platform = (try { $registry_info.ci_platform } catch { "local" })
+  
+  if $ci_platform == "github" {
+    $"($registry_info.github_registry)/($registry_info.github_path)/($service):($tag)"
+  } else if $ci_platform == "forgejo" {
+    $"($registry_info.forgejo_registry)/($registry_info.forgejo_path)/($service):($tag)"
   } else {
-    return $"($registry_info.github_registry)/($registry_info.github_path)/($service):($tag)"
+    # Fallback to local format
+    $"($service):($tag)"
   }
 }
 

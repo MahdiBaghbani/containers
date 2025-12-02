@@ -342,6 +342,34 @@ For each dependency build:
 
 This ensures accurate metadata for recursive builds.
 
+## Builder Configuration
+
+Both development and CI builds use the same Buildx builder model: docker driver with a shared Docker daemon store.
+
+### Unified Docker Driver
+
+- **Dev builds**: Use the default Buildx builder (docker driver)
+- **CI builds**: Workflows configure Buildx with `driver: docker` via `docker/setup-buildx-action`
+- **Shared store**: Images built with `--load` go to the Docker daemon, which is the same store Buildx uses
+
+### Dev vs CI Differences
+
+The only differences between dev and CI are:
+
+| Aspect | Dev | CI |
+|--------|-----|-----|
+| Tag prefixes | Local (`service:version`) | Registry path (`ghcr.io/owner/repo/service:version`) |
+| Registry push | Manual (`--push`) | Workflow-controlled |
+| Remote fallback | Never (local-only) | When local image not found |
+
+### Why Unified Driver
+
+Previously, CI used `docker-container` driver which has a separate cache from the Docker daemon. This caused issues where images built with `--load` were not visible to subsequent builds. The unified docker driver model ensures:
+
+- Images built earlier in a workflow are visible to later builds
+- `docker pull` warms the same store Buildx uses
+- Consistent behavior between dev and CI
+
 ## Pre-Pull Mode
 
 The `--pull` flag enables pre-pulling images before the build starts. This is useful for:

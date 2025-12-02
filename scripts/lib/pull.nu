@@ -337,6 +337,8 @@ def aggregate-external-images [build_order: list] {
 }
 
 # Pull a single image using docker pull
+# Uses plain docker pull which warms the same store that Buildx uses
+# (both dev and CI use docker driver with shared daemon)
 # Returns {success: bool, error: string}
 def pull-image [image_ref: string] {
   let result = (try {

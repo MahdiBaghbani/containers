@@ -34,12 +34,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU (release only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Install Nushell
         env:
@@ -67,4 +65,4 @@ jobs:
           FORGEJO_REGISTRY_USER: ${{ secrets.FORGEJO_REGISTRY_USER }}
           FORGEJO_REGISTRY_TOKEN: ${{ secrets.FORGEJO_REGISTRY_TOKEN }}
         run: |
-          nu scripts/build.nu --service ${{ inputs.service || 'cernbox-web' }} --push ${{ steps.flags.outputs.push }} --latest true --extra-tag "${{ inputs.extra_tag }}"
+          nu scripts/build.nu --service ${{ inputs.service || 'cernbox-web' }} --push ${{ steps.flags.outputs.push }} --latest true --extra-tag "${{ inputs.extra_tag }}" --pull=deps,externals
