@@ -164,7 +164,7 @@ def pull-externals [
     let result = (pull-image $image_ref)
     if $result.success {
       let node_list = ($nodes | str join ", ")
-      print $"OK: Pulled ($image_ref) (used by: ($node_list))"
+      print $"OK: Pulled ($image_ref) \(used by: ($node_list)\)"
       $pulled = $pulled + 1
     } else {
       $failures = ($failures | append {
@@ -382,16 +382,16 @@ export def print-pull-summary [metrics: record] {
   if $deps.pulled > 0 or $deps.skipped > 0 or $deps.failed > 0 {
     print "Dependencies (cache warm-up):"
     print $"  Pulled: ($deps.pulled)"
-    print $"  Skipped (deduped): ($deps.skipped)"
-    print $"  Failed (non-fatal): ($deps.failed)"
+    print $"  Skipped \(deduped\): ($deps.skipped)"
+    print $"  Failed \(non-fatal\): ($deps.failed)"
     print ""
   }
   
   if $externals.pulled > 0 or $externals.skipped > 0 or $externals.failed > 0 {
     print "External Images (preflight):"
     print $"  Pulled: ($externals.pulled)"
-    print $"  Skipped (deduped): ($externals.skipped)"
-    print $"  Failed (fatal): ($externals.failed)"
+    print $"  Skipped \(deduped\): ($externals.skipped)"
+    print $"  Failed \(fatal\): ($externals.failed)"
     print ""
   }
 }
