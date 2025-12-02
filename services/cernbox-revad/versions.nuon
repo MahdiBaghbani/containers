@@ -1,11 +1,11 @@
 {
-  "default": "v3.3.3",
+  "default": "master",
 
   "defaults": {
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "v3.3.3"
+        "ref": "master"
       },
       "revad_plugins": {
         "url": "https://github.com/cernbox/reva-plugins",
@@ -59,7 +59,7 @@
     },
     {
       "name": "master",
-      "latest": false,
+      "latest": true,
       "overrides": {
         "sources": {
           "revad": {
@@ -78,33 +78,6 @@
             "dependencies": {
               "revad-base": {
                 "version": "master-development"
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "name": "v3.3.3",
-      "latest": true,
-      "overrides": {
-        "sources": {
-          "revad": {
-            "ref": "v3.3.3"
-          }
-        },
-        "platforms": {
-          "production": {
-            "dependencies": {
-              "revad-base": {
-                "version": "v3.3.3-production"
-              }
-            }
-          },
-          "development": {
-            "dependencies": {
-              "revad-base": {
-                "version": "v3.3.3-development"
               }
             }
           }
