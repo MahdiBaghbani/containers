@@ -99,5 +99,4 @@ jobs:
           nu scripts/build.nu \
             --all-services \
             --all-versions \
-            --pull=deps,externals \
-            --progress plain
+            --pull=deps,externals

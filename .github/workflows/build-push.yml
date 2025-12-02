@@ -65,5 +65,4 @@ jobs:
             --all-services \
             --all-versions \
             --push true \
-            --pull=deps,externals \
-            --progress plain
+            --pull=deps,externals
