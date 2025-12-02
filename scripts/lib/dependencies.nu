@@ -142,26 +142,32 @@ def check-image-exists [
   is_local: bool,
   registry_info: record
 ] {
-  if $is_local {
-    let result = (try {
-      let cmd_result = (^docker image inspect $image_ref | complete)
-      let exit_ok = ($cmd_result.exit_code == 0)
-      $exit_ok
-    } catch {|err|
-      false
-    })
-    
-    return $result
-  } else {
-    let result = (try {
-      let cmd_result = (^docker manifest inspect $image_ref | complete)
-      $cmd_result.exit_code == 0
-    } catch {
-      false
-    })
-    
-    return $result
+  # Always check locally first (handles --load builds in CI)
+  let local_exists = (try {
+    let cmd_result = (^docker image inspect $image_ref | complete)
+    $cmd_result.exit_code == 0
+  } catch {
+    false
+  })
+  
+  if $local_exists {
+    return true
   }
+  
+  # For local builds, we're done
+  if $is_local {
+    return false
+  }
+  
+  # In CI, also check remote registry
+  let remote_exists = (try {
+    let cmd_result = (^docker manifest inspect $image_ref | complete)
+    $cmd_result.exit_code == 0
+  } catch {
+    false
+  })
+  
+  $remote_exists
 }
 
 def construct-image-ref [

@@ -20,13 +20,13 @@
 # Test suite entry point
 
 def main [
-  --suite: string = "all"       # Which test suite to run (all, manifests, services, tls, tag-generation, build-system)
+  --suite: string = "all"       # Which test suite to run (all, manifests, services, tls, tag-generation, build-system, pull)
   --verbose                      # Show detailed output
 ] {
   print "Running OCM Containers Test Suite\n"
   
   let test_suites = if $suite == "all" {
-    ["manifests", "services", "tls", "tag-generation", "build-system", "defaults"]
+    ["manifests", "services", "tls", "tag-generation", "build-system", "defaults", "pull"]
   } else {
     [$suite]
   }

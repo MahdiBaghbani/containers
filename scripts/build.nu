@@ -39,7 +39,8 @@ use ./lib/build-ops.nu [
     generate-labels
     generate-build-args
 ]
-use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs show-build-order-for-version]
+use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs show-build-order-for-version compute-single-service-build-order]
+use ./lib/pull.nu [parse-pull-modes run-pulls print-pull-summary]
 
 export def main [
   --service: string,
@@ -75,7 +76,9 @@ export def main [
   # Tag dependencies with --latest and --extra-tag when auto-building
   --tag-deps,
   # Fail fast on first error (default: continue building all services)
-  --fail-fast
+  --fail-fast,
+  # Pre-pull images before build: deps (cache warm-up), externals (fail-fast preflight), or both
+  --pull: string = ""
 ] {
   let info = (get-registry-info)
   let meta = (detect-build)
@@ -97,6 +100,7 @@ export def main [
   let push_deps = (parse-bool-flag ($push_deps | default false))
   let tag_deps = (parse-bool-flag ($tag_deps | default false))
   let fail_fast = (parse-bool-flag ($fail_fast | default false))
+  let pull_modes = (parse-pull-modes $pull)
   
   # Validate flag conflicts with --all-services
   if $all_services_val {
@@ -120,7 +124,7 @@ export def main [
     }
     
     # Route to build-all-services function
-    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val
+    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes
     return
   }
   
@@ -467,6 +471,15 @@ export def main [
         return
       }
       
+      # Pre-pull images if --pull flag is provided
+      if not ($pull_modes | is-empty) {
+        # Compute build order for all expanded versions
+        let pull_build_order = (compute-single-service-build-order $service $expanded_versions $platforms_manifest $info)
+        let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+        print-pull-summary $pull_metrics
+        print ""
+      }
+      
       print $"\n=== Building ($expanded_versions | length) version\(s\) of ($service) ==="
       print ""
       
@@ -510,6 +523,14 @@ export def main [
       
       return
     } else {
+      # Pre-pull images if --pull flag is provided (single-platform multi-version)
+      if not ($pull_modes | is-empty) {
+        let pull_build_order = (compute-single-service-build-order $service $versions_to_build null $info)
+        let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+        print-pull-summary $pull_metrics
+        print ""
+      }
+      
       print $"\n=== Building ($versions_to_build | length) version\(s\) of ($service) ==="
       print ""
       
@@ -608,6 +629,14 @@ export def main [
       return
     }
     
+    # Pre-pull images if --pull flag is provided (single-version with platforms)
+    if not ($pull_modes | is-empty) {
+      let pull_build_order = (compute-single-service-build-order $service $expanded_versions $platforms_manifest $info)
+      let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+      print-pull-summary $pull_metrics
+      print ""
+    }
+    
     for expanded_version in $expanded_versions {
       let prev_cache = $sha_cache
       let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
@@ -615,6 +644,14 @@ export def main [
     }
   } else {
     # Single-platform build (no platforms manifest)
+    # Pre-pull images if --pull flag is provided (single-version without platforms)
+    if not ($pull_modes | is-empty) {
+      let pull_build_order = (compute-single-service-build-order $service [$version_spec] null $info)
+      let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+      print-pull-summary $pull_metrics
+      print ""
+    }
+    
     let prev_cache = $sha_cache
     let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
     $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
@@ -641,7 +678,8 @@ def build-all-services [
   tag_deps: bool,
   fail_fast: bool,
   show_build_order: bool,
-  matrix_json: bool
+  matrix_json: bool,
+  pull_modes: list  # Pre-pull modes: deps, externals, or both
 ] {
   use ./lib/services.nu [list-service-names]
   use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest get-default-version]
@@ -910,6 +948,13 @@ def build-all-services [
     print $"($label). ($node)"
   }
   print ""
+  
+  # Pre-pull images if --pull flag is provided
+  if not ($pull_modes | is-empty) {
+    let pull_metrics = (run-pulls $pull_modes $build_order $info $meta.is_local)
+    print-pull-summary $pull_metrics
+    print ""
+  }
   
   # Execute builds in topological order
   # Use reduce to avoid Nushell for loop scope bug

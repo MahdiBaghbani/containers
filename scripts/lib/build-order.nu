@@ -460,3 +460,78 @@ export def show-build-order-for-version [
   # Return updated cache
   {cache: $updated_cache}
 }
+
+# Compute build order for a single service with multiple versions/platforms
+# Used for --pull flag in single-service builds
+export def compute-single-service-build-order [
+  service: string,
+  version_specs: list,
+  platforms_manifest: any,
+  registry_info: record
+] {
+  # Build dependency graphs for each version_spec and merge
+  let graph_result = ($version_specs | reduce --fold {nodes: [], edges: []} {|version_spec, acc|
+    let platform = (try { $version_spec.platform } catch { "" })
+    
+    # Load service config
+    let cfg = (try {
+      load-service-config $service $version_spec $platform $platforms_manifest
+    } catch {|err|
+      # If config fails to load, skip this version
+      print $"WARNING: Could not load config for ($service):($version_spec.name): ($err.msg)"
+      return $acc
+    })
+    
+    # Build dependency graph
+    let graph = (try {
+      build-dependency-graph $service $version_spec $cfg $platform $platforms_manifest false $registry_info
+    } catch {|err|
+      print $"WARNING: Could not build dependency graph for ($service):($version_spec.name): ($err.msg)"
+      return $acc
+    })
+    
+    # Merge nodes (deduplicate)
+    let merged_nodes = ($graph.nodes | reduce --fold $acc.nodes {|node_item, node_acc|
+      if not ($node_item in $node_acc) {
+        $node_acc | append $node_item
+      } else {
+        $node_acc
+      }
+    })
+    
+    # Merge edges (deduplicate)
+    let merged_edges = ($graph.edges | reduce --fold $acc.edges {|edge_item, edge_acc|
+      let edge_exists = ($edge_acc | any {|e|
+        $e.from == $edge_item.from and $e.to == $edge_item.to
+      })
+      if not $edge_exists {
+        $edge_acc | append $edge_item
+      } else {
+        $edge_acc
+      }
+    })
+    
+    # Also add the service itself as a node if not already present
+    let service_node = (if ($platform | str length) > 0 {
+      $"($service):($version_spec.name):($platform)"
+    } else {
+      $"($service):($version_spec.name)"
+    })
+    
+    let final_nodes = (if not ($service_node in $merged_nodes) {
+      $merged_nodes | append $service_node
+    } else {
+      $merged_nodes
+    })
+    
+    {nodes: $final_nodes, edges: $merged_edges}
+  })
+  
+  let merged_graph = {
+    nodes: $graph_result.nodes,
+    edges: $graph_result.edges
+  }
+  
+  # Perform topological sort
+  topological-sort-dfs $merged_graph
+}

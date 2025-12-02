@@ -342,6 +342,127 @@ For each dependency build:
 
 This ensures accurate metadata for recursive builds.
 
+## Pre-Pull Mode
+
+The `--pull` flag enables pre-pulling images before the build starts. This is useful for:
+
+- **Cache warm-up**: Pre-populate the local Docker cache with dependency images
+- **Fail-fast validation**: Verify external images exist before starting lengthy builds
+
+### Local-First Image Resolution
+
+The build system uses **local-first** image resolution for dependencies:
+
+1. Check if image exists in local Docker daemon
+2. Only check remote registry if local check fails (CI builds only)
+
+This approach:
+
+- Handles `--load` builds in CI (images exist locally but not remotely)
+- Reduces registry calls for faster builds
+- Works correctly for both local and CI environments
+
+### Pull Modes
+
+The `--pull` flag accepts comma-separated values:
+
+| Mode       | Behavior                                       | On Failure     |
+| ---------- | ---------------------------------------------- | -------------- |
+| `deps`     | Pre-pull internal dependency images            | Warning (non-fatal) |
+| `externals`| Pre-pull external images declared in manifests | Error (fatal)  |
+
+**Usage examples:**
+
+```bash
+# Cache warm-up for dependencies
+nu scripts/build.nu --service cernbox-web --pull=deps
+
+# Fail-fast validation for external images
+nu scripts/build.nu --service idp --pull=externals
+
+# Both modes
+nu scripts/build.nu --all-services --pull=deps,externals
+```
+
+### Deps Mode (Cache Warm-Up)
+
+When `--pull=deps` is specified:
+
+1. Compute build order for all services/versions to be built
+2. For each node in build order, compute the canonical image reference
+3. Attempt `docker pull` for each unique image
+4. Log success/warning for each image (failures are non-fatal)
+5. Continue to build phase
+
+**Image reference format:**
+
+- Multi-platform services: `{service}:{version}-{platform}` (e.g., `revad-base:v3.3.3-production`)
+- Single-platform services: `{service}:{version}` (e.g., `gaia:v1.0.0`)
+- In CI: Full registry path (e.g., `ghcr.io/owner/repo/revad-base:v3.3.3-production`)
+
+### Externals Mode (Fail-Fast Preflight)
+
+When `--pull=externals` is specified:
+
+1. Compute build order for all services/versions to be built
+2. For each node, load merged config and extract `external_images`
+3. Resolve each external image to its effective reference (with env var overrides)
+4. Aggregate and deduplicate across all nodes
+5. Attempt `docker pull` for each unique external image
+6. If any fail: report all failures and exit non-zero
+
+**External image resolution:**
+
+- Uses same logic as `process-external-images-to-build-args`
+- Applies environment variable overrides via `get-env-or-config`
+- Validates exactly what the build will use
+
+**Error output example:**
+
+```text
+ERROR: External image preflight failed
+
+  Missing: quay.io/keycloak/keycloak:26.4.2
+    Required by: idp:v26.4.2
+    Error: manifest unknown
+
+  Missing: gcr.io/distroless/static-debian12:nonroot
+    Required by: revad-base:v3.3.3:production
+    Error: unauthorized
+```
+
+### Pull Summary
+
+After pre-pull operations, a summary is displayed:
+
+```text
+=== Pull Summary ===
+STATUS: SUCCESS
+
+Dependencies (cache warm-up):
+  Pulled: 3
+  Skipped (deduped): 2
+  Failed (non-fatal): 1
+
+External Images (preflight):
+  Pulled: 2
+  Skipped (deduped): 0
+  Failed (fatal): 0
+```
+
+### Dry-Run Modes
+
+The `--pull` flag is ignored when using dry-run modes:
+
+- `--matrix-json`: Outputs CI matrix JSON without any pull operations
+- `--show-build-order`: Displays build order without any pull operations
+
+### CI Usage Recommendations
+
+1. **Use `--pull=externals` in CI** to fail fast on missing external images
+2. **Use `--pull=deps` for cache warming** when you know images exist remotely
+3. **Combine modes** (`--pull=deps,externals`) for comprehensive preflight checks
+
 ## Continue-on-Failure Mode
 
 The build system supports continue-on-failure for multi-version builds.
@@ -561,6 +682,7 @@ scripts/
   - manifest.nu             # Version manifest loading
   - matrix.nu               # CI matrix generation
   - dependencies.nu         # Dependency resolution
+  - pull.nu                 # Pre-pull orchestration (--pull flag)
   - buildx.nu               # Docker buildx wrapper
   - registry/
     - registry-info.nu    # Registry path construction
@@ -729,6 +851,7 @@ For complete details on tag generation, see the [Multi-Platform Builds Guide](..
 3. **Let auto-build handle dependencies** (default behavior) - Simplifies workflow and ensures correct build order
 4. **Use `--show-build-order`** to debug dependency issues - Visualize the dependency graph before building
 5. **Review build summary** after multi-version builds - Check for partial failures and skipped builds
+6. **Use `--pull=externals` in CI** to fail fast on missing external images - Catches missing images before lengthy builds
 
 ## See Also
 
