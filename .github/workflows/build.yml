@@ -45,7 +45,8 @@ jobs:
 
       - name: Build all services
         run: |
-          nu scripts/build.nu \
-            --all-services \
-            --all-versions \
-            --pull=deps,externals
+          # nu scripts/build.nu \
+          #   --all-services \
+          #   --all-versions \
+          #   --pull=deps,externals
+          nu scripts/build.nu --service cernbox-web --version testing --pull=deps,externals
