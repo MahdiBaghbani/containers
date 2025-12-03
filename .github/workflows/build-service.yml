@@ -1,0 +1,114 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Reusable workflow for building a single service (all versions)
+# Called by build.yml for per-service orchestration with cache-based image reuse
+
+name: Build Service
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Service name to build"
+        required: true
+        type: string
+      push:
+        description: "Push images to registry (not used in build-only workflow)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build-service:
+    name: Build ${{ inputs.service }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nushell
+        env:
+          NU_VERSION: "0.108.0"
+        run: |
+          curl -fsSL -o /tmp/nu.tar.gz \
+            "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      # Phase 1.2: Cache restore
+      - name: Restore Docker image cache
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images
+          key: docker-${{ inputs.service }}-${{ github.sha }}
+          restore-keys: |
+            docker-${{ inputs.service }}-
+
+      - name: Load cached images
+        if: steps.cache-restore.outputs.cache-hit == 'true'
+        run: |
+          if [ -f "/tmp/docker-images/${{ inputs.service }}.tar.gz" ]; then
+            echo "Loading cached images for ${{ inputs.service }}..."
+            gunzip -c "/tmp/docker-images/${{ inputs.service }}.tar.gz" | docker load
+            echo "Cache loaded successfully"
+          else
+            echo "Cache file not found, will build from scratch"
+          fi
+
+      # Phase 1.3: Build the service
+      - name: Show build order
+        run: |
+          echo "Build order for ${{ inputs.service }}:"
+          nu scripts/build.nu --service ${{ inputs.service }} --all-versions --show-build-order
+
+      - name: Build service
+        run: |
+          nu scripts/build.nu \
+            --service ${{ inputs.service }} \
+            --all-versions \
+            --pull=deps,externals \
+            --progress plain
+
+      # Phase 1.5: Cache save
+      - name: List built images
+        id: list-images
+        run: |
+          echo "Listing images for ${{ inputs.service }}..."
+          IMAGES=$(nu scripts/list-service-images.nu --service ${{ inputs.service }})
+          echo "images<<EOF" >> $GITHUB_OUTPUT
+          echo "$IMAGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "Built images:"
+          echo "$IMAGES"
+
+      - name: Save images to cache
+        if: success()
+        run: |
+          mkdir -p /tmp/docker-images
+          IMAGES="${{ steps.list-images.outputs.images }}"
+          if [ -n "$IMAGES" ]; then
+            echo "Saving images to cache..."
+            # Convert newline-separated list to space-separated for docker save
+            IMAGES_SPACE=$(echo "$IMAGES" | tr '\n' ' ')
+            docker save $IMAGES_SPACE | gzip > "/tmp/docker-images/${{ inputs.service }}.tar.gz"
+            ls -lh /tmp/docker-images/
+            echo "Images saved successfully"
+          else
+            echo "No images to save"
+          fi
+
+      - name: Save Docker image cache
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: /tmp/docker-images
+          key: docker-${{ inputs.service }}-${{ github.sha }}
+

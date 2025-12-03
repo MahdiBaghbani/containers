@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Build all services and versions (no push)
 # Use this for build verification without pushing to registries
+#
+# Per-service orchestration with cache-based image reuse
+# See .cursor/plans/github-build-per-service-cache-20251203T000000Z.md for design
 
 name: Build All
 
@@ -13,40 +16,114 @@ on:
         type: boolean
         default: false
 
+# Service dependency graph:
+#
+#   common-tools (root service, no dependencies)
+#       |
+#       +-- gaia
+#       +-- revad-base
+#       +-- cernbox-web
+#       +-- nextcloud-base --> nextcloud --> nextcloud-contacts
+#       +-- idp
+#       |
+#       +-- cernbox-revad (depends on: revad-base, gaia)
+#
+# Parallel groups:
+#   Group 1: common-tools (root)
+#   Group 2: gaia, revad-base, cernbox-web, nextcloud-base, idp (all depend only on common-tools)
+#   Group 3: cernbox-revad (needs revad-base + gaia), nextcloud (needs nextcloud-base)
+#   Group 4: nextcloud-contacts (needs nextcloud)
+
 jobs:
-  build:
-    name: Build All Services
+  # Group 1: Root service (no dependencies)
+  build_common_tools:
+    name: Build common-tools
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: common-tools
+      push: false
+
+  # Group 2: Services that depend only on common-tools (run in parallel)
+  build_gaia:
+    name: Build gaia
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: gaia
+      push: false
+
+  build_revad_base:
+    name: Build revad-base
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: revad-base
+      push: false
+
+  build_cernbox_web:
+    name: Build cernbox-web
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: cernbox-web
+      push: false
+
+  build_nextcloud_base:
+    name: Build nextcloud-base
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: nextcloud-base
+      push: false
+
+  build_idp:
+    name: Build idp
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: idp
+      push: false
+
+  # Group 3: Services with multiple dependencies
+  build_cernbox_revad:
+    name: Build cernbox-revad
+    needs: [build_revad_base, build_gaia]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: cernbox-revad
+      push: false
+
+  build_nextcloud:
+    name: Build nextcloud
+    needs: [build_nextcloud_base]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: nextcloud
+      push: false
+
+  # Group 4: Services at the end of dependency chains
+  build_nextcloud_contacts:
+    name: Build nextcloud-contacts
+    needs: [build_nextcloud]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: nextcloud-contacts
+      push: false
+
+  # Aggregation job for overall status
+  build_complete:
+    name: Build Complete
+    needs:
+      - build_common_tools
+      - build_gaia
+      - build_revad_base
+      - build_cernbox_web
+      - build_nextcloud_base
+      - build_idp
+      - build_cernbox_revad
+      - build_nextcloud
+      - build_nextcloud_contacts
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Nushell
-        env:
-          NU_VERSION: "0.108.0"
-        run: |
-          curl -fsSL -o /tmp/nu.tar.gz \
-            "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
-          mkdir -p /tmp/nu
-          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
-          sudo mv /tmp/nu/nu /usr/local/bin/nu
-          nu --version
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
-      - name: Show build order
-        run: |
-          echo "Build order for all services and versions:"
-          nu scripts/build.nu --all-services --all-versions --show-build-order
-
-      - name: Build all services
-        run: |
-          # nu scripts/build.nu \
-          #   --all-services \
-          #   --all-versions \
-          #   --pull=deps,externals
-          nu scripts/build.nu --service cernbox-web --version testing --pull=deps,externals
+      - name: All builds completed
+        run: echo "All service builds completed successfully"
