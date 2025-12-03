@@ -42,6 +42,24 @@ export def verify-image-exists-locally [image_ref: string] {
   $exists
 }
 
+# Get a specific label from a local Docker image
+# Returns empty string if image or label is missing
+export def get-image-label [image_ref: string, label_key: string] {
+  try {
+    let result = (^docker image inspect $image_ref --format $"{{index .Config.Labels \"($label_key)\"}}" | str trim)
+    $result
+  } catch {
+    ""
+  }
+}
+
+# Get service definition hash from a local Docker image
+# Returns empty string if image or label is missing
+export def get-service-def-hash-from-image [image_ref: string] {
+  use ./constants.nu [LABEL_SERVICE_DEF_HASH]
+  get-image-label $image_ref $LABEL_SERVICE_DEF_HASH
+}
+
 def gha-cache-args [] {
   if ((try { $env.GITHUB_ACTIONS } catch { "" }) | default "" | str length) > 0 {
     [

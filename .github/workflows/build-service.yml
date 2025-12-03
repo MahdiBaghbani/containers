@@ -42,15 +42,42 @@ jobs:
         with:
           driver: docker
 
-      # Phase 1.2: Cache restore
+      # Cache restore with commit+branch keys for precise reuse
+      # Each commit gets its own cache key; cross-commit reuse via prefix restore
       - name: Restore Docker image cache
         id: cache-restore
         uses: actions/cache/restore@v4
         with:
-          path: /tmp/docker-images
-          key: docker-${{ inputs.service }}-${{ github.sha }}
+          path: /tmp/docker-images/${{ inputs.service }}.tar.gz
+          key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}
           restore-keys: |
-            docker-${{ inputs.service }}-
+            images-${{ inputs.service }}-${{ github.ref }}-
+
+      # Compute cache match kind for diagnostics
+      # exact: cache key matched exactly (same commit)
+      # fallback: cache restored from older commit on same branch
+      # miss: no cache found
+      - name: Determine cache match kind
+        id: cache-match
+        run: |
+          PRIMARY_KEY="images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}"
+          MATCHED_KEY="${{ steps.cache-restore.outputs.cache-matched-key }}"
+          CACHE_HIT="${{ steps.cache-restore.outputs.cache-hit }}"
+          
+          if [ "$CACHE_HIT" = "true" ]; then
+            if [ "$MATCHED_KEY" = "$PRIMARY_KEY" ]; then
+              MATCH_KIND="exact"
+            else
+              MATCH_KIND="fallback"
+            fi
+          else
+            MATCH_KIND="miss"
+          fi
+          
+          echo "Cache match kind: $MATCH_KIND"
+          echo "  Primary key: $PRIMARY_KEY"
+          echo "  Matched key: $MATCHED_KEY"
+          echo "match_kind=$MATCH_KIND" >> $GITHUB_OUTPUT
 
       - name: Load cached images
         if: steps.cache-restore.outputs.cache-hit == 'true'
@@ -71,11 +98,12 @@ jobs:
 
       - name: Build service
         run: |
+          echo "Cache match kind: ${{ steps.cache-match.outputs.match_kind }}"
           nu scripts/build.nu \
             --service ${{ inputs.service }} \
             --all-versions \
             --pull=deps,externals \
-            --progress plain
+            --cache-match=${{ steps.cache-match.outputs.match_kind }}
 
       # Phase 1.5: Cache save
       - name: List built images
@@ -109,6 +137,5 @@ jobs:
         if: success()
         uses: actions/cache/save@v4
         with:
-          path: /tmp/docker-images
-          key: docker-${{ inputs.service }}-${{ github.sha }}
-
+          path: /tmp/docker-images/${{ inputs.service }}.tar.gz
+          key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}

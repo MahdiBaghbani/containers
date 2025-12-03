@@ -56,6 +56,10 @@ export const LABEL_IMAGE_SOURCE = "org.opencontainers.image.source"
 export const LABEL_IMAGE_REVISION = "org.opencontainers.image.revision"
 export const LABEL_SERVICE = "org.opencloudmesh.service"
 
+# System-owned label namespace (reserved for build system, not user-overridable)
+export const LABEL_SYSTEM_PREFIX = "org.opencloudmesh.system."
+export const LABEL_SERVICE_DEF_HASH = "org.opencloudmesh.system.service-def-hash"
+
 export const DEFAULT_BUILD_ARGS = {
     "COMMIT_SHA": "local",
     "VERSION": "local"

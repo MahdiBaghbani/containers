@@ -20,7 +20,7 @@
 use ./lib/meta.nu [detect-build]
 use ./lib/registry/registry-info.nu [get-registry-info]
 use ./lib/registry/registry.nu [login-ghcr login-forgejo]
-use ./lib/buildx.nu [build verify-image-exists-locally]
+use ./lib/buildx.nu [build verify-image-exists-locally get-service-def-hash-from-image]
 use ./lib/dependencies.nu [resolve-dependencies]
 use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest filter-versions get-version-or-null resolve-version-name get-version-spec apply-version-defaults]
 use ./lib/platforms.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names expand-version-to-platforms strip-platform-suffix]
@@ -40,7 +40,8 @@ use ./lib/build-ops.nu [
     generate-build-args
 ]
 use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs show-build-order-for-version compute-single-service-build-order]
-use ./lib/pull.nu [parse-pull-modes run-pulls print-pull-summary]
+use ./lib/pull.nu [parse-pull-modes run-pulls print-pull-summary compute-canonical-image-ref]
+use ./lib/service-def-hash.nu [compute-service-def-hash-graph]
 
 export def main [
   --service: string,
@@ -78,7 +79,9 @@ export def main [
   # Fail fast on first error (default: continue building all services)
   --fail-fast,
   # Pre-pull images before build: deps (cache warm-up), externals (fail-fast preflight), or both
-  --pull: string = ""
+  --pull: string = "",
+  # CI cache match kind for diagnostics: exact, fallback, miss (set by GitHub Actions workflow)
+  --cache-match: string = ""
 ] {
   let info = (get-registry-info)
   let meta = (detect-build)
@@ -124,7 +127,7 @@ export def main [
     }
     
     # Route to build-all-services function
-    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes
+    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes $cache_match
     return
   }
   
@@ -471,11 +474,15 @@ export def main [
         return
       }
       
+      # Compute build order for hash graph and pre-pull
+      let build_order = (compute-single-service-build-order $service $expanded_versions $platforms_manifest $info)
+      
+      # Compute service definition hash graph
+      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+      
       # Pre-pull images if --pull flag is provided
       if not ($pull_modes | is-empty) {
-        # Compute build order for all expanded versions
-        let pull_build_order = (compute-single-service-build-order $service $expanded_versions $platforms_manifest $info)
-        let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+        let pull_metrics = (run-pulls $pull_modes $build_order $info $meta.is_local)
         print-pull-summary $pull_metrics
         print ""
       }
@@ -493,7 +500,7 @@ export def main [
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
+          let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -523,10 +530,15 @@ export def main [
       
       return
     } else {
-      # Pre-pull images if --pull flag is provided (single-platform multi-version)
+      # Compute build order for hash graph and pre-pull (single-platform multi-version)
+      let build_order = (compute-single-service-build-order $service $versions_to_build null $info)
+      
+      # Compute service definition hash graph
+      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+      
+      # Pre-pull images if --pull flag is provided
       if not ($pull_modes | is-empty) {
-        let pull_build_order = (compute-single-service-build-order $service $versions_to_build null $info)
-        let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+        let pull_metrics = (run-pulls $pull_modes $build_order $info $meta.is_local)
         print-pull-summary $pull_metrics
         print ""
       }
@@ -544,7 +556,7 @@ export def main [
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
+          let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -629,31 +641,41 @@ export def main [
       return
     }
     
-    # Pre-pull images if --pull flag is provided (single-version with platforms)
+    # Compute build order for hash graph and pre-pull (single-version with platforms)
+    let build_order = (compute-single-service-build-order $service $expanded_versions $platforms_manifest $info)
+    
+    # Compute service definition hash graph
+    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+    
+    # Pre-pull images if --pull flag is provided
     if not ($pull_modes | is-empty) {
-      let pull_build_order = (compute-single-service-build-order $service $expanded_versions $platforms_manifest $info)
-      let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+      let pull_metrics = (run-pulls $pull_modes $build_order $info $meta.is_local)
       print-pull-summary $pull_metrics
       print ""
     }
     
     for expanded_version in $expanded_versions {
       let prev_cache = $sha_cache
-      let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
+      let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
       $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
     }
   } else {
     # Single-platform build (no platforms manifest)
-    # Pre-pull images if --pull flag is provided (single-version without platforms)
+    # Compute build order for hash graph and pre-pull (single-version without platforms)
+    let build_order = (compute-single-service-build-order $service [$version_spec] null $info)
+    
+    # Compute service definition hash graph
+    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+    
+    # Pre-pull images if --pull flag is provided
     if not ($pull_modes | is-empty) {
-      let pull_build_order = (compute-single-service-build-order $service [$version_spec] null $info)
-      let pull_metrics = (run-pulls $pull_modes $pull_build_order $info $meta.is_local)
+      let pull_metrics = (run-pulls $pull_modes $build_order $info $meta.is_local)
       print-pull-summary $pull_metrics
       print ""
     }
     
     let prev_cache = $sha_cache
-    let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps)
+    let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
     $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
   }
 }
@@ -679,7 +701,8 @@ def build-all-services [
   fail_fast: bool,
   show_build_order: bool,
   matrix_json: bool,
-  pull_modes: list  # Pre-pull modes: deps, externals, or both
+  pull_modes: list,  # Pre-pull modes: deps, externals, or both
+  cache_match: string  # CI cache match kind for diagnostics
 ] {
   use ./lib/services.nu [list-service-names]
   use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest get-default-version]
@@ -949,6 +972,9 @@ def build-all-services [
   }
   print ""
   
+  # Compute service definition hash graph
+  let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+  
   # Pre-pull images if --pull flag is provided
   if not ($pull_modes | is-empty) {
     let pull_metrics = (run-pulls $pull_modes $build_order $info $meta.is_local)
@@ -1046,7 +1072,7 @@ def build-all-services [
         # Execute build (use cache from accumulator)
         let build_result = (try {
           # Always pass no_auto_build_deps=true because dependencies are handled by build order
-          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $provenance_val $progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps
+          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $provenance_val $progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps $hash_graph $cache_match
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
           print $"ERROR: Failed to build ($build_label)"
@@ -1273,7 +1299,9 @@ def build-single-version [
   no_cache: bool = false,
   no_auto_build_deps: bool = false,
   push_deps: bool = false,
-  tag_deps: bool = false
+  tag_deps: bool = false,
+  hash_graph: record = {},  # Pre-computed service definition hashes {node_key: hash}
+  cache_match: string = ""  # CI cache match kind for diagnostics: exact, fallback, miss
 ] {
   let current_platform = (try { $version_spec.platform } catch { $platform })
   
@@ -1392,9 +1420,18 @@ def build-single-version [
   # Update cache for this function's scope
   $current_cache = ($current_cache | merge $source_shas_result.cache)
 
-  # Generate labels with source SHAs
+  # Generate labels with source SHAs and service definition hash
   let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform)
-  let labels = (generate-labels $service $meta $cfg $source_shas $source_types)
+  
+  # Get service definition hash from pre-computed graph
+  let node_key = (if ($current_platform | str length) > 0 {
+    $"($service):($version_tag):($current_platform)"
+  } else {
+    $"($service):($version_tag)"
+  })
+  let service_def_hash = (try { $hash_graph | get $node_key } catch { "" })
+  
+  let labels = (generate-labels $service $meta $cfg $source_shas $source_types $service_def_hash)
   
   let build_label = (if ($current_platform | str length) > 0 {
     $"($service):($version_tag)-($current_platform)"
@@ -1415,6 +1452,10 @@ def build-single-version [
   let dockerfile = ($cfg.dockerfile)
   
   # Auto-build dependencies if enabled
+  # CI mode: use hash-based skip logic for internal deps
+  # Local mode: always build deps (rely on Docker layer cache)
+  let ci_mode = (not $is_local)
+  
   if not $no_auto_build_deps {
     # Build dependency graph
     let graph = (build-dependency-graph $service $version_spec $cfg $current_platform $platforms $is_local $info)
@@ -1488,9 +1529,52 @@ def build-single-version [
           $"($dep_service):($dep_version_spec.name)"
         })
         
+        # CI-only: Check if local image has matching service definition hash
+        # Local builds always proceed to docker build (rely on layer cache)
+        # Cache match kind passed from CLI (set by GitHub Actions workflow)
+        let cache_hint = (if ($cache_match | str length) > 0 { $" [cache: ($cache_match)]" } else { "" })
+        
+        let should_skip_build = (if $ci_mode {
+          # Get expected hash from pre-computed graph
+          let expected_hash = (try { $hash_graph | get $dep_node } catch { "" })
+          
+          if ($expected_hash | str length) == 0 {
+            # No expected hash - can't skip, must build
+            false
+          } else {
+            # Compute canonical image ref for this dep
+            let dep_image_ref = (compute-canonical-image-ref $dep_node $info $is_local)
+            
+            # Check if local image exists and get its hash label
+            let actual_hash = (get-service-def-hash-from-image $dep_image_ref)
+            
+            if ($actual_hash | str length) == 0 {
+              # Image missing or no hash label - stale, must build
+              print $"CI: Dependency '($dep_label)' - local image missing or unlabeled, will auto-build($cache_hint)"
+              false
+            } else if $actual_hash == $expected_hash {
+              # Hash matches - safe to skip
+              print $"CI: Dependency '($dep_label)' - found fresh image with matching hash, skipping build"
+              true
+            } else {
+              # Hash mismatch - stale, must build
+              print $"CI: Dependency '($dep_label)' - hash mismatch (expected: ($expected_hash | str substring 0..8)..., actual: ($actual_hash | str substring 0..8)...), will auto-build($cache_hint)"
+              false
+            }
+          }
+        } else {
+          # Local mode: never skip, always build (rely on Docker layer cache)
+          false
+        })
+        
+        if $should_skip_build {
+          # Skip build for this dep - already have fresh image
+          continue
+        }
+        
         let prev_cache = $current_cache
         try {
-          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps)
+          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps $hash_graph $cache_match)
           $current_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
@@ -1515,6 +1599,50 @@ def build-single-version [
       let exists = (verify-image-exists-locally $dep_image)
       if not $exists {
         print $"Warning: Dependency image '($dep_image)' not found locally. Build may fail."
+      }
+    }
+  }
+  
+  # CI strict mode: when --no-auto-build-deps is set, validate all internal deps have matching hashes
+  # This catches stale/missing deps that would have been auto-built in soft mode
+  if $ci_mode and $no_auto_build_deps {
+    # Build dependency graph to get all internal deps
+    let strict_graph = (build-dependency-graph $service $version_spec $cfg $current_platform $platforms $is_local $info)
+    let strict_build_order = (topological-sort-dfs $strict_graph)
+    let strict_target_node = (if ($current_platform | str length) > 0 {
+      $"($service):($version_tag):($current_platform)"
+    } else {
+      $"($service):($version_tag)"
+    })
+    let strict_dep_order = (filter-to-dependencies-only $strict_build_order $strict_target_node)
+    
+    mut stale_deps = []
+    
+    for dep_node in $strict_dep_order {
+      let expected_hash = (try { $hash_graph | get $dep_node } catch { "" })
+      
+      if ($expected_hash | str length) == 0 {
+        # No expected hash in graph - skip validation for this dep
+        continue
+      }
+      
+      let dep_image_ref = (compute-canonical-image-ref $dep_node $info $is_local)
+      let actual_hash = (get-service-def-hash-from-image $dep_image_ref)
+      
+      if ($actual_hash | str length) == 0 {
+        $stale_deps = ($stale_deps | append {node: $dep_node, reason: "missing or unlabeled"})
+      } else if $actual_hash != $expected_hash {
+        $stale_deps = ($stale_deps | append {node: $dep_node, reason: $"hash mismatch (expected: ($expected_hash | str substring 0..8)..., actual: ($actual_hash | str substring 0..8)...)"})
+      }
+    }
+    
+    if not ($stale_deps | is-empty) {
+      let stale_list = ($stale_deps | each {|d| $"  - ($d.node): ($d.reason)"} | str join "\n")
+      error make {
+        msg: ($"CI strict mode (--no-auto-build-deps): Found stale or missing dependency images.\n\n" +
+              $"The following dependencies need to be rebuilt:\n($stale_list)\n\n" +
+              "In strict mode, dependencies must have matching service definition hashes.\n" +
+              "Either rebuild the dependencies first, or remove --no-auto-build-deps to allow auto-building.")
       }
     }
   }

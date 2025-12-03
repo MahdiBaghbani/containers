@@ -20,6 +20,7 @@
 use ./platforms.nu [merge-version-overrides merge-platform-config get-platform-spec check-platforms-manifest-exists]
 use ./common.nu [get-service-config-path get-tls-mode get-repo-root]
 use ./validate.nu [validate-merged-config validate-local-path]
+use ./constants.nu [LABEL_SYSTEM_PREFIX LABEL_SERVICE_DEF_HASH]
 
 # Load service config and merge platform/version overrides
 # See docs/concepts/service-configuration.md for merge order
@@ -316,7 +317,8 @@ export def generate-labels [
     meta: record,
     cfg: record,
     source_shas: record = {},
-    source_types: record = {}
+    source_types: record = {},
+    service_def_hash: string = ""
 ] {
     let image_source = (try {
         git remote get-url origin | str trim
@@ -411,7 +413,27 @@ export def generate-labels [
         }
     }
 
-    $base_labels | merge (try { $cfg.labels } catch { {} } | default {})
+    # Merge user labels
+    let user_labels = (try { $cfg.labels } catch { {} } | default {})
+    
+    # Warn if user tries to set system-owned labels (org.opencloudmesh.system.*)
+    let system_label_keys = ($user_labels | columns | where {|k| $k | str starts-with $LABEL_SYSTEM_PREFIX})
+    if not ($system_label_keys | is-empty) {
+        for key in $system_label_keys {
+            let user_value = ($user_labels | get $key)
+            print $"WARNING: [($service)] User-defined label '($key)' is in system-owned namespace '($LABEL_SYSTEM_PREFIX)*'. This label will be ignored and overwritten by the build system."
+        }
+    }
+    
+    # Merge user labels into base labels
+    mut final_labels = ($base_labels | merge $user_labels)
+    
+    # Inject service definition hash label (always overwrites, even if user tried to set it)
+    if ($service_def_hash | str length) > 0 {
+        $final_labels = ($final_labels | upsert $LABEL_SERVICE_DEF_HASH $service_def_hash)
+    }
+    
+    $final_labels
 }
 
 # Generate build arguments (priority order documented in docs/concepts/build-system.md)

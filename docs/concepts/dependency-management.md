@@ -339,6 +339,37 @@ By default, the build system automatically builds missing dependencies:
 3. **Sequential building:** Builds each dependency in order
 4. **Docker caching:** If dependency image exists, Docker uses it (no rebuild)
 
+### CI-Only Hash-Based Reuse
+
+In CI builds, the build system uses service definition hashes to determine whether dependencies need rebuilding:
+
+1. **Hash computation:** Before building, compute hashes for all nodes in the build graph
+2. **Local image inspection:** For each dependency, check if a local image exists with the expected hash label
+3. **Skip or rebuild:**
+   - **Hash matches:** Skip the dependency build (image is valid)
+   - **Hash missing/mismatched:** Image is stale, rebuild is needed
+
+The service definition hash captures all inputs that affect the image: Dockerfile contents, sources, external images, build args, TLS config, and direct dependency hashes. See [Build System - Service Definition Hash](build-system.md#service-definition-hash) for details.
+
+**Local builds** do not use hash-based skipping. They always proceed to `docker build` and rely on Docker's layer cache.
+
+### Soft vs Strict CI Mode
+
+CI builds have two modes for handling missing or stale dependencies:
+
+| Mode | Flag | Missing/Stale Deps | Use Case |
+|------|------|-------------------|----------|
+| Soft (default) | None | Auto-build with warning | Standard CI workflows |
+| Strict | `--no-auto-build-deps` | Fail with error | Explicit dependency control |
+
+**Soft mode** (default): If a dependency image is missing or has a stale hash, the build system auto-builds it with a warning message. This ensures builds complete even when cache restoration is incomplete.
+
+**Strict mode** (`--no-auto-build-deps`): If a dependency image is missing or has a stale hash, the build fails with an error. Use this when you require explicit control over dependency builds or want to fail fast on cache misses.
+
+### Hash Label Requirement
+
+Internal dependency images must have the `org.opencloudmesh.system.service-def-hash` label to be considered valid in CI. Images without this label (e.g., images built before this feature) are treated as stale and trigger a rebuild (soft mode) or error (strict mode).
+
 ### Disable Auto-Build
 
 Use `--no-auto-build-deps` flag to disable:

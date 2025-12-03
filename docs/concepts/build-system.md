@@ -872,6 +872,67 @@ Other platforms (alpine):
 
 For complete details on tag generation, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
 
+## Service Definition Hash
+
+The build system computes a deterministic hash for each build node (service:version[:platform]) that captures all inputs affecting the final image. This hash is stored as an OCI label on built images and enables CI-only dependency reuse.
+
+### Hash Inputs
+
+The service definition hash is computed from:
+
+- **Identity**: Service name, version, platform
+- **Dockerfile contents**: SHA-256 of the Dockerfile content
+- **Sources**: Git source refs/URLs (sorted for determinism)
+- **External images**: Base images and other external dependencies
+- **Build args**: User-defined build arguments from config
+- **TLS fields**: TLS configuration (enabled, cert name, CA name)
+- **Direct dependency hashes**: Hashes of all immediate internal dependencies
+
+The hash is computed recursively in topological order, ensuring that dependency hashes are available before computing the dependent service's hash.
+
+### Label Storage
+
+The hash is stored as an OCI image label:
+
+```text
+org.opencloudmesh.system.service-def-hash=<64-character SHA-256 hex>
+```
+
+Labels with the `org.opencloudmesh.system.` prefix are system-owned and cannot be overridden by user configuration. If a user attempts to set a label with this prefix, a warning is logged and the system value is used.
+
+### Local vs CI Behavior
+
+The service definition hash enables different behaviors for local and CI builds:
+
+| Aspect | Local Builds | CI Builds |
+|--------|--------------|-----------|
+| Dependency building | Always auto-build, rely on Docker layer cache | Hash-based skip: skip if local image has matching hash |
+| Missing dependencies | Auto-build (default) or error (--no-auto-build-deps) | Auto-build with warning (soft) or error (strict) |
+| Stale dependencies | Docker rebuilds as needed | Auto-build with warning (soft) or error (strict) |
+
+**Local builds** always proceed to `docker build` for each dependency and rely on Docker's layer cache for efficiency. No label-based skipping occurs.
+
+**CI builds** inspect local images for the service definition hash label. If the hash matches, the dependency build is skipped. If the hash is missing or mismatched (stale), the behavior depends on mode:
+
+- **Soft mode (default)**: Auto-build with a warning message
+- **Strict mode (`--no-auto-build-deps`)**: Fail with an error
+
+### Cache Match Diagnostics
+
+In CI, the `--cache-match` flag provides diagnostic information about cache restoration:
+
+```bash
+nu scripts/build.nu --service my-service --cache-match=exact
+```
+
+Values:
+
+- `exact`: Cache key matched exactly (commit+branch)
+- `fallback`: Fallback key matched (same branch, different commit)
+- `miss`: No cache found
+
+This information appears in auto-build warning messages to help diagnose cache behavior.
+
 ## Best Practices
 
 1. **Use per-service cache busting** for normal builds (default) - This ensures efficient caching while detecting source changes

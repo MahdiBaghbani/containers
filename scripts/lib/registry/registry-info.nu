@@ -83,7 +83,12 @@ export def get-registry-info [] {
   let repo = ($path_parts | get 1)
 
   # For GitHub CI, use GITHUB_REPOSITORY for the path (lowercase for OCI compliance)
-  let github_repo = ((try { $env.GITHUB_REPOSITORY } catch { "" }) | default ($"($owner)/($repo)") | str downcase)
+  let github_repo_env = ((try { $env.GITHUB_REPOSITORY } catch { "" }) | default "")
+  let github_repo = (if ($github_repo_env | str length) > 0 {
+    $github_repo_env | str downcase
+  } else {
+    $"($owner)/($repo)" | str downcase
+  })
   
   # For Forgejo, use the parsed host as registry (only valid when running on Forgejo)
   # When running on GitHub, forgejo_registry will be github.com which is wrong, but we won't use it
