@@ -1029,6 +1029,88 @@ Values:
 
 This information appears in auto-build warning messages to help diagnose cache behavior.
 
+## Disk Monitoring
+
+The build system includes an optional disk monitoring feature for diagnosing disk usage on constrained CI runners. When enabled, the system emits human-readable disk usage snapshots at key build phases.
+
+### Enabling Disk Monitoring
+
+Use the `--disk-monitor` flag:
+
+```bash
+# Enable basic disk monitoring
+nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=basic
+
+# Default: monitoring disabled
+nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=off
+```
+
+### Monitoring Modes
+
+| Mode | Behavior |
+|------|----------|
+| `off` | No monitoring (default) |
+| `basic` | Emit disk usage snapshots at build phases |
+
+### Build Phases
+
+Disk usage snapshots are captured at three phases:
+
+1. **pre** - At the start of the build pipeline (after flag parsing, before builds)
+2. **after-deps** - After dependency validation and graph setup, before main service build
+3. **post-build** - After all builds complete
+
+**Note:** In CI, dependency images are loaded via `ci-load-dep-tarballs.nu` before `build.nu` runs. The `pre` and `after-deps` phases occur after cache restoration.
+
+### Snapshot Contents
+
+Each snapshot includes:
+
+- **Filesystem Summary** - Output of `df -h` for root filesystem and Docker mounts
+- **Docker Disk Usage** - Output of `docker system df` showing image/container/cache usage
+- **CI Cache Directory Usage** - Sizes of `/tmp/docker-images/` and per-service/dependency subdirectories
+- **Top Workspace Directories** - Largest directories in the repository (depth-limited)
+- **Top /tmp Directories** - Largest directories in `/tmp` (depth-limited)
+
+### Low Disk Warning
+
+If the root filesystem has less than 1GB free, a warning is displayed:
+
+```text
+WARNING: Low disk space: 0.8GB free
+```
+
+### CI Integration
+
+In CI workflows, disk monitoring can be enabled per-service via the `disk_monitor_mode` input:
+
+```yaml
+# In build-service.yml call
+uses: ./.github/workflows/build-service.yml
+with:
+  service: cernbox-web
+  disk_monitor_mode: basic
+```
+
+To enable monitoring for specific services in the generated `build.yml`, add service names to `DISK_MONITORED_SERVICES` in `scripts/gen-ci-build-workflow.nu` and regenerate the workflow.
+
+### Metadata-Only Modes
+
+Disk monitoring is automatically skipped for metadata-only operations:
+
+- `--show-build-order` - No snapshots emitted
+- `--matrix-json` - No snapshots emitted
+
+### Error Handling
+
+Disk monitoring failures are non-fatal. If any monitoring operation fails, a warning is logged and the build continues:
+
+```text
+WARNING: Disk monitoring failed: df command failed
+```
+
+This ensures monitoring issues never break actual builds.
+
 ## Best Practices
 
 1. **Use per-service cache busting** for normal builds (default) - This ensures efficient caching while detecting source changes

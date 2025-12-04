@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: ""
+      disk_monitor_mode:
+        description: "Disk monitoring mode: off (default), basic (emit disk usage snapshots)"
+        required: false
+        type: string
+        default: "off"
 
 jobs:
   build-service:
@@ -223,12 +228,14 @@ jobs:
       - name: Build service
         run: |
           echo "Cache match kind: ${{ steps.cache-match.outputs.match_kind }}"
+          echo "Disk monitor mode: ${{ inputs.disk_monitor_mode }}"
           nu scripts/build.nu \
             --service ${{ inputs.service }} \
             --all-versions \
             --dep-cache=soft \
             --pull=deps,externals \
-            --cache-match=${{ steps.cache-match.outputs.match_kind }}
+            --cache-match=${{ steps.cache-match.outputs.match_kind }} \
+            --disk-monitor=${{ inputs.disk_monitor_mode }}
 
       # Save images using SHA-deduplicated tarballs
       - name: Save images to cache

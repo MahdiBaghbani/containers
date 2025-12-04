@@ -43,6 +43,7 @@ use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs show-build
 use ./lib/pull.nu [parse-pull-modes run-pulls print-pull-summary compute-canonical-image-ref]
 use ./lib/service-def-hash.nu [compute-service-def-hash-graph]
 use ./lib/dep-cache.nu [parse-dep-cache-mode save-owner-tarballs]
+use ./lib/disk-usage.nu [record-disk-usage]
 
 export def main [
   --service: string,
@@ -84,7 +85,9 @@ export def main [
   # Pre-pull images before build: deps (cache warm-up), externals (fail-fast preflight), or both
   --pull: string = "",
   # CI cache match kind for diagnostics: exact, fallback, miss (set by GitHub Actions workflow)
-  --cache-match: string = ""
+  --cache-match: string = "",
+  # Disk monitoring mode: off (default), basic (emit disk usage snapshots at build phases)
+  --disk-monitor: string = "off"
 ] {
   let info = (get-registry-info)
   let meta = (detect-build)
@@ -107,6 +110,7 @@ export def main [
   let tag_deps = (parse-bool-flag ($tag_deps | default false))
   let fail_fast = (parse-bool-flag ($fail_fast | default false))
   let pull_modes = (parse-pull-modes $pull)
+  let disk_monitor = $disk_monitor
   
   # Validate flag conflicts with --all-services
   if $all_services_val {
@@ -130,7 +134,17 @@ export def main [
     }
     
     # Route to build-all-services function
-    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes $cache_match
+    # Disk monitoring: pre phase (skip for metadata-only modes)
+    if $disk_monitor != "off" and not $show_build_order and not $matrix_json_val {
+      try { record-disk-usage "all-services" "pre" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+    }
+    
+    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes $cache_match $disk_monitor
+    
+    # Disk monitoring: post-build phase (skip for metadata-only modes)
+    if $disk_monitor != "off" and not $show_build_order and not $matrix_json_val {
+      try { record-disk-usage "all-services" "post-build" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+    }
     return
   }
   
@@ -140,6 +154,11 @@ export def main [
     error make {
       msg: "Either --service <name> or --all-services must be specified."
     }
+  }
+  
+  # Disk monitoring: pre phase for single-service builds (skip for metadata-only modes)
+  if $disk_monitor != "off" and not $show_build_order and not $matrix_json_val {
+    try { record-disk-usage $service "pre" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
   }
   
   let has_versions_manifest = (check-versions-manifest-exists $service)
@@ -490,6 +509,13 @@ export def main [
         print ""
       }
       
+      # Disk monitoring: after-deps phase
+      # Note: In CI, dependency images are loaded via ci-load-dep-tarballs.nu BEFORE build.nu runs.
+      # This phase represents "early mid-build" after validation and graph setup.
+      if $disk_monitor != "off" {
+        try { record-disk-usage $service "after-deps" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+      }
+      
       print $"\n=== Building ($expanded_versions | length) version\(s\) of ($service) ==="
       print ""
       
@@ -527,6 +553,11 @@ export def main [
       
       print-build-summary $successes $failures $skipped
       
+      # Disk monitoring: post-build phase
+      if $disk_monitor != "off" {
+        try { record-disk-usage $service "post-build" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+      }
+      
       if ($failures | length) > 0 {
         exit 1
       }
@@ -544,6 +575,13 @@ export def main [
         let pull_metrics = (run-pulls $pull_modes $build_order $info $meta.is_local)
         print-pull-summary $pull_metrics
         print ""
+      }
+      
+      # Disk monitoring: after-deps phase
+      # Note: In CI, dependency images are loaded via ci-load-dep-tarballs.nu BEFORE build.nu runs.
+      # This phase represents "early mid-build" after validation and graph setup.
+      if $disk_monitor != "off" {
+        try { record-disk-usage $service "after-deps" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
       }
       
       print $"\n=== Building ($versions_to_build | length) version\(s\) of ($service) ==="
@@ -582,6 +620,11 @@ export def main [
       }
       
       print-build-summary $successes $failures $skipped
+      
+      # Disk monitoring: post-build phase
+      if $disk_monitor != "off" {
+        try { record-disk-usage $service "post-build" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+      }
       
       if ($failures | length) > 0 {
         exit 1
@@ -657,6 +700,13 @@ export def main [
       print ""
     }
     
+    # Disk monitoring: after-deps phase
+    # Note: In CI, dependency images are loaded via ci-load-dep-tarballs.nu BEFORE build.nu runs.
+    # This phase represents "early mid-build" after validation and graph setup.
+    if $disk_monitor != "off" {
+      try { record-disk-usage $service "after-deps" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+    }
+    
     for expanded_version in $expanded_versions {
       let prev_cache = $sha_cache
       let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $hash_graph $cache_match)
@@ -677,9 +727,21 @@ export def main [
       print ""
     }
     
+    # Disk monitoring: after-deps phase
+    # Note: In CI, dependency images are loaded via ci-load-dep-tarballs.nu BEFORE build.nu runs.
+    # This phase represents "early mid-build" after validation and graph setup.
+    if $disk_monitor != "off" {
+      try { record-disk-usage $service "after-deps" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+    }
+    
     let prev_cache = $sha_cache
     let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $hash_graph $cache_match)
     $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
+  }
+  
+  # Disk monitoring: post-build phase for single-version builds
+  if $disk_monitor != "off" {
+    try { record-disk-usage $service "post-build" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
   }
 }
 
@@ -705,7 +767,8 @@ def build-all-services [
   show_build_order: bool,
   matrix_json: bool,
   pull_modes: list,  # Pre-pull modes: deps, externals, or both
-  cache_match: string  # CI cache match kind for diagnostics
+  cache_match: string,  # CI cache match kind for diagnostics
+  disk_monitor: string = "off"  # Disk monitoring mode: off, basic
 ] {
   use ./lib/services.nu [list-service-names]
   use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest get-default-version]

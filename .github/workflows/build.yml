@@ -60,6 +60,7 @@ jobs:
       service: cernbox-web
       push: false
       dependencies: "common-tools"
+      disk_monitor_mode: basic
 
   build_common_tools:
     uses: ./.github/workflows/build-service.yml

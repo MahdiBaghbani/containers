@@ -196,6 +196,37 @@ $list | where {|item| $item.size > 1kb and $item.name == "test" }
 
 **Why**: Nushell's parser may have issues resolving `$it` in closures when there are variable name conflicts or complex scoping. Explicit parameters (`{|item| ...}`) are always reliable and make the code clearer.
 
+### CRITICAL: Multi-Line Boolean Expressions in Where Closures
+
+**IMPORTANT**: Multi-line boolean expressions with `or` operators in `where` closures can cause "Incomplete math expression" parse errors.
+
+```nu
+# WRONG - Parse error: "Incomplete math expression"
+let lines = ($result.stdout | lines)
+let filtered = ($lines | where {|line|
+    ($line | str starts-with "Filesystem") or
+    ($line | str contains " /$") or
+    ($line | str contains "/var/lib/docker")
+})
+
+# CORRECT - Use `any` with a list of patterns
+let patterns = ["Filesystem", " /$", "/var/lib/docker"]
+let filtered = ($lines | where {|line|
+    $patterns | any {|pat| $line | str contains $pat}
+})
+
+# CORRECT - Single-line boolean expression (if short enough)
+let filtered = ($lines | where {|line| ($line | str starts-with "X") or ($line | str contains "Y")})
+```
+
+**Why**: Nushell's parser can misinterpret multi-line `or` expressions as incomplete math operations. When you need to check multiple conditions:
+
+1. **Use `any` with a pattern list** for "any of these match" logic
+2. **Use `all` with a pattern list** for "all of these match" logic
+3. **Keep single-line** if the expression is short enough
+
+**Pattern**: For filtering with multiple alternative conditions, prefer `any` over chained `or` operators.
+
 ### Common Patterns
 
 ```nu
@@ -694,6 +725,7 @@ export def set-mock-platform-behavior [service: string, has_platforms: bool] {
 17. **Use `not ($x in $y)` for membership tests** - `$x not in $y` is a syntax error
 18. **Use explicit closure parameters in `where`** - `where {|item| ...}` is more reliable than `where { ... }` with implicit `$it`
 19. **Save mutable vars before closures** - `let prev = $mut_var` then use `$prev` in `catch { $prev }`
+20. **Use `any`/`all` for multi-condition filtering** - avoid multi-line `or` expressions in where closures (use `any` with pattern list instead)
 
 ## Command Execution
 
@@ -857,6 +889,26 @@ let value = (try { $record.field } catch { default_value })
 # WRONG $list | where { ($var | str length) == 0 or $it.field == $var }  # Error: Variable not found
 # OK: $list | where {|item| ($var | str length) == 0 or $item.field == $var }  # Works!
 ```
+
+#### Error: "Incomplete math expression" in multi-line where closure?
+
+```nu
+# Multi-line `or` expressions can cause parse errors
+# WRONG - Parse error on the `or` operators
+let filtered = ($lines | where {|line|
+    ($line | str starts-with "X") or
+    ($line | str contains "Y") or
+    ($line | str contains "Z")
+})
+
+# CORRECT - Use `any` with a pattern list
+let patterns = ["X", "Y", "Z"]
+let filtered = ($lines | where {|line|
+    $patterns | any {|pat| $line | str contains $pat}
+})
+```
+
+**Key Insight**: Nushell's parser can misinterpret multi-line `or` expressions. Use `any` with a list for "any of these match" conditions, or `all` for "all of these match" conditions.
 
 #### Error: "External command failed" when calling a function?
 
