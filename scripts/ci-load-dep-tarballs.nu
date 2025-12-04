@@ -21,7 +21,7 @@
 # Called by build-service.yml to load images from dependency service caches
 
 use ./lib/dep-cache.nu [read-manifest get-image-tarball-path]
-use ./lib/ci-deps.nu [get-direct-dependency-services]
+use ./lib/ci-deps.nu [get-all-dependency-services]
 
 # Get Docker image ID for a given image reference
 def get-docker-image-id [image_ref: string] {
@@ -47,8 +47,8 @@ export def main [
 
     print $"Loading dependency images for service: ($service)"
 
-    # Get all dependency services
-    let dep_services = (get-direct-dependency-services $service)
+    # Get all dependency services (transitive)
+    let dep_services = (get-all-dependency-services $service)
 
     if ($dep_services | is-empty) {
         print "No dependencies found for this service."

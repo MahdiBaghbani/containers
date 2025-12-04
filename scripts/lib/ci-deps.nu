@@ -43,7 +43,7 @@ def merge-services [acc: list, services: list] {
     }
 }
 
-# Get direct dependency service names for a service
+# Get direct dependency service names for a service (non-recursive)
 # Directly parses versions.nuon to extract dependency service names from:
 # - defaults.dependencies
 # - version overrides.dependencies
@@ -83,4 +83,45 @@ export def get-direct-dependency-services [service: string] {
     }
 
     $all_deps
+}
+
+# Get all transitive dependency service names for a service (recursive)
+# Walks the full dependency tree to find all services needed to build this service.
+# Returns deduplicated list in topological order (deepest deps first).
+export def get-all-dependency-services [service: string] {
+    mut result = []
+    mut queue = (get-direct-dependency-services $service)
+    mut visited = []
+
+    # BFS through dependency tree
+    while not ($queue | is-empty) {
+        let current = ($queue | first)
+        $queue = ($queue | skip 1)
+
+        if $current in $visited {
+            continue
+        }
+
+        $visited = ($visited | append $current)
+
+        # Get deps of current service and add to queue
+        let current_deps = (get-direct-dependency-services $current)
+        for dep in $current_deps {
+            if $dep not-in $visited {
+                $queue = ($queue | append $dep)
+            }
+        }
+
+        # Prepend to result (deepest deps first for topological order)
+        $result = ([$current] | append $result)
+    }
+
+    # Deduplicate while preserving order
+    mut final = []
+    for svc in $result {
+        if $svc not-in $final {
+            $final = ($final | append $svc)
+        }
+    }
+    $final
 }

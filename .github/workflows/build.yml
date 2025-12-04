@@ -46,16 +46,14 @@ on:
 
 jobs:
   build_cernbox_revad:
-    name: Build cernbox-revad
     needs: [build_common_tools, build_gaia, build_revad_base]
     uses: ./.github/workflows/build-service.yml
     with:
       service: cernbox-revad
       push: false
-      dependencies: "common-tools,gaia,revad-base"
+      dependencies: "revad-base,gaia,common-tools"
 
   build_cernbox_web:
-    name: Build cernbox-web
     needs: [build_common_tools]
     uses: ./.github/workflows/build-service.yml
     with:
@@ -64,7 +62,6 @@ jobs:
       dependencies: "common-tools"
 
   build_common_tools:
-    name: Build common-tools
     uses: ./.github/workflows/build-service.yml
     with:
       service: common-tools
@@ -72,7 +69,6 @@ jobs:
       dependencies: ""
 
   build_gaia:
-    name: Build gaia
     needs: [build_common_tools]
     uses: ./.github/workflows/build-service.yml
     with:
@@ -81,7 +77,6 @@ jobs:
       dependencies: "common-tools"
 
   build_idp:
-    name: Build idp
     needs: [build_common_tools]
     uses: ./.github/workflows/build-service.yml
     with:
@@ -90,16 +85,14 @@ jobs:
       dependencies: "common-tools"
 
   build_nextcloud:
-    name: Build nextcloud
     needs: [build_nextcloud_base]
     uses: ./.github/workflows/build-service.yml
     with:
       service: nextcloud
       push: false
-      dependencies: "nextcloud-base"
+      dependencies: "common-tools,nextcloud-base"
 
   build_nextcloud_base:
-    name: Build nextcloud-base
     needs: [build_common_tools]
     uses: ./.github/workflows/build-service.yml
     with:
@@ -108,16 +101,14 @@ jobs:
       dependencies: "common-tools"
 
   build_nextcloud_contacts:
-    name: Build nextcloud-contacts
     needs: [build_common_tools, build_nextcloud]
     uses: ./.github/workflows/build-service.yml
     with:
       service: nextcloud-contacts
       push: false
-      dependencies: "common-tools,nextcloud"
+      dependencies: "nextcloud-base,nextcloud,common-tools"
 
   build_revad_base:
-    name: Build revad-base
     needs: [build_common_tools]
     uses: ./.github/workflows/build-service.yml
     with:

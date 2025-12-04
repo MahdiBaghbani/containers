@@ -21,7 +21,7 @@
 # Produces .github/workflows/build.yml with per-service jobs and dependency inputs
 
 use ./lib/services.nu [list-service-names]
-use ./lib/ci-deps.nu [get-direct-dependency-services]
+use ./lib/ci-deps.nu [get-direct-dependency-services get-all-dependency-services]
 
 const OUTPUT_PATH = ".github/workflows/build.yml"
 
@@ -35,16 +35,20 @@ def services-to-job-ids [services: list] {
     $services | each {|svc| service-to-job-id $svc }
 }
 
-# Get all services with their direct dependencies
+# Get all services with their dependencies
+# - direct_deps: direct deps only (used for job `needs` clause)
+# - all_deps: transitive deps (used for `dependencies` input to restore all caches)
 def get-services-with-deps [] {
     let services = (list-service-names)
     $services | each {|svc|
-        let deps = (get-direct-dependency-services $svc)
+        let direct_deps = (get-direct-dependency-services $svc)
+        let all_deps = (get-all-dependency-services $svc)
         {
             name: $svc,
             job_id: (service-to-job-id $svc),
-            direct_deps: $deps,
-            needs_job_ids: (services-to-job-ids $deps)
+            direct_deps: $direct_deps,
+            all_deps: $all_deps,
+            needs_job_ids: (services-to-job-ids $direct_deps)
         }
     }
 }
@@ -91,7 +95,8 @@ on:
 def gen-service-job [svc_info: record] {
     let job_id = $svc_info.job_id
     let name = $svc_info.name
-    let deps_str = ($svc_info.direct_deps | str join ",")
+    # Use all_deps for cache restoration (transitive), needs uses direct_deps
+    let deps_str = ($svc_info.all_deps | str join ",")
     let needs_list = $svc_info.needs_job_ids
 
     # Build the needs clause

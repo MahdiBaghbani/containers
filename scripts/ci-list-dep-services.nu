@@ -17,14 +17,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# CI helper: List direct dependency services for a consumer service
+# CI helper: List dependency services for a consumer service
 # Outputs one dependency service name per line on stdout (for CI parsing)
 # All logs and errors go to stderr to keep stdout clean
 
-use ./lib/ci-deps.nu [get-direct-dependency-services]
+use ./lib/ci-deps.nu [get-direct-dependency-services get-all-dependency-services]
 
 export def main [
     --service: string  # Service name to list dependencies for
+    --transitive       # Include transitive dependencies (default: direct only)
     --debug            # Enable verbose output on stderr
 ] {
     if ($service | str length) == 0 {
@@ -32,14 +33,19 @@ export def main [
         exit 1
     }
 
+    let mode = (if $transitive { "transitive" } else { "direct" })
     if $debug {
-        print --stderr $"DEBUG: Getting direct dependencies for service: ($service)"
+        print --stderr $"DEBUG: Getting ($mode) dependencies for service: ($service)"
     }
 
-    let dep_services = (get-direct-dependency-services $service)
+    let dep_services = (if $transitive {
+        get-all-dependency-services $service
+    } else {
+        get-direct-dependency-services $service
+    })
 
     if $debug {
-        print --stderr $"DEBUG: Found ($dep_services | length) direct dependencies"
+        print --stderr $"DEBUG: Found ($dep_services | length) ($mode) dependencies"
     }
 
     # Output each dependency on its own line (clean stdout for CI parsing)
