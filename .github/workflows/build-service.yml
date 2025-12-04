@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      dependencies:
+        description: "Comma-separated list of direct dependency service names for cache restore"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   build-service:
@@ -47,7 +52,120 @@ jobs:
         with:
           driver: docker
 
-      # Cache restore with commit+branch keys for precise reuse
+      # Parse dependencies input into fixed slots for cache restore
+      # Supports up to 8 direct dependencies per service
+      - name: Parse dependencies
+        id: deps
+        run: |
+          DEPS="${{ inputs.dependencies }}"
+          echo "Parsing dependencies: '$DEPS'"
+          
+          # Split by comma and assign to slots
+          IFS=',' read -ra DEP_ARRAY <<< "$DEPS"
+          COUNT=${#DEP_ARRAY[@]}
+          
+          # Write each dep to its slot (dep1 through dep8)
+          for i in {1..8}; do
+            IDX=$((i - 1))
+            if [ $IDX -lt $COUNT ] && [ -n "${DEP_ARRAY[$IDX]}" ]; then
+              DEP=$(echo "${DEP_ARRAY[$IDX]}" | xargs)  # trim whitespace
+              echo "dep${i}=${DEP}" >> $GITHUB_OUTPUT
+              echo "  Slot dep${i}: ${DEP}"
+            else
+              echo "dep${i}=" >> $GITHUB_OUTPUT
+            fi
+          done
+          
+          # Warn if truncated
+          if [ $COUNT -gt 8 ]; then
+            echo "WARNING: Service has $COUNT dependencies but only 8 slots available"
+            echo "  Included: ${DEP_ARRAY[@]:0:8}"
+            echo "  Truncated: ${DEP_ARRAY[@]:8}"
+          fi
+          
+          echo "Total dependencies: $COUNT (max 8 restored)"
+
+      # Restore dependency caches (up to 8 direct dependencies)
+      - name: Restore dep1 cache
+        if: steps.deps.outputs.dep1 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep1 }}/
+          key: images-${{ steps.deps.outputs.dep1 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep1 }}-${{ github.ref }}-
+
+      - name: Restore dep2 cache
+        if: steps.deps.outputs.dep2 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep2 }}/
+          key: images-${{ steps.deps.outputs.dep2 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep2 }}-${{ github.ref }}-
+
+      - name: Restore dep3 cache
+        if: steps.deps.outputs.dep3 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep3 }}/
+          key: images-${{ steps.deps.outputs.dep3 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep3 }}-${{ github.ref }}-
+
+      - name: Restore dep4 cache
+        if: steps.deps.outputs.dep4 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep4 }}/
+          key: images-${{ steps.deps.outputs.dep4 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep4 }}-${{ github.ref }}-
+
+      - name: Restore dep5 cache
+        if: steps.deps.outputs.dep5 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep5 }}/
+          key: images-${{ steps.deps.outputs.dep5 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep5 }}-${{ github.ref }}-
+
+      - name: Restore dep6 cache
+        if: steps.deps.outputs.dep6 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep6 }}/
+          key: images-${{ steps.deps.outputs.dep6 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep6 }}-${{ github.ref }}-
+
+      - name: Restore dep7 cache
+        if: steps.deps.outputs.dep7 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep7 }}/
+          key: images-${{ steps.deps.outputs.dep7 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep7 }}-${{ github.ref }}-
+
+      - name: Restore dep8 cache
+        if: steps.deps.outputs.dep8 != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: /tmp/docker-images/${{ steps.deps.outputs.dep8 }}/
+          key: images-${{ steps.deps.outputs.dep8 }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            images-${{ steps.deps.outputs.dep8 }}-${{ github.ref }}-
+
+      # Load dependency tarballs into Docker daemon
+      - name: Load dependency images
+        if: inputs.service != 'common-tools'
+        run: |
+          echo "Loading dependency images for ${{ inputs.service }}..."
+          nu scripts/ci-load-dep-tarballs.nu --service ${{ inputs.service }}
+
+      # Cache restore for the service's own images
       # Each commit gets its own cache key; cross-commit reuse via prefix restore
       # Uses directory-based cache with per-image-ID .tar.zst files
       - name: Restore Docker image cache

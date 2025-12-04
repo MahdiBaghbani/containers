@@ -1,9 +1,25 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Build all services and versions (no push)
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Build all services and versions
 # Use this for build verification without pushing to registries
 #
-# Per-service orchestration with cache-based image reuse
-# See .cursor/plans/github-build-per-service-cache-20251203T000000Z.md for design
+# GENERATED FILE - Do not edit manually
+# Regenerate with: nu scripts/gen-ci-build-workflow.nu
 
 name: Build All
 
@@ -15,35 +31,46 @@ on:
         required: false
         type: boolean
         default: false
-
 # Service dependency graph:
 #
-#   common-tools (root service, no dependencies)
-#       |
-#       +-- gaia
-#       +-- revad-base
-#       +-- cernbox-web
-#       +-- nextcloud-base --> nextcloud --> nextcloud-contacts
-#       +-- idp
-#       |
-#       +-- cernbox-revad (depends on: revad-base, gaia)
+#   cernbox-revad - depends on: common-tools, gaia, revad-base
+#   cernbox-web - depends on: common-tools
+#   common-tools - (root service, no dependencies)
+#   gaia - depends on: common-tools
+#   idp - depends on: common-tools
+#   nextcloud - depends on: nextcloud-base
+#   nextcloud-base - depends on: common-tools
+#   nextcloud-contacts - depends on: common-tools, nextcloud
+#   revad-base - depends on: common-tools
 #
-# Parallel groups:
-#   Group 1: common-tools (root)
-#   Group 2: gaia, revad-base, cernbox-web, nextcloud-base, idp (all depend only on common-tools)
-#   Group 3: cernbox-revad (needs revad-base + gaia), nextcloud (needs nextcloud-base)
-#   Group 4: nextcloud-contacts (needs nextcloud)
 
 jobs:
-  # Group 1: Root service (no dependencies)
+  build_cernbox_revad:
+    name: Build cernbox-revad
+    needs: [build_common_tools, build_gaia, build_revad_base]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: cernbox-revad
+      push: false
+      dependencies: "common-tools,gaia,revad-base"
+
+  build_cernbox_web:
+    name: Build cernbox-web
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: cernbox-web
+      push: false
+      dependencies: "common-tools"
+
   build_common_tools:
     name: Build common-tools
     uses: ./.github/workflows/build-service.yml
     with:
       service: common-tools
       push: false
+      dependencies: ""
 
-  # Group 2: Services that depend only on common-tools (run in parallel)
   build_gaia:
     name: Build gaia
     needs: [build_common_tools]
@@ -51,30 +78,7 @@ jobs:
     with:
       service: gaia
       push: false
-
-  build_revad_base:
-    name: Build revad-base
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: revad-base
-      push: false
-
-  # build_cernbox_web:
-  #   name: Build cernbox-web
-  #   needs: [build_common_tools]
-  #   uses: ./.github/workflows/build-service.yml
-  #   with:
-  #     service: cernbox-web
-  #     push: false
-
-  build_nextcloud_base:
-    name: Build nextcloud-base
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: nextcloud-base
-      push: false
+      dependencies: "common-tools"
 
   build_idp:
     name: Build idp
@@ -83,15 +87,7 @@ jobs:
     with:
       service: idp
       push: false
-
-  # Group 3: Services with multiple dependencies
-  build_cernbox_revad:
-    name: Build cernbox-revad
-    needs: [build_revad_base, build_gaia]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: cernbox-revad
-      push: false
+      dependencies: "common-tools"
 
   build_nextcloud:
     name: Build nextcloud
@@ -100,29 +96,38 @@ jobs:
     with:
       service: nextcloud
       push: false
+      dependencies: "nextcloud-base"
 
-  # Group 4: Services at the end of dependency chains
+  build_nextcloud_base:
+    name: Build nextcloud-base
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: nextcloud-base
+      push: false
+      dependencies: "common-tools"
+
   build_nextcloud_contacts:
     name: Build nextcloud-contacts
-    needs: [build_nextcloud]
+    needs: [build_common_tools, build_nextcloud]
     uses: ./.github/workflows/build-service.yml
     with:
       service: nextcloud-contacts
       push: false
+      dependencies: "common-tools,nextcloud"
 
-  # Aggregation job for overall status
+  build_revad_base:
+    name: Build revad-base
+    needs: [build_common_tools]
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: revad-base
+      push: false
+      dependencies: "common-tools"
+
   build_complete:
     name: Build Complete
-    needs:
-      - build_common_tools
-      - build_gaia
-      - build_revad_base
-      # - build_cernbox_web
-      - build_nextcloud_base
-      - build_idp
-      - build_cernbox_revad
-      - build_nextcloud
-      - build_nextcloud_contacts
+    needs: [build_cernbox_revad, build_cernbox_web, build_common_tools, build_gaia, build_idp, build_nextcloud, build_nextcloud_base, build_nextcloud_contacts, build_revad_base]
     runs-on: ubuntu-latest
     steps:
       - name: All builds completed

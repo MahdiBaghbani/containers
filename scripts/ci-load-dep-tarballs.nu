@@ -20,16 +20,8 @@
 # CI helper: Load cached dependency tarballs for a consumer service
 # Called by build-service.yml to load images from dependency service caches
 
-use ./lib/dep-cache.nu [
-    get-dep-nodes-for-service
-    read-manifest
-    get-image-tarball-path
-    get-owner-cache-dir
-]
-use ./lib/build-ops.nu [load-service-config]
-use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest]
-use ./lib/platforms.nu [check-platforms-manifest-exists load-platforms-manifest]
-use ./lib/registry/registry-info.nu [get-registry-info]
+use ./lib/dep-cache.nu [read-manifest get-image-tarball-path]
+use ./lib/ci-deps.nu [get-direct-dependency-services]
 
 # Get Docker image ID for a given image reference
 def get-docker-image-id [image_ref: string] {
@@ -45,62 +37,6 @@ def get-docker-image-id [image_ref: string] {
     }
 }
 
-# Collect all dependency services from a service's config
-def get-dependency-services [service: string] {
-    if not (check-versions-manifest-exists $service) {
-        return []
-    }
-
-    let versions_manifest = (load-versions-manifest $service)
-    let versions = (try { $versions_manifest.versions } catch { [] })
-
-    if ($versions | is-empty) {
-        return []
-    }
-
-    # Get platforms manifest if exists
-    let has_platforms = (check-platforms-manifest-exists $service)
-    let platforms_manifest = (if $has_platforms {
-        try { load-platforms-manifest $service } catch { null }
-    } else {
-        null
-    })
-
-    # Collect dependency services from all versions
-    let dep_services = ($versions | reduce --fold [] {|version_spec, acc|
-        let cfg = (try {
-            load-service-config $service $version_spec "" $platforms_manifest
-        } catch {
-            {dependencies: {}}
-        })
-
-        let deps = (try { $cfg.dependencies } catch { {} })
-        if ($deps | is-empty) {
-            $acc
-        } else {
-            let services = ($deps | columns | reduce --fold [] {|dep_key, inner_acc|
-                let dep = ($deps | get $dep_key)
-                let dep_service = (try { $dep.service } catch { $dep_key })
-                if $dep_service in $inner_acc {
-                    $inner_acc
-                } else {
-                    $inner_acc | append $dep_service
-                }
-            })
-            # Merge into accumulator, deduplicating
-            ($services | reduce --fold $acc {|svc, merged|
-                if $svc in $merged {
-                    $merged
-                } else {
-                    $merged | append $svc
-                }
-            })
-        }
-    })
-
-    $dep_services
-}
-
 export def main [
     --service: string  # Consumer service name to load dependency tarballs for
 ] {
@@ -112,7 +48,7 @@ export def main [
     print $"Loading dependency images for service: ($service)"
 
     # Get all dependency services
-    let dep_services = (get-dependency-services $service)
+    let dep_services = (get-direct-dependency-services $service)
 
     if ($dep_services | is-empty) {
         print "No dependencies found for this service."
