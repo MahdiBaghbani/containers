@@ -36,7 +36,7 @@ export def main [
     print ""
     print "=== Load Summary ==="
     print $"Loaded: ($metrics.loaded)"
-    print $"Skipped (already present): ($metrics.skipped)"
+    print $"Skipped \(already present\): ($metrics.skipped)"
     print $"Failed: ($metrics.failed)"
 
     if $metrics.failed > 0 {

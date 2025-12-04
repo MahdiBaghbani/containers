@@ -102,9 +102,8 @@ def gen-service-job [svc_info: record] {
         $"    needs: [($needs_formatted)]\n"
     })
 
-    # Build the job YAML
+    # Build the job YAML (no 'name:' to avoid redundancy with reusable workflow job name)
     $"  ($job_id):
-    name: Build ($name)
 ($needs_yaml)    uses: ./.github/workflows/build-service.yml
     with:
       service: ($name)

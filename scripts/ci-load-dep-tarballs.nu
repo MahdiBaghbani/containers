@@ -94,7 +94,7 @@ export def main [
             # Check if image already loaded
             let existing = (get-docker-image-id $image_id)
             if ($existing | str length) > 0 {
-                print $"Skipping ($image_id | str substring 0..16)... (already loaded)"
+                print $"Skipping ($image_id | str substring 0..16)... \(already loaded\)"
                 $total_skipped = $total_skipped + 1
                 continue
             }
@@ -124,7 +124,7 @@ export def main [
     print ""
     print "=== Dependency Load Summary ==="
     print $"Loaded: ($total_loaded)"
-    print $"Skipped (already present): ($total_skipped)"
+    print $"Skipped \(already present\): ($total_skipped)"
     print $"Failed: ($total_failed)"
 
     if not ($missing_manifests | is-empty) {

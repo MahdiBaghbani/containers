@@ -278,10 +278,11 @@ export def save-owner-tarballs [
 
     let cache_dir = (get-owner-cache-dir $owner_service)
 
-    # Ensure cache directory exists
-    if not ($cache_dir | path exists) {
-        mkdir $cache_dir
+    # Clear and recreate cache directory to remove stale tarballs from previous runs
+    if ($cache_dir | path exists) {
+        rm -rf $cache_dir
     }
+    mkdir $cache_dir
 
     print $"=== Saving ($image_ids | length) image\(s\) for ($owner_service) ==="
 
@@ -359,7 +360,7 @@ export def load-owner-tarballs [owner_service: string] {
         # Check if image already loaded (skip dedup)
         let existing = (get-docker-image-id $image_id)
         if ($existing | str length) > 0 {
-            print $"Skipping ($image_id | str substring 0..16)... (already loaded)"
+            print $"Skipping ($image_id | str substring 0..16)... \(already loaded\)"
             $skipped = $skipped + 1
             continue
         }
