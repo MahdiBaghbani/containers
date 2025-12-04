@@ -52,6 +52,8 @@ jobs:
       service: cernbox-revad
       push: false
       dependencies: "revad-base,gaia,common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_cernbox_web:
     needs: [build_common_tools]
@@ -61,6 +63,7 @@ jobs:
       push: false
       dependencies: "common-tools"
       disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_common_tools:
     uses: ./.github/workflows/build-service.yml
@@ -68,6 +71,8 @@ jobs:
       service: common-tools
       push: false
       dependencies: ""
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_gaia:
     needs: [build_common_tools]
@@ -76,6 +81,8 @@ jobs:
       service: gaia
       push: false
       dependencies: "common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_idp:
     needs: [build_common_tools]
@@ -84,6 +91,8 @@ jobs:
       service: idp
       push: false
       dependencies: "common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_nextcloud:
     needs: [build_nextcloud_base]
@@ -92,6 +101,8 @@ jobs:
       service: nextcloud
       push: false
       dependencies: "common-tools,nextcloud-base"
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_nextcloud_base:
     needs: [build_common_tools]
@@ -100,6 +111,8 @@ jobs:
       service: nextcloud-base
       push: false
       dependencies: "common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_nextcloud_contacts:
     needs: [build_common_tools, build_nextcloud]
@@ -108,6 +121,8 @@ jobs:
       service: nextcloud-contacts
       push: false
       dependencies: "nextcloud-base,nextcloud,common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_revad_base:
     needs: [build_common_tools]
@@ -116,6 +131,8 @@ jobs:
       service: revad-base
       push: false
       dependencies: "common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
 
   build_complete:
     name: Build Complete

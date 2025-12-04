@@ -26,6 +26,11 @@ on:
         required: false
         type: string
         default: "off"
+      prune_build_cache:
+        description: "Enable pruning of BuildKit cache mounts between version builds"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-service:
@@ -229,13 +234,15 @@ jobs:
         run: |
           echo "Cache match kind: ${{ steps.cache-match.outputs.match_kind }}"
           echo "Disk monitor mode: ${{ inputs.disk_monitor_mode }}"
+          echo "Prune build cache: ${{ inputs.prune_build_cache }}"
           nu scripts/build.nu \
             --service ${{ inputs.service }} \
             --all-versions \
             --dep-cache=soft \
             --pull=deps,externals \
             --cache-match=${{ steps.cache-match.outputs.match_kind }} \
-            --disk-monitor=${{ inputs.disk_monitor_mode }}
+            --disk-monitor=${{ inputs.disk_monitor_mode }} \
+            ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }}
 
       # Save images using SHA-deduplicated tarballs
       - name: Save images to cache

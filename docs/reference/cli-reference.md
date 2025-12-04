@@ -460,6 +460,58 @@ Control latest tag generation:
 nu scripts/build.nu --service revad-base --version v1.28.0 --latest false
 ```
 
+## Disk Management Flags
+
+### `--disk-monitor <string>`
+
+Control disk monitoring output during builds:
+
+```bash
+# Enable basic disk monitoring
+nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=basic
+
+# Default: monitoring disabled
+nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=off
+```
+
+**Modes:**
+
+| Mode | Behavior |
+|------|----------|
+| `off` | No monitoring (default for local builds) |
+| `basic` | Emit disk usage snapshots at build phases |
+
+**CI Default:** `basic` (enabled for all services in generated workflows)
+
+### `--prune-cache-mounts`
+
+Prune BuildKit exec cache mounts between version builds:
+
+```bash
+# Enable cache pruning
+nu scripts/build.nu --service cernbox-web --all-versions --prune-cache-mounts
+
+# Default: pruning disabled (local builds)
+nu scripts/build.nu --service cernbox-web --all-versions
+```
+
+**Behavior:**
+
+- Runs `docker builder prune --filter type=exec.cachemount -f` after each version build
+- Only affects multi-version builds (single-version builds have no intermediate phases)
+- Preserves Docker layer cache and image cache (only prunes `RUN --mount=type=cache` entries)
+- Non-fatal: failures are logged as warnings and builds continue
+
+**Use cases:**
+
+- CI environments with limited disk space
+- Multi-version builds where exec cache accumulates (e.g., `cernbox-web` with 8+ versions)
+- Investigating disk exhaustion issues
+
+**CI Default:** Enabled for all services in generated workflows (`prune_build_cache: true`)
+
+**Local Usage:** Typically not needed (persistent Docker cache is beneficial). Enable manually when simulating CI behavior or debugging disk issues.
+
 ## See Also
 
 - [Multi-Version Builds Guide](../guides/multi-version-builds.md) - Complete version management guide

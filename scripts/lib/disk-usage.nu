@@ -297,7 +297,7 @@ export def record-disk-usage [service: string, phase: string, mode: string] {
     if $df_result.root_avail_gb < $LOW_DISK_THRESHOLD_GB and $df_result.root_avail_gb > 0.0 {
       print ""
       print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-      print $"!! WARNING: LOW DISK SPACE - ONLY ($avail_str)GB FREE !!"
+      print $"!!    WARNING: LOW DISK SPACE - ONLY ($avail_str)GB FREE    !!"
       print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
       print ""
     }
@@ -307,5 +307,48 @@ export def record-disk-usage [service: string, phase: string, mode: string] {
   } catch {|err|
     let error_msg = (try { $err.msg } catch { "Unknown error" })
     print $"WARNING: Disk monitoring failed: ($error_msg)"
+  }
+}
+
+# Prune BuildKit exec cache mounts between version builds
+# Non-fatal: logs warnings but never fails the build
+export def prune-build-cache [context: string, mode: string = "exec-cache"] {
+  # Wrap entire function in try-catch to ensure non-fatal on any error
+  try {
+    print ""
+    print "------------------------------------------------------------"
+    print $"CI PRUNE: ($context) | mode: ($mode)"
+    print "------------------------------------------------------------"
+    
+    if $mode == "exec-cache" {
+      # Prune BuildKit exec.cachemount entries (RUN --mount=type=cache)
+      let result = (try {
+        ^docker builder prune --filter type=exec.cachemount -f | complete
+      } catch {
+        {exit_code: 1, stdout: "", stderr: "docker builder prune not available"}
+      })
+      
+      if $result.exit_code == 0 {
+        print $"CI PRUNE: exec.cachemount prune completed \(exit code 0\)"
+        if ($result.stdout | str trim | str length) > 0 {
+          print $result.stdout
+        }
+      } else {
+        let stderr_msg = (try { $result.stderr | str trim } catch { "" })
+        if ($stderr_msg | str length) > 0 {
+          print $"WARNING: Build cache prune returned exit code ($result.exit_code): ($stderr_msg)"
+        } else {
+          print $"WARNING: Build cache prune returned exit code ($result.exit_code)"
+        }
+      }
+    } else {
+      print $"WARNING: Unknown prune mode '($mode)', skipping"
+    }
+    
+    print "------------------------------------------------------------"
+    print ""
+  } catch {|err|
+    let error_msg = (try { $err.msg } catch { "Unknown error" })
+    print $"WARNING: Build cache prune failed: ($error_msg)"
   }
 }

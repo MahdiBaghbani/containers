@@ -43,7 +43,7 @@ use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs show-build
 use ./lib/pull.nu [parse-pull-modes run-pulls print-pull-summary compute-canonical-image-ref]
 use ./lib/service-def-hash.nu [compute-service-def-hash-graph]
 use ./lib/dep-cache.nu [parse-dep-cache-mode save-owner-tarballs]
-use ./lib/disk-usage.nu [record-disk-usage]
+use ./lib/disk-usage.nu [record-disk-usage prune-build-cache]
 
 export def main [
   --service: string,
@@ -87,7 +87,9 @@ export def main [
   # CI cache match kind for diagnostics: exact, fallback, miss (set by GitHub Actions workflow)
   --cache-match: string = "",
   # Disk monitoring mode: off (default), basic (emit disk usage snapshots at build phases)
-  --disk-monitor: string = "off"
+  --disk-monitor: string = "off",
+  # Prune BuildKit cache mounts between version builds (CI disk management)
+  --prune-cache-mounts
 ] {
   let info = (get-registry-info)
   let meta = (detect-build)
@@ -111,6 +113,7 @@ export def main [
   let fail_fast = (parse-bool-flag ($fail_fast | default false))
   let pull_modes = (parse-pull-modes $pull)
   let disk_monitor = $disk_monitor
+  let prune_cache_mounts = (parse-bool-flag ($prune_cache_mounts | default false))
   
   # Validate flag conflicts with --all-services
   if $all_services_val {
@@ -139,7 +142,7 @@ export def main [
       try { record-disk-usage "all-services" "pre" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
     }
     
-    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes $cache_match $disk_monitor
+    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes $cache_match $disk_monitor $prune_cache_mounts
     
     # Disk monitoring: post-build phase (skip for metadata-only modes)
     if $disk_monitor != "off" and not $show_build_order and not $matrix_json_val {
@@ -545,6 +548,11 @@ export def main [
           try { record-disk-usage $build_label "after-version" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
         }
         
+        # Prune BuildKit cache mounts between version builds (CI disk management)
+        if $prune_cache_mounts {
+          try { prune-build-cache $build_label } catch {|err| print $"WARNING: Cache prune failed: (try { $err.msg } catch { 'Unknown error' })" }
+        }
+        
         if $result.success {
           $successes = ($successes | append {label: $result.label, success: true})
         } else {
@@ -616,6 +624,11 @@ export def main [
         # Disk monitoring: after each version build (captures disk state between builds)
         if $disk_monitor != "off" {
           try { record-disk-usage $build_label "after-version" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+        }
+        
+        # Prune BuildKit cache mounts between version builds (CI disk management)
+        if $prune_cache_mounts {
+          try { prune-build-cache $build_label } catch {|err| print $"WARNING: Cache prune failed: (try { $err.msg } catch { 'Unknown error' })" }
         }
         
         if $result.success {
@@ -773,7 +786,8 @@ def build-all-services [
   matrix_json: bool,
   pull_modes: list,  # Pre-pull modes: deps, externals, or both
   cache_match: string,  # CI cache match kind for diagnostics
-  disk_monitor: string = "off"  # Disk monitoring mode: off, basic
+  disk_monitor: string = "off",  # Disk monitoring mode: off, basic
+  prune_cache_mounts: bool = false  # Prune BuildKit cache mounts between version builds
 ] {
   use ./lib/services.nu [list-service-names]
   use ./lib/manifest.nu [check-versions-manifest-exists load-versions-manifest get-default-version]

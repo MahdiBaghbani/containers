@@ -25,10 +25,6 @@ use ./lib/ci-deps.nu [get-direct-dependency-services get-all-dependency-services
 
 const OUTPUT_PATH = ".github/workflows/build.yml"
 
-# Services with disk monitoring enabled (for CI disk usage diagnostics)
-# Add service names here to enable disk monitoring in CI builds
-const DISK_MONITORED_SERVICES = ["cernbox-web"]
-
 # Convert service name to job ID (e.g., "cernbox-revad" -> "build_cernbox_revad")
 def service-to-job-id [service: string] {
     $"build_($service | str replace -a '-' '_')"
@@ -92,10 +88,12 @@ on:
         required: false
         type: boolean
         default: false
+
 "
 }
 
 # Generate YAML for a single service job
+# All jobs enable disk monitoring and cache pruning for CI disk management
 def gen-service-job [svc_info: record] {
     let job_id = $svc_info.job_id
     let name = $svc_info.name
@@ -111,21 +109,17 @@ def gen-service-job [svc_info: record] {
         $"    needs: [($needs_formatted)]\n"
     })
 
-    # Check if this service should have disk monitoring enabled
-    let disk_monitor_yaml = (if $name in $DISK_MONITORED_SERVICES {
-        "      disk_monitor_mode: basic\n"
-    } else {
-        ""
-    })
-
     # Build the job YAML (no 'name:' to avoid redundancy with reusable workflow job name)
+    # Disk monitoring and cache pruning enabled for all services (CI disk management)
     $"  ($job_id):
 ($needs_yaml)    uses: ./.github/workflows/build-service.yml
     with:
       service: ($name)
       push: false
       dependencies: \"($deps_str)\"
-($disk_monitor_yaml)"
+      disk_monitor_mode: basic
+      prune_build_cache: true
+"
 }
 
 # Generate YAML for the build_complete aggregation job
