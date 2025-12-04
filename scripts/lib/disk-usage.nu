@@ -310,9 +310,12 @@ export def record-disk-usage [service: string, phase: string, mode: string] {
   }
 }
 
-# Prune BuildKit exec cache mounts between version builds
+# Prune BuildKit cache between version builds
 # Non-fatal: logs warnings but never fails the build
-export def prune-build-cache [context: string, mode: string = "exec-cache"] {
+# Modes:
+#   - exec-cache: Only prune exec.cachemount entries (conservative)
+#   - build-cache: Prune all build cache (aggressive, recommended for CI)
+export def prune-build-cache [context: string, mode: string = "build-cache"] {
   # Wrap entire function in try-catch to ensure non-fatal on any error
   try {
     print ""
@@ -320,29 +323,49 @@ export def prune-build-cache [context: string, mode: string = "exec-cache"] {
     print $"CI PRUNE: ($context) | mode: ($mode)"
     print "------------------------------------------------------------"
     
-    if $mode == "exec-cache" {
-      # Prune BuildKit exec.cachemount entries (RUN --mount=type=cache)
-      let result = (try {
+    let prune_result = (if $mode == "exec-cache" {
+      # Prune only BuildKit exec.cachemount entries (RUN --mount=type=cache)
+      try {
         ^docker builder prune --filter type=exec.cachemount -f | complete
       } catch {
         {exit_code: 1, stdout: "", stderr: "docker builder prune not available"}
-      })
-      
-      if $result.exit_code == 0 {
-        print $"CI PRUNE: exec.cachemount prune completed \(exit code 0\)"
-        if ($result.stdout | str trim | str length) > 0 {
-          print $result.stdout
-        }
-      } else {
-        let stderr_msg = (try { $result.stderr | str trim } catch { "" })
-        if ($stderr_msg | str length) > 0 {
-          print $"WARNING: Build cache prune returned exit code ($result.exit_code): ($stderr_msg)"
-        } else {
-          print $"WARNING: Build cache prune returned exit code ($result.exit_code)"
-        }
+      }
+    } else if $mode == "build-cache" {
+      # Prune all BuildKit cache (more aggressive, clears intermediate layers too)
+      try {
+        ^docker builder prune -f | complete
+      } catch {
+        {exit_code: 1, stdout: "", stderr: "docker builder prune not available"}
       }
     } else {
       print $"WARNING: Unknown prune mode '($mode)', skipping"
+      {exit_code: 0, stdout: "", stderr: ""}
+    })
+    
+    if $prune_result.exit_code == 0 {
+      print $"CI PRUNE: ($mode) prune completed \(exit code 0\)"
+      if ($prune_result.stdout | str trim | str length) > 0 {
+        print $prune_result.stdout
+      }
+    } else {
+      let stderr_msg = (try { $prune_result.stderr | str trim } catch { "" })
+      if ($stderr_msg | str length) > 0 {
+        print $"WARNING: Build cache prune returned exit code ($prune_result.exit_code): ($stderr_msg)"
+      } else {
+        print $"WARNING: Build cache prune returned exit code ($prune_result.exit_code)"
+      }
+    }
+    
+    # Show Docker disk usage after prune to confirm the effect
+    print ""
+    print "--- Docker Disk Usage (after prune) ---"
+    let df_result = (run-docker-system-df)
+    if ($df_result | is-empty) {
+      print "  (Docker not available)"
+    } else {
+      for line in $df_result {
+        print $line
+      }
     }
     
     print "------------------------------------------------------------"

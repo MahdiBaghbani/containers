@@ -1117,7 +1117,7 @@ This ensures monitoring issues never break actual builds.
 
 ## Build Cache Pruning
 
-The build system supports automatic pruning of BuildKit exec cache mounts (`RUN --mount=type=cache`) between version builds. This prevents disk exhaustion on CI runners with limited storage.
+The build system supports automatic pruning of BuildKit cache between version builds. This prevents disk exhaustion on CI runners with limited storage.
 
 ### Enabling Cache Pruning
 
@@ -1137,11 +1137,23 @@ Cache pruning runs **after each version build** in multi-version builds:
 
 1. Build version A
 2. Record disk usage (if `--disk-monitor=basic`)
-3. Prune exec cache mounts (if `--prune-cache-mounts`)
-4. Build version B
-5. Repeat steps 2-4 for each version
+3. Prune build cache (if `--prune-cache-mounts`)
+4. Record disk usage after prune (confirms effect)
+5. Build version B
+6. Repeat steps 2-5 for each version
 
-**Note:** Pruning only affects `exec.cachemount` entries (from `RUN --mount=type=cache`). Layer cache and image cache are preserved.
+### Pruning Modes
+
+The pruning function supports two modes:
+
+| Mode | Command | What Gets Pruned |
+|------|---------|------------------|
+| `build-cache` (default) | `docker builder prune -f` | All BuildKit cache (intermediate layers, exec mounts, source cache) |
+| `exec-cache` | `docker builder prune --filter type=exec.cachemount -f` | Only exec cache mounts (`RUN --mount=type=cache`) |
+
+**Default mode:** `build-cache` (aggressive) - recommended for CI where disk space is constrained.
+
+**Note:** Image cache is preserved in both modes. Only build-time cache is pruned.
 
 ### CI Integration
 
@@ -1163,12 +1175,21 @@ When pruning is enabled, logs show:
 
 ```text
 ------------------------------------------------------------
-CI PRUNE: cernbox-web:testing-debian | mode: exec-cache
+CI PRUNE: cernbox-web:testing-debian | mode: build-cache
 ------------------------------------------------------------
-CI PRUNE: exec.cachemount prune completed (exit code 0)
-Total reclaimed space: 1.2GB
+CI PRUNE: build-cache prune completed (exit code 0)
+Total reclaimed space: 12.4GB
+
+--- Docker Disk Usage (after prune) ---
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          9         0         1.191GB   1.191GB (100%)
+Containers      0         0         0B        0B
+Local Volumes   0         0         0B        0B
+Build Cache     0         0         0B        0B
 ------------------------------------------------------------
 ```
+
+The post-prune disk usage confirms the pruning effect, making it easy to verify cache was cleared.
 
 ### Error Handling
 

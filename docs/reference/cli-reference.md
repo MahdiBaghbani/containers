@@ -485,7 +485,7 @@ nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=off
 
 ### `--prune-cache-mounts`
 
-Prune BuildKit exec cache mounts between version builds:
+Prune BuildKit cache between version builds:
 
 ```bash
 # Enable cache pruning
@@ -497,15 +497,28 @@ nu scripts/build.nu --service cernbox-web --all-versions
 
 **Behavior:**
 
-- Runs `docker builder prune --filter type=exec.cachemount -f` after each version build
+- Runs `docker builder prune -f` after each version build (clears all BuildKit cache)
 - Only affects multi-version builds (single-version builds have no intermediate phases)
-- Preserves Docker layer cache and image cache (only prunes `RUN --mount=type=cache` entries)
+- Preserves Docker image cache (only prunes build-time cache, not final images)
+- Shows disk usage after prune to confirm the effect
 - Non-fatal: failures are logged as warnings and builds continue
+
+**What gets pruned:**
+
+- Intermediate build layers
+- Exec cache mounts (`RUN --mount=type=cache` entries)
+- Source cache
+- Build context cache
+
+**What is preserved:**
+
+- Final Docker images
+- Docker layer cache for images
 
 **Use cases:**
 
 - CI environments with limited disk space
-- Multi-version builds where exec cache accumulates (e.g., `cernbox-web` with 8+ versions)
+- Multi-version builds where build cache accumulates (e.g., `cernbox-web` with 8+ versions)
 - Investigating disk exhaustion issues
 
 **CI Default:** Enabled for all services in generated workflows (`prune_build_cache: true`)
