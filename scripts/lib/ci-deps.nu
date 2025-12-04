@@ -107,7 +107,7 @@ export def get-all-dependency-services [service: string] {
         # Get deps of current service and add to queue
         let current_deps = (get-direct-dependency-services $current)
         for dep in $current_deps {
-            if $dep not-in $visited {
+            if not ($dep in $visited) {
                 $queue = ($queue | append $dep)
             }
         }
@@ -119,7 +119,7 @@ export def get-all-dependency-services [service: string] {
     # Deduplicate while preserving order
     mut final = []
     for svc in $result {
-        if $svc not-in $final {
+        if not ($svc in $final) {
             $final = ($final | append $svc)
         }
     }

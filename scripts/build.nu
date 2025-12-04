@@ -1667,6 +1667,11 @@ def build-single-version [
   # local_source_paths contains resolved paths (relative to context root) for local sources
   let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths)
   
+  # Clear separator before main build (especially useful when deps were skipped)
+  print ""
+  print $"=== Building ($service):($version_tag) ==="
+  print ""
+  
   build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $push_val $provenance_val $is_local
   
   cleanup-tls-context $context $tls_context
