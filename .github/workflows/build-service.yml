@@ -37,6 +37,11 @@ jobs:
           sudo mv /tmp/nu/nu /usr/local/bin/nu
           nu --version
 
+      - name: Install zstd
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -44,11 +49,12 @@ jobs:
 
       # Cache restore with commit+branch keys for precise reuse
       # Each commit gets its own cache key; cross-commit reuse via prefix restore
+      # Uses directory-based cache with per-image-ID .tar.zst files
       - name: Restore Docker image cache
         id: cache-restore
         uses: actions/cache/restore@v4
         with:
-          path: /tmp/docker-images/${{ inputs.service }}.tar.gz
+          path: /tmp/docker-images/${{ inputs.service }}/
           key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}
           restore-keys: |
             images-${{ inputs.service }}-${{ github.ref }}-
@@ -82,15 +88,15 @@ jobs:
       - name: Load cached images
         if: steps.cache-restore.outputs.cache-hit == 'true'
         run: |
-          if [ -f "/tmp/docker-images/${{ inputs.service }}.tar.gz" ]; then
+          if [ -d "/tmp/docker-images/${{ inputs.service }}" ]; then
             echo "Loading cached images for ${{ inputs.service }}..."
-            gunzip -c "/tmp/docker-images/${{ inputs.service }}.tar.gz" | docker load
-            echo "Cache loaded successfully"
+            nu scripts/ci-load-owner-tarballs.nu --service ${{ inputs.service }}
+            echo "Cache load complete"
           else
-            echo "Cache file not found, will build from scratch"
+            echo "Cache directory not found, will build from scratch"
           fi
 
-      # Phase 1.3: Build the service
+      # Build the service with dep-cache=soft for hash-based dependency reuse
       - name: Show build order
         run: |
           echo "Build order for ${{ inputs.service }}:"
@@ -102,40 +108,22 @@ jobs:
           nu scripts/build.nu \
             --service ${{ inputs.service }} \
             --all-versions \
+            --dep-cache=soft \
             --pull=deps,externals \
             --cache-match=${{ steps.cache-match.outputs.match_kind }}
 
-      # Phase 1.5: Cache save
-      - name: List built images
-        id: list-images
-        run: |
-          echo "Listing images for ${{ inputs.service }}..."
-          IMAGES=$(nu scripts/list-service-images.nu --service ${{ inputs.service }})
-          echo "images<<EOF" >> $GITHUB_OUTPUT
-          echo "$IMAGES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "Built images:"
-          echo "$IMAGES"
-
+      # Save images using SHA-deduplicated tarballs
       - name: Save images to cache
         if: success()
         run: |
-          mkdir -p /tmp/docker-images
-          IMAGES="${{ steps.list-images.outputs.images }}"
-          if [ -n "$IMAGES" ]; then
-            echo "Saving images to cache..."
-            # Convert newline-separated list to space-separated for docker save
-            IMAGES_SPACE=$(echo "$IMAGES" | tr '\n' ' ')
-            docker save $IMAGES_SPACE | gzip > "/tmp/docker-images/${{ inputs.service }}.tar.gz"
-            ls -lh /tmp/docker-images/
-            echo "Images saved successfully"
-          else
-            echo "No images to save"
-          fi
+          echo "Saving image tarballs for ${{ inputs.service }}..."
+          nu scripts/ci-save-owner-tarballs.nu --service ${{ inputs.service }}
+          echo "Cache directory contents:"
+          ls -lh /tmp/docker-images/${{ inputs.service }}/ || echo "No tarballs saved"
 
       - name: Save Docker image cache
         if: success()
         uses: actions/cache/save@v4
         with:
-          path: /tmp/docker-images/${{ inputs.service }}.tar.gz
+          path: /tmp/docker-images/${{ inputs.service }}/
           key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}

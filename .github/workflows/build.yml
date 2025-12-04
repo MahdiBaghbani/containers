@@ -60,13 +60,13 @@ jobs:
       service: revad-base
       push: false
 
-  build_cernbox_web:
-    name: Build cernbox-web
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: cernbox-web
-      push: false
+  # build_cernbox_web:
+  #   name: Build cernbox-web
+  #   needs: [build_common_tools]
+  #   uses: ./.github/workflows/build-service.yml
+  #   with:
+  #     service: cernbox-web
+  #     push: false
 
   build_nextcloud_base:
     name: Build nextcloud-base
@@ -117,7 +117,7 @@ jobs:
       - build_common_tools
       - build_gaia
       - build_revad_base
-      - build_cernbox_web
+      # - build_cernbox_web
       - build_nextcloud_base
       - build_idp
       - build_cernbox_revad

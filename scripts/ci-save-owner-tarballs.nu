@@ -17,43 +17,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# CLI wrapper to list canonical image references for a service
-# Used by GitHub Actions to determine which images to save to cache
+# CI helper: Save built images as tarballs for caching
+# Called by build-service.yml after successful build to save images to cache
 
-use ./lib/dep-cache.nu [get-dep-nodes-for-service]
-use ./lib/pull.nu [compute-canonical-image-ref]
+use ./lib/dep-cache.nu [save-owner-tarballs]
 use ./lib/registry/registry-info.nu [get-registry-info]
 
-# List all canonical image references for a service
-# Outputs one image reference per line for shell consumption
 export def main [
-    --service: string  # Service name to list images for
+    --service: string  # Service name to save tarballs for
 ] {
     if ($service | str length) == 0 {
         print --stderr "ERROR: --service is required"
         exit 1
     }
 
-    # Get registry info for CI environment detection
     let registry_info = (get-registry-info)
     let is_local = ($registry_info.ci_platform == "local")
 
-    # Get all nodes for the service using dep-cache module
-    let nodes = (get-dep-nodes-for-service $service $registry_info $is_local)
+    print $"Saving image tarballs for service: ($service)"
+    save-owner-tarballs $service $registry_info $is_local
 
-    if ($nodes | is-empty) {
-        print --stderr $"WARNING: Service '($service)' has no versions or nodes defined"
-        exit 0
-    }
-
-    # Convert nodes to canonical image refs
-    let image_refs = ($nodes | each {|node|
-        compute-canonical-image-ref $node.node_key $registry_info $is_local
-    })
-
-    # Deduplicate and print one per line
-    let unique_refs = ($image_refs | uniq)
-    for ref in $unique_refs {
-        print $ref
-    }
+    print ""
+    print "Tarball save complete."
 }

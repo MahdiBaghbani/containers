@@ -473,13 +473,13 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test14)
   
-  # Test 15: --no-auto-build-deps flag
+  # Test 15: --dep-cache=strict flag
   # Validates that graph construction works (flag is handled in build.nu)
-  let test15 = (run-test "Test 15: Auto-Build - --no-auto-build-deps flag" {
+  let test15 = (run-test "Test 15: Auto-Build - --dep-cache=strict flag" {
     with-test-cleanup {
       let test_env = (setup-test-environment "test-service" "v1.0.0")
     
-      # Graph construction works regardless of auto-build flag
+      # Graph construction works regardless of dep-cache mode
       let graph = (build-dependency-graph-with-mocks "test-service" $test_env.version_spec $test_env.merged_cfg "" $test_env.platforms $test_env.registry_info.is_local $test_env.registry_info)
     
       if ($graph.nodes | length) == 0 {
@@ -487,7 +487,7 @@ def main [--verbose] {
       }
     
       if $verbose_flag {
-        print "    Graph construction works (--no-auto-build-deps is handled in build.nu)"
+        print "    Graph construction works (--dep-cache mode is handled in build.nu)"
       }
     
       true

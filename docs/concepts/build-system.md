@@ -306,18 +306,31 @@ When building a service:
 
 **Docker handles caching:** If a dependency image already exists, Docker uses it (no rebuild).
 
-### Disable Auto-Build
+### Dep-Cache Mode
 
-Use `--no-auto-build-deps` to disable:
+The `--dep-cache` flag controls CI dependency reuse behavior:
 
 ```bash
-nu scripts/build.nu --service cernbox-web --no-auto-build-deps
+# Disable hash-based skip (always build deps)
+nu scripts/build.nu --service cernbox-web --dep-cache=off
+
+# Hash-based skip + auto-build on missing/stale (default for CI)
+nu scripts/build.nu --service cernbox-web --dep-cache=soft
+
+# Strict validation, fail on missing/stale (no auto-build)
+nu scripts/build.nu --service cernbox-web --dep-cache=strict
 ```
 
-**Behavior when disabled:**
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `off` | Always build deps, no hash skip | Local development, forced rebuilds |
+| `soft` | Hash-based skip + auto-build on missing/stale | Default for CI workflows |
+| `strict` | Hash validation, fail on missing/stale | Explicit dependency control |
 
-- Dependencies are checked for existence
-- Build fails if dependencies are missing (legacy behavior)
+**Defaults:**
+
+- Local builds: `off` (always build, rely on Docker layer cache)
+- CI builds: `soft` (hash-based skip + auto-build)
 
 ### Flag Propagation
 
@@ -676,7 +689,7 @@ The `--all-services` flag conflicts with:
 
 When using `--all-services`:
 
-- `--no-auto-build-deps` is implicitly enabled
+- `--dep-cache=strict` is implicitly enabled
 - Dependencies are handled by the global build order (not per-service auto-build)
 - This avoids redundant builds and ensures consistent build order
 
@@ -907,15 +920,16 @@ The service definition hash enables different behaviors for local and CI builds:
 | Aspect | Local Builds | CI Builds |
 |--------|--------------|-----------|
 | Dependency building | Always auto-build, rely on Docker layer cache | Hash-based skip: skip if local image has matching hash |
-| Missing dependencies | Auto-build (default) or error (--no-auto-build-deps) | Auto-build with warning (soft) or error (strict) |
+| Missing dependencies | Auto-build (default) | Auto-build with warning (soft) or error (strict) |
 | Stale dependencies | Docker rebuilds as needed | Auto-build with warning (soft) or error (strict) |
 
-**Local builds** always proceed to `docker build` for each dependency and rely on Docker's layer cache for efficiency. No label-based skipping occurs.
+**Local builds** always proceed to `docker build` for each dependency and rely on Docker's layer cache for efficiency. No label-based skipping occurs. The `--dep-cache` flag defaults to `off` for local builds.
 
-**CI builds** inspect local images for the service definition hash label. If the hash matches, the dependency build is skipped. If the hash is missing or mismatched (stale), the behavior depends on mode:
+**CI builds** inspect local images for the service definition hash label. If the hash matches, the dependency build is skipped. If the hash is missing or mismatched (stale), the behavior depends on `--dep-cache` mode:
 
-- **Soft mode (default)**: Auto-build with a warning message
-- **Strict mode (`--no-auto-build-deps`)**: Fail with an error
+- **Off mode (`--dep-cache=off`)**: Always build deps, no hash-based skip
+- **Soft mode (`--dep-cache=soft`, default for CI)**: Auto-build with a warning message
+- **Strict mode (`--dep-cache=strict`)**: Fail with an error
 
 ### Cache Match Diagnostics
 

@@ -42,6 +42,7 @@ use ./lib/build-ops.nu [
 use ./lib/build-order.nu [build-dependency-graph topological-sort-dfs show-build-order-for-version compute-single-service-build-order]
 use ./lib/pull.nu [parse-pull-modes run-pulls print-pull-summary compute-canonical-image-ref]
 use ./lib/service-def-hash.nu [compute-service-def-hash-graph]
+use ./lib/dep-cache.nu [parse-dep-cache-mode save-owner-tarballs]
 
 export def main [
   --service: string,
@@ -70,8 +71,10 @@ export def main [
   --no-cache,
   # Show build order and exit (no build)
   --show-build-order,
-  # Disable automatic dependency building (default: auto-build enabled)
-  --no-auto-build-deps,
+  # Dep-cache mode for CI dependency reuse: off, soft, strict
+  # off: always build deps (no hash skip), soft: hash skip + auto-build (default CI),
+  # strict: hash validation, fail on missing/stale (no auto-build)
+  --dep-cache: string = "",
   # Push dependency images when auto-building (independent of --push)
   --push-deps,
   # Tag dependencies with --latest and --extra-tag when auto-building
@@ -99,7 +102,7 @@ export def main [
   let cache_bust = $cache_bust
   let no_cache = (parse-bool-flag ($no_cache | default false))
   let show_build_order = (parse-bool-flag ($show_build_order | default false))
-  let no_auto_build_deps = (parse-bool-flag ($no_auto_build_deps | default false))
+  let dep_cache_mode = (parse-dep-cache-mode $dep_cache $meta.is_local)
   let push_deps = (parse-bool-flag ($push_deps | default false))
   let tag_deps = (parse-bool-flag ($tag_deps | default false))
   let fail_fast = (parse-bool-flag ($fail_fast | default false))
@@ -127,7 +130,7 @@ export def main [
     }
     
     # Route to build-all-services function
-    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes $cache_match
+    build-all-services $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $all_versions_val $latest_only_val $platform $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $fail_fast $show_build_order $matrix_json_val $pull_modes $cache_match
     return
   }
   
@@ -500,7 +503,7 @@ export def main [
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
+          let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $hash_graph $cache_match)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -556,7 +559,7 @@ export def main [
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
+          let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $hash_graph $cache_match)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -656,7 +659,7 @@ export def main [
     
     for expanded_version in $expanded_versions {
       let prev_cache = $sha_cache
-      let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
+      let build_result = (build-single-version $service $expanded_version $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $hash_graph $cache_match)
       $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
     }
   } else {
@@ -675,7 +678,7 @@ export def main [
     }
     
     let prev_cache = $sha_cache
-    let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $no_auto_build_deps $push_deps $tag_deps $hash_graph $cache_match)
+    let build_result = (build-single-version $service $version_spec $push_val $latest_val $extra_tag $provenance_val $progress $info $meta $sha_cache "" "" null $cache_bust $no_cache $dep_cache_mode $push_deps $tag_deps $hash_graph $cache_match)
     $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
   }
 }
@@ -695,7 +698,7 @@ def build-all-services [
   platform: string,
   cache_bust_override: string,
   no_cache: bool,
-  no_auto_build_deps: bool,
+  dep_cache_mode: string,  # Dep-cache mode: off, soft, strict
   push_deps: bool,
   tag_deps: bool,
   fail_fast: bool,
@@ -1071,8 +1074,8 @@ def build-all-services [
         
         # Execute build (use cache from accumulator)
         let build_result = (try {
-          # Always pass no_auto_build_deps=true because dependencies are handled by build order
-          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $provenance_val $progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps $hash_graph $cache_match
+          # Always pass dep_cache_mode=strict because dependencies are handled by build order
+          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $provenance_val $progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $cache_match
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
           print $"ERROR: Failed to build ($build_label)"
@@ -1297,7 +1300,7 @@ def build-single-version [
   platforms: any = null,
   cache_bust_override: string = "",
   no_cache: bool = false,
-  no_auto_build_deps: bool = false,
+  dep_cache_mode: string = "off",  # Dep-cache mode: off, soft, strict
   push_deps: bool = false,
   tag_deps: bool = false,
   hash_graph: record = {},  # Pre-computed service definition hashes {node_key: hash}
@@ -1451,12 +1454,14 @@ def build-single-version [
   let context = ($cfg.context)
   let dockerfile = ($cfg.dockerfile)
   
-  # Auto-build dependencies if enabled
-  # CI mode: use hash-based skip logic for internal deps
-  # Local mode: always build deps (rely on Docker layer cache)
+  # Auto-build dependencies based on dep-cache mode
+  # strict: no auto-build, validate deps via hash and fail on missing/stale
+  # soft: hash-based skip + auto-build on missing/stale
+  # off: always build deps (no hash skip)
   let ci_mode = (not $is_local)
+  let allow_auto_build = ($dep_cache_mode != "strict")
   
-  if not $no_auto_build_deps {
+  if $allow_auto_build {
     # Build dependency graph
     let graph = (build-dependency-graph $service $version_spec $cfg $current_platform $platforms $is_local $info)
     
@@ -1522,7 +1527,7 @@ def build-single-version [
         let dep_latest = (if $tag_deps { $latest_val } else { false })
         let dep_extra_tag = (if $tag_deps { $extra_tag } else { "" })
         
-        # Build dependency recursively (with no_auto_build_deps=true to prevent infinite recursion)
+        # Build dependency recursively (with dep_cache_mode=strict to prevent infinite recursion)
         let dep_label = (if ($dep_platform | str length) > 0 {
           $"($dep_service):($dep_version_spec.name)-($dep_platform)"
         } else {
@@ -1531,10 +1536,11 @@ def build-single-version [
         
         # CI-only: Check if local image has matching service definition hash
         # Local builds always proceed to docker build (rely on layer cache)
+        # dep_cache_mode=off skips hash checking entirely
         # Cache match kind passed from CLI (set by GitHub Actions workflow)
         let cache_hint = (if ($cache_match | str length) > 0 { $" [cache: ($cache_match)]" } else { "" })
         
-        let should_skip_build = (if $ci_mode {
+        let should_skip_build = (if $ci_mode and $dep_cache_mode != "off" {
           # Get expected hash from pre-computed graph
           let expected_hash = (try { $hash_graph | get $dep_node } catch { "" })
           
@@ -1574,7 +1580,7 @@ def build-single-version [
         
         let prev_cache = $current_cache
         try {
-          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache true $push_deps $tag_deps $hash_graph $cache_match)
+          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $cache_match)
           $current_cache = (try { $build_result.sha_cache } catch { $prev_cache })  # Update cache or preserve existing
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
@@ -1603,9 +1609,9 @@ def build-single-version [
     }
   }
   
-  # CI strict mode: when --no-auto-build-deps is set, validate all internal deps have matching hashes
+  # CI strict mode: when dep-cache=strict, validate all internal deps have matching hashes
   # This catches stale/missing deps that would have been auto-built in soft mode
-  if $ci_mode and $no_auto_build_deps {
+  if $ci_mode and $dep_cache_mode == "strict" {
     # Build dependency graph to get all internal deps
     let strict_graph = (build-dependency-graph $service $version_spec $cfg $current_platform $platforms $is_local $info)
     let strict_build_order = (topological-sort-dfs $strict_graph)
@@ -1639,10 +1645,10 @@ def build-single-version [
     if not ($stale_deps | is-empty) {
       let stale_list = ($stale_deps | each {|d| $"  - ($d.node): ($d.reason)"} | str join "\n")
       error make {
-        msg: ($"CI strict mode (--no-auto-build-deps): Found stale or missing dependency images.\n\n" +
+        msg: ($"CI strict mode (--dep-cache=strict): Found stale or missing dependency images.\n\n" +
               $"The following dependencies need to be rebuilt:\n($stale_list)\n\n" +
               "In strict mode, dependencies must have matching service definition hashes.\n" +
-              "Either rebuild the dependencies first, or remove --no-auto-build-deps to allow auto-building.")
+              "Either rebuild the dependencies first, or use --dep-cache=soft to allow auto-building.")
       }
     }
   }

@@ -255,22 +255,39 @@ This is equivalent to `--cache-bust <random-uuid>` but more convenient for forci
 
 ## Dependency Building Flags
 
-### `--no-auto-build-deps`
+### `--dep-cache <string>`
 
-Disable automatic dependency building (default: auto-build enabled):
+Control dependency reuse behavior for CI builds:
 
 ```bash
-# Build service without auto-building dependencies
-nu scripts/build.nu --service cernbox-web --no-auto-build-deps
+# Disable hash-based skip (always build deps)
+nu scripts/build.nu --service cernbox-web --dep-cache=off
+
+# Hash-based skip + auto-build on missing/stale (default for CI)
+nu scripts/build.nu --service cernbox-web --dep-cache=soft
+
+# Strict validation, fail on missing/stale (no auto-build)
+nu scripts/build.nu --service cernbox-web --dep-cache=strict
 ```
 
-**Default behavior:** Dependencies are automatically built if missing (see [Dependency Management](../concepts/dependency-management.md))
+**Modes:**
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `off` | Always build deps, no hash skip | Local development, forced rebuilds |
+| `soft` | Hash-based skip + auto-build on missing/stale | Default for CI workflows |
+| `strict` | Hash validation, fail on missing/stale | Explicit dependency control |
+
+**Defaults:**
+
+- Local builds: `off` (always build, rely on Docker layer cache)
+- CI builds: `soft` (hash-based skip + auto-build)
 
 **Use cases:**
 
-- Dependencies already exist and you want to skip building them
-- Debugging dependency resolution issues
-- CI/CD scenarios where dependencies are pre-built
+- `--dep-cache=off`: Force rebuild of all dependencies
+- `--dep-cache=soft`: Standard CI workflow with cache reuse
+- `--dep-cache=strict`: CI/CD scenarios where dependencies must be pre-built
 
 ### `--push-deps`
 

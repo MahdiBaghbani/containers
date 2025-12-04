@@ -353,18 +353,21 @@ The service definition hash captures all inputs that affect the image: Dockerfil
 
 **Local builds** do not use hash-based skipping. They always proceed to `docker build` and rely on Docker's layer cache.
 
-### Soft vs Strict CI Mode
+### Dep-Cache Modes
 
-CI builds have two modes for handling missing or stale dependencies:
+The `--dep-cache` flag controls CI dependency reuse behavior:
 
 | Mode | Flag | Missing/Stale Deps | Use Case |
 |------|------|-------------------|----------|
-| Soft (default) | None | Auto-build with warning | Standard CI workflows |
-| Strict | `--no-auto-build-deps` | Fail with error | Explicit dependency control |
+| Off | `--dep-cache=off` | Always build (no hash skip) | Forced rebuilds |
+| Soft (default for CI) | `--dep-cache=soft` | Auto-build with warning | Standard CI workflows |
+| Strict | `--dep-cache=strict` | Fail with error | Explicit dependency control |
 
-**Soft mode** (default): If a dependency image is missing or has a stale hash, the build system auto-builds it with a warning message. This ensures builds complete even when cache restoration is incomplete.
+**Off mode** (`--dep-cache=off`): Disables hash-based skipping. Dependencies are always built. This is the default for local builds.
 
-**Strict mode** (`--no-auto-build-deps`): If a dependency image is missing or has a stale hash, the build fails with an error. Use this when you require explicit control over dependency builds or want to fail fast on cache misses.
+**Soft mode** (`--dep-cache=soft`): If a dependency image is missing or has a stale hash, the build system auto-builds it with a warning message. This ensures builds complete even when cache restoration is incomplete. This is the default for CI builds.
+
+**Strict mode** (`--dep-cache=strict`): If a dependency image is missing or has a stale hash, the build fails with an error. Use this when you require explicit control over dependency builds or want to fail fast on cache misses.
 
 ### Hash Label Requirement
 
@@ -372,16 +375,16 @@ Internal dependency images must have the `org.opencloudmesh.system.service-def-h
 
 ### Disable Auto-Build
 
-Use `--no-auto-build-deps` flag to disable:
+Use `--dep-cache=strict` to disable auto-building and enforce strict validation:
 
 ```bash
-nu scripts/build.nu --service cernbox-web --no-auto-build-deps
+nu scripts/build.nu --service cernbox-web --dep-cache=strict
 ```
 
-**When disabled:**
+**When strict mode is enabled:**
 
-- Dependencies are checked for existence
-- Build fails if dependencies are missing (legacy behavior)
+- Dependencies are validated via service definition hash
+- Build fails if dependencies are missing or have stale hashes
 
 ### Build Order Display
 
