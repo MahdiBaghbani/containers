@@ -36,17 +36,6 @@
       }
     },
     {
-      "name": "main-nc-master",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "contacts": {
-            "ref": "main"
-          }
-        }
-      }
-    },
-    {
       "name": "v8.1.0-nc-master",
       "latest": true,
       "overrides": {
