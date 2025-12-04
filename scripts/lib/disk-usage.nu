@@ -208,7 +208,7 @@ def format-size [size_kb: int] {
 }
 
 # Main API: Record disk usage snapshot for a build phase
-# Phases: pre, after-deps, post-build
+# Phases: pre, after-deps, after-version, post-build
 export def record-disk-usage [service: string, phase: string, mode: string] {
   # Early return if monitoring is off
   if $mode == "off" {
@@ -218,7 +218,9 @@ export def record-disk-usage [service: string, phase: string, mode: string] {
   # Wrap entire function in try-catch to ensure non-fatal on any error
   try {
     print ""
-    print $"=== Disk usage \(service=($service), phase=($phase), mode=($mode)\) ==="
+    print "############################################################"
+    print $"## DISK MONITOR: ($phase) | ($service)"
+    print "############################################################"
     print ""
     
     # 1. Filesystem summary
@@ -226,12 +228,6 @@ export def record-disk-usage [service: string, phase: string, mode: string] {
     let df_result = (run-df-summary)
     for line in $df_result.lines {
       print $line
-    }
-    
-    # Low disk warning
-    if $df_result.root_avail_gb < $LOW_DISK_THRESHOLD_GB and $df_result.root_avail_gb > 0.0 {
-      print ""
-      print $"WARNING: Low disk space: ($df_result.root_avail_gb | math round --precision 2)GB free"
     }
     print ""
     
@@ -291,9 +287,22 @@ export def record-disk-usage [service: string, phase: string, mode: string] {
         print $"  ($entry.size)\t($entry.path)"
       }
     }
-    
     print ""
-    print "=== End Disk Usage ==="
+    
+    # Summary line with available space
+    let avail_str = ($df_result.root_avail_gb | math round --precision 2)
+    print $">> Root filesystem available: ($avail_str)GB"
+    
+    # Low disk warning - prominent banner
+    if $df_result.root_avail_gb < $LOW_DISK_THRESHOLD_GB and $df_result.root_avail_gb > 0.0 {
+      print ""
+      print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      print $"!! WARNING: LOW DISK SPACE - ONLY ($avail_str)GB FREE !!"
+      print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+      print ""
+    }
+    
+    print "############################################################"
     print ""
   } catch {|err|
     let error_msg = (try { $err.msg } catch { "Unknown error" })

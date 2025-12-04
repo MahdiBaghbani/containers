@@ -1054,11 +1054,14 @@ nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=off
 
 ### Build Phases
 
-Disk usage snapshots are captured at three phases:
+Disk usage snapshots are captured at four phases:
 
 1. **pre** - At the start of the build pipeline (after flag parsing, before builds)
 2. **after-deps** - After dependency validation and graph setup, before main service build
-3. **post-build** - After all builds complete
+3. **after-version** - After each individual version build completes (for multi-version builds)
+4. **post-build** - After all builds complete
+
+The `after-version` phase is particularly useful for multi-version builds (e.g., `cernbox-web` with `testing`, `master`, `v1.0.0`) to identify which specific version exhausts disk space.
 
 **Note:** In CI, dependency images are loaded via `ci-load-dep-tarballs.nu` before `build.nu` runs. The `pre` and `after-deps` phases occur after cache restoration.
 

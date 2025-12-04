@@ -540,6 +540,11 @@ export def main [
           {success: false, label: $build_label, error: $error_msg}
         })
         
+        # Disk monitoring: after each version build (captures disk state between builds)
+        if $disk_monitor != "off" {
+          try { record-disk-usage $build_label "after-version" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+        }
+        
         if $result.success {
           $successes = ($successes | append {label: $result.label, success: true})
         } else {
@@ -608,6 +613,11 @@ export def main [
           {success: false, label: $build_label, error: $error_msg}
         })
         
+        # Disk monitoring: after each version build (captures disk state between builds)
+        if $disk_monitor != "off" {
+          try { record-disk-usage $build_label "after-version" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
+        }
+        
         if $result.success {
           $successes = ($successes | append {label: $result.label, success: true})
         } else {
@@ -620,11 +630,6 @@ export def main [
       }
       
       print-build-summary $successes $failures $skipped
-      
-      # Disk monitoring: post-build phase
-      if $disk_monitor != "off" {
-        try { record-disk-usage $service "post-build" $disk_monitor } catch {|err| print $"WARNING: Disk monitoring failed: (try { $err.msg } catch { 'Unknown error' })" }
-      }
       
       if ($failures | length) > 0 {
         exit 1
