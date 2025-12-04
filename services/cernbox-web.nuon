@@ -2,29 +2,6 @@
   "name": "cernbox-web",
   "context": "services/cernbox-web",
   "dockerfile": "services/cernbox-web/Dockerfile",
-  "external_images": {
-    "build": {
-      "name": "node",
-      "build_arg": "BASE_BUILD_IMAGE"
-    },
-    "runtime": {
-      "name": "nginx",
-      "build_arg": "BASE_RUNTIME_IMAGE"
-    }
-  },
-  "dependencies": {
-    "common-tools-builder": {
-      "service": "common-tools",
-      "build_arg": "COMMON_TOOLS_BUILDER_IMAGE"
-    },
-    "common-tools-runtime": {
-      "service": "common-tools",
-      "build_arg": "COMMON_TOOLS_RUNTIME_IMAGE"
-    }
-  },
-  "build_args": {
-    "PNPM_RETRY_COUNT": "10"
-  },
   "labels": {
     "org.opencloudmesh.service": "cernbox-web",
     "org.opencontainers.image.title": "Open Cloud Mesh CERNBox Web Image",
