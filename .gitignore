@@ -1,6 +1,7 @@
 # Legacy directory
 legacy/
 .plans/
+.snapshot/
 
 # Operating System Files
 # macOS
