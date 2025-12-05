@@ -231,9 +231,9 @@ export def resolve-dependencies [
     let exists = (check-image-exists $image_ref $is_local $registry_info)
     if not $exists {
       let error_msg = (if ($platform | str length) > 0 {
-        $"Dependency image '($image_ref)' not found for platform '($platform)'. Please build it first: nu scripts/build.nu --service ($dep_service) --version ($resolved_tag)"
+        $"Dependency image '($image_ref)' not found for platform '($platform)'. Please build it first: nu scripts/dockypody.nu build --service ($dep_service) --version ($resolved_tag)"
       } else {
-        $"Dependency image '($image_ref)' not found. Please build it first: nu scripts/build.nu --service ($dep_service) --version ($resolved_tag)"
+        $"Dependency image '($image_ref)' not found. Please build it first: nu scripts/dockypody.nu build --service ($dep_service) --version ($resolved_tag)"
       })
       error make { msg: $error_msg }
     }

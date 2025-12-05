@@ -3,7 +3,7 @@
 # Called by build.yml for per-service orchestration with cache-based image reuse
 #
 # Note: dockypody.nu is the canonical CLI entrypoint
-# Local equivalent: nu -c "use scripts/dockypody.nu; dockypody build --service <name>"
+# Local equivalent: nu scripts/dockypody.nu build --service <name>
 
 name: Build Service
 
@@ -176,7 +176,7 @@ jobs:
         if: inputs.service != 'common-tools'
         run: |
           echo "Loading dependency images for ${{ inputs.service }}..."
-          nu -c "use scripts/dockypody.nu; dockypody ci load-deps --service ${{ inputs.service }}"
+          nu scripts/dockypody.nu ci load-deps --service ${{ inputs.service }}
 
       # Cache restore for the service's own images
       # Each commit gets its own cache key; cross-commit reuse via prefix restore
@@ -221,7 +221,7 @@ jobs:
         run: |
           if [ -d "/tmp/docker-images/${{ inputs.service }}" ]; then
             echo "Loading cached images for ${{ inputs.service }}..."
-            nu -c "use scripts/dockypody.nu; dockypody ci load-owner --service ${{ inputs.service }}"
+            nu scripts/dockypody.nu ci load-owner --service ${{ inputs.service }}
             echo "Cache load complete"
           else
             echo "Cache directory not found, will build from scratch"
@@ -231,14 +231,14 @@ jobs:
       - name: Show build order
         run: |
           echo "Build order for ${{ inputs.service }}:"
-          nu scripts/build.nu --service ${{ inputs.service }} --all-versions --show-build-order
+          nu scripts/dockypody.nu build --service ${{ inputs.service }} --all-versions --show-build-order
 
       - name: Build service
         run: |
           echo "Cache match kind: ${{ steps.cache-match.outputs.match_kind }}"
           echo "Disk monitor mode: ${{ inputs.disk_monitor_mode }}"
           echo "Prune build cache: ${{ inputs.prune_build_cache }}"
-          nu scripts/build.nu \
+          nu scripts/dockypody.nu build \
             --service ${{ inputs.service }} \
             --all-versions \
             --dep-cache=soft \
@@ -252,7 +252,7 @@ jobs:
         if: success()
         run: |
           echo "Saving image tarballs for ${{ inputs.service }}..."
-          nu -c "use scripts/dockypody.nu; dockypody ci save-owner --service ${{ inputs.service }}"
+          nu scripts/dockypody.nu ci save-owner --service ${{ inputs.service }}
           echo "Cache directory contents:"
           ls -lh /tmp/docker-images/${{ inputs.service }}/ || echo "No tarballs saved"
 
