@@ -19,11 +19,11 @@
 
 # Version manifest tests
 
-use ../lib/manifest.nu [check-versions-manifest-exists load-versions-manifest filter-versions]
-use ../lib/platforms.nu [merge-version-overrides]
-use ../lib/matrix.nu [generate-service-matrix]
-use ../lib/validate.nu [validate-service-file validate-manifest-file validate-version-manifest print-validation-results]
-use ../lib/services.nu [list-service-names]
+use ../lib/manifest/core.nu [check-versions-manifest-exists load-versions-manifest filter-versions]
+use ../lib/platforms/core.nu [merge-version-overrides]
+use ../lib/build/matrix.nu [generate-service-matrix]
+use ../lib/validate/core.nu [validate-service-file validate-manifest-file validate-version-manifest print-validation-results]
+use ../lib/services/core.nu [list-service-names]
 use ./lib.nu [run-test print-test-summary]
 
 def main [--verbose] {
@@ -32,8 +32,9 @@ def main [--verbose] {
   
   # Test 1: Matrix JSON generation
   let test1 = (run-test "Matrix JSON generation" {
-    let matrix = (nu scripts/build.nu --service revad-base --matrix-json true)
+    let matrix = (nu scripts/dockypody.nu build --service revad-base --matrix-json)
     if $verbose_flag { print $"    Matrix: ($matrix)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test1)
   
@@ -49,6 +50,7 @@ def main [--verbose] {
     if not ($missing | is-empty) {
       error make {msg: $"Services missing manifests: ($missing | str join ', ')"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test2)
   
@@ -56,6 +58,7 @@ def main [--verbose] {
   let test3 = (run-test "Load manifest" {
     let manifest = (load-versions-manifest "revad-base")
     if $verbose_flag { print $"    Default version: ($manifest.default)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test3)
   
@@ -72,6 +75,7 @@ def main [--verbose] {
     if not ($invalid | is-empty) {
       error make {msg: $"Invalid service configs: ($invalid | str join ', ')"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test4)
   
@@ -94,6 +98,7 @@ def main [--verbose] {
     if not ($invalid | is-empty) {
       error make {msg: $"Invalid manifests: ($invalid | str join ', ')"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test5)
   
@@ -108,6 +113,7 @@ def main [--verbose] {
       let merged = (merge-version-overrides $base_config $version_spec "" null)
       if $verbose_flag { print $"    Merged config has ($merged | columns | length) keys" }
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test6)
   
@@ -118,6 +124,7 @@ def main [--verbose] {
     let result = (filter-versions $manifest null --all=true)
     let all_versions = $result.versions
     if $verbose_flag { print $"    Found ($all_versions | length) version\(s\)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test7)
   
@@ -134,6 +141,7 @@ def main [--verbose] {
     if $result.valid {
       error make {msg: "Failed to detect forbidden 'latest' in tags"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test8)
   
@@ -151,6 +159,7 @@ def main [--verbose] {
     if $result.valid {
       error make {msg: "Failed to detect duplicate version names"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test9)
   
@@ -168,6 +177,7 @@ def main [--verbose] {
     if $result.valid {
       error make {msg: "Failed to detect tag collision"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test10)
   
@@ -185,6 +195,7 @@ def main [--verbose] {
     if $result.valid {
       error make {msg: "Failed to detect multiple latest versions"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test11)
   
@@ -212,12 +223,13 @@ def main [--verbose] {
     if not $has_suffix_error {
       error make {msg: "Error message should mention platform suffix"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test12)
   
   # Test 13: Platform expansion creates correct composite keys
   let test13 = (run-test "Platform expansion composite uniqueness" {
-    use ../lib/platforms.nu [expand-version-to-platforms get-default-platform]
+    use ../lib/platforms/core.nu [expand-version-to-platforms get-default-platform]
     let platforms = {
       default: "debian",
       platforms: [
@@ -239,11 +251,13 @@ def main [--verbose] {
         error make {msg: "Expanded version missing platform field"}
       }
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test13)
   
   # Test 14: Matrix generation includes platform field
-  let test14 = (run-test "Matrix includes platform field (single-platform)" {
+  let test14 = (run-test "Matrix includes platform field (multi-platform)" {
+    # Use revad-base which is a multi-platform service with production/development platforms
     let matrix = (generate-service-matrix "revad-base")
     let entries = $matrix.include
     
@@ -256,17 +270,18 @@ def main [--verbose] {
       if not ("platform" in ($entry | columns)) {
         error make {msg: "Matrix entry missing platform field"}
       }
-      # Single-platform should have empty string
-      if ($entry.platform | str length) > 0 {
-        error make {msg: $"Single-platform should have empty platform string, got: ($entry.platform)"}
+      # Multi-platform should have non-empty platform string
+      if ($entry.platform | str length) == 0 {
+        error make {msg: "Multi-platform should have non-empty platform string"}
       }
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test14)
   
   # Test 15: Multi-platform service without base dockerfile (should pass)
   let test15 = (run-test "Multi-platform service without base dockerfile" {
-    use ../lib/validate.nu [validate-service-config]
+    use ../lib/validate/core.nu [validate-service-config]
     let test_config = {
       name: "test-multi-platform",
       context: "services/test-multi-platform"
@@ -276,12 +291,13 @@ def main [--verbose] {
     if not $result.valid {
       error make {msg: $"Multi-platform service without dockerfile should be valid, errors: ($result.errors | str join ', ')"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test15)
   
   # Test 16: Single-platform service without dockerfile (should fail)
   let test16 = (run-test "Single-platform service without dockerfile" {
-    use ../lib/validate.nu [validate-service-config]
+    use ../lib/validate/core.nu [validate-service-config]
     let test_config = {
       name: "test-single-platform",
       context: "services/test-single-platform"
@@ -296,18 +312,19 @@ def main [--verbose] {
     if not $has_dockerfile_error {
       error make {msg: "Error should mention missing dockerfile"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test16)
   
   # Test 17: Platform config with missing build_arg in external_images (should fail)
   let test17 = (run-test "Platform config with missing build_arg in external_images" {
-    use ../lib/validate.nu [validate-platform-config]
+    use ../lib/validate/core.nu [validate-platform-config]
     let bad_platform_config = {
       name: "alpine",
       dockerfile: "Dockerfile.alpine",
       external_images: {
         runtime: {
-          image: "alpine:3.21"
+          name: "alpine:3.21"
           # Missing: build_arg field
         }
       }
@@ -324,18 +341,19 @@ def main [--verbose] {
     if $verbose_flag {
       print $"    Caught expected error: ($result.errors.0)"
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test17)
   
   # Test 18: Platform config with complete external_images entries (should pass)
   let test18 = (run-test "Platform config with complete external_images" {
-    use ../lib/validate.nu [validate-platform-config]
+    use ../lib/validate/core.nu [validate-platform-config]
     let good_platform_config = {
       name: "alpine",
       dockerfile: "Dockerfile.alpine",
       external_images: {
         runtime: {
-          image: "alpine:3.21",
+          name: "alpine:3.21",
           build_arg: "BASE_RUNTIME_IMAGE"
         }
       }
@@ -347,13 +365,14 @@ def main [--verbose] {
     if $verbose_flag {
       print $"    Validation passed for complete platform config"
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test18)
   
   # Test 19: Deep-merge behavior for external_images (platform + base = merged)
   let test19 = (run-test "Deep-merge behavior for external_images" {
-    use ../lib/platforms.nu [merge-platform-config]
-    use ../lib/common.nu [deep-merge]
+    use ../lib/platforms/core.nu [merge-platform-config]
+    use ../lib/core/records.nu [deep-merge]
     
     # Base config
     let base_config = {
@@ -411,13 +430,14 @@ def main [--verbose] {
     if $verbose_flag {
       print $"    Deep-merge verified: build image preserved, runtime image overridden"
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test19)
   
   # Test 20: Validate-manifest-file performs Phase 2 validation for multi-platform
   let test20 = (run-test "validate-manifest-file Phase 2 validation with platforms" {
-    use ../lib/validate.nu [validate-version-manifest]
-    use ../lib/platforms.nu [expand-version-to-platforms get-default-platform]
+    use ../lib/validate/core.nu [validate-version-manifest]
+    use ../lib/platforms/core.nu [expand-version-to-platforms get-default-platform]
     
     # Create a scenario that would pass Phase 1 but fail Phase 2
     # (version names without platform suffixes, but collision after expansion)
@@ -456,12 +476,13 @@ def main [--verbose] {
     if $verbose_flag {
       print $"    Phase 2 validation correctly detected tag collision: ($result.errors.0)"
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test20)
   
   # Test 21: validate-manifest-file loads platforms manifest automatically
   let test21 = (run-test "validate-manifest-file auto-loads platforms for Phase 2" {
-    use ../lib/validate.nu [validate-manifest-file]
+    use ../lib/validate/core.nu [validate-manifest-file]
     
     # For this test, we'll verify that validate-manifest-file works correctly
     # by calling it on revad-base (which exists and should have valid manifest)
@@ -475,6 +496,7 @@ def main [--verbose] {
     if $verbose_flag {
       print $"    validate-manifest-file successfully validated revad-base"
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test21)
   

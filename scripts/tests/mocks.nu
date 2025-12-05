@@ -20,8 +20,8 @@
 # Mock infrastructure for test isolation
 # Replaces real dependencies with test-controlled alternatives
 
-use ../lib/common.nu [deep-merge]
-use ../lib/platforms.nu [
+use ../lib/core/records.nu [deep-merge]
+use ../lib/platforms/core.nu [
   strip-platform-suffix
   has-platform-suffix
   get-platform-spec
@@ -29,8 +29,8 @@ use ../lib/platforms.nu [
   merge-platform-config
   merge-version-overrides
 ]
-use ../lib/validate.nu [validate-merged-config]
-use ../lib/manifest.nu [get-version-or-null check-versions-manifest-exists]
+use ../lib/validate/core.nu [validate-merged-config]
+use ../lib/manifest/core.nu [get-version-or-null check-versions-manifest-exists]
 
 # Test-controlled registry for platform manifest existence
 # Using $env to store registry state (allows mutation from functions)

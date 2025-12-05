@@ -321,7 +321,7 @@ Before building, the system checks if dependency images exist:
 
 ```text
 Error: Dependency image 'revad-base:v3.3.3' not found.
-Please build it first: nu scripts/build.nu --service revad-base --version v3.3.3
+Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.3.3
 ```
 
 **Note:** For local builds, the check verifies the image exists in the local Docker daemon before proceeding. For CI builds, the check verifies the image exists in the remote registry. In both cases, only exact tag matches are checked - digests and alternative tags are not considered.
@@ -378,7 +378,7 @@ Internal dependency images must have the `org.opencloudmesh.system.service-def-h
 Use `--dep-cache=strict` to disable auto-building and enforce strict validation:
 
 ```bash
-nu scripts/build.nu --service cernbox-web --dep-cache=strict
+nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 ```
 
 **When strict mode is enabled:**
@@ -474,7 +474,7 @@ Service `app` (multi-platform: debian, alpine) depends on `base-service` (multi-
 
 ```text
 Error: Dependency image 'revad-base:v3.3.3' not found.
-Please build it first: nu scripts/build.nu --service revad-base --version v3.3.3
+Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.3.3
 ```
 
 #### Solution: Build Dependency First
@@ -483,17 +483,17 @@ Build the dependency service first:
 
 ```bash
 # Build the dependency
-nu scripts/build.nu --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.3.3
 
 # Then build the dependent service
-nu scripts/build.nu --service my-service --version v1.0.0
+nu scripts/dockypody.nu build --service my-service --version v1.0.0
 ```
 
 #### For Multi-Platform Builds
 
 ```text
 Error: Dependency image 'revad-base:v3.3.3-debian' not found for platform 'debian'.
-Please build it first: nu scripts/build.nu --service revad-base --version v3.3.3-debian
+Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.3.3-debian
 ```
 
 #### Solution: Build Dependency for Platform
@@ -502,10 +502,10 @@ Build the dependency for the specific platform:
 
 ```bash
 # Build dependency for the platform
-nu scripts/build.nu --service revad-base --version v3.3.3 --platform debian
+nu scripts/dockypody.nu build --service revad-base --version v3.3.3 --platform debian
 
 # Or build all platforms
-nu scripts/build.nu --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.3.3
 ```
 
 ### Error: "Multi-platform service depends on single-platform service"

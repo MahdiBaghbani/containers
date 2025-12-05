@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Reusable workflow for building a single service (all versions)
 # Called by build.yml for per-service orchestration with cache-based image reuse
+#
+# Note: dockypody.nu is the canonical CLI entrypoint
+# Local equivalent: nu -c "use scripts/dockypody.nu; dockypody build --service <name>"
 
 name: Build Service
 
@@ -173,7 +176,7 @@ jobs:
         if: inputs.service != 'common-tools'
         run: |
           echo "Loading dependency images for ${{ inputs.service }}..."
-          nu scripts/ci-load-dep-tarballs.nu --service ${{ inputs.service }}
+          nu -c "use scripts/dockypody.nu; dockypody ci load-deps --service ${{ inputs.service }}"
 
       # Cache restore for the service's own images
       # Each commit gets its own cache key; cross-commit reuse via prefix restore
@@ -218,7 +221,7 @@ jobs:
         run: |
           if [ -d "/tmp/docker-images/${{ inputs.service }}" ]; then
             echo "Loading cached images for ${{ inputs.service }}..."
-            nu scripts/ci-load-owner-tarballs.nu --service ${{ inputs.service }}
+            nu -c "use scripts/dockypody.nu; dockypody ci load-owner --service ${{ inputs.service }}"
             echo "Cache load complete"
           else
             echo "Cache directory not found, will build from scratch"
@@ -249,7 +252,7 @@ jobs:
         if: success()
         run: |
           echo "Saving image tarballs for ${{ inputs.service }}..."
-          nu scripts/ci-save-owner-tarballs.nu --service ${{ inputs.service }}
+          nu -c "use scripts/dockypody.nu; dockypody ci save-owner --service ${{ inputs.service }}"
           echo "Cache directory contents:"
           ls -lh /tmp/docker-images/${{ inputs.service }}/ || echo "No tarballs saved"
 

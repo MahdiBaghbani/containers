@@ -19,9 +19,9 @@
 
 # Build system tests
 
-use ../lib/build-ops.nu [generate-build-args]
-use ../lib/build-order.nu [topological-sort-dfs]
-use ../lib/manifest.nu [get-default-version get-version-or-null]
+use ../lib/build/args.nu [generate-build-args]
+use ../lib/build/order.nu [topological-sort-dfs]
+use ../lib/manifest/core.nu [get-default-version get-version-or-null]
 use ./mocks.nu [detect-build get-mock-service-config build-mock-version-manifest build-mock-platform-manifest check-platforms-manifest-exists check-versions-manifest-exists build-dependency-graph-with-mocks get-default-platform set-mock-platform-behavior]
 use ./helpers.nu [setup-test-environment setup-test-service-with-deps cleanup-test-environment with-test-cleanup create-test-dependency create-test-deps-resolved create-test-tls-meta create-test-registry-info assert-cache-bust-format assert-cache-bust-value assert-build-args-contain assert-build-order assert-graph-structure]
 use ./lib.nu [run-test print-test-summary]

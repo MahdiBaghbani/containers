@@ -63,7 +63,7 @@ The workflow determines how the cache was matched and passes this to the build s
 The match kind is passed via the `--cache-match` flag:
 
 ```bash
-nu scripts/build.nu --service my-service --cache-match=fallback
+nu scripts/dockypody.nu build --service my-service --cache-match=fallback
 ```
 
 This appears in log messages when dependencies are auto-built, helping diagnose cache behavior.

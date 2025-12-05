@@ -592,6 +592,56 @@ $list | where {|item| $item.size > 1kb }
 
 **Why**: Nushell's parser may fail to resolve `$it` in closures when there are variable name conflicts, complex scoping, or when the closure spans multiple lines. Explicit parameters (`{|item| ...}`) are always reliable and make code clearer.
 
+### 8. "External command failed" = Missing or Incorrect Import
+
+**CRITICAL**: When you see "External command failed" error, it almost always means a function wasn't imported correctly.
+
+```nu
+# WRONG - function not imported, Nushell treats it as external command
+let services = (list-service-names)  # Error: External command failed
+
+# CORRECT - import the function first
+use scripts/lib/services/core.nu [list-service-names]
+let services = (list-service-names)  # Works!
+```
+
+**Common causes**:
+
+1. **Forgot to import**: The function isn't in the `use` statement
+2. **Wrong path**: Import path changed (e.g., `lib/services.nu` -> `lib/services/core.nu`)
+3. **Typo in function name**: `list-service-name` vs `list-service-names`
+4. **Import path relative to wrong location**: Relative paths resolve from the script's location, not CWD
+
+**Debugging tip**: If you see "External command failed", check your imports first before investigating the function itself.
+
+### 9. Test Closures Must Return `true` on Success
+
+Test closures passed to `run-test` must explicitly return `true` when successful:
+
+```nu
+# WRONG - closure returns null (last statement is `if` that may not execute)
+let test1 = (run-test "My test" {
+  let result = (some-function)
+  if $result != expected {
+    error make {msg: "Test failed"}
+  }
+  if $verbose { print "passed" }  # Returns null if $verbose is false!
+} $verbose)
+# Result: test marked as FAILED even when no error thrown
+
+# CORRECT - always return true at the end
+let test1 = (run-test "My test" {
+  let result = (some-function)
+  if $result != expected {
+    error make {msg: "Test failed"}
+  }
+  if $verbose { print "passed" }
+  true  # Explicit success return
+} $verbose)
+```
+
+**Why**: The `run-test` function checks if the closure returns `true` for success. If the closure returns `null` (from a non-executing `if` statement), it's treated as failure. The `true` at the end is only reached if no error was thrown, so it correctly indicates "test passed".
+
 ## Module System
 
 ### Using Modules

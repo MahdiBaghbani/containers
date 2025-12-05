@@ -101,7 +101,7 @@ FROM ${BASE_RUNTIME_IMAGE}
 ### 5. Build the Service
 
 ```bash
-nu scripts/build.nu --service my-service
+nu scripts/dockypody.nu build --service my-service
 ```
 
 ## Service with Dependency
@@ -157,10 +157,10 @@ COPY ./configs/cernbox /configs/revad
 
 ```bash
 # Build default version
-nu scripts/build.nu --service cernbox-revad
+nu scripts/dockypody.nu build --service cernbox-revad
 
 # Build specific version
-nu scripts/build.nu --service cernbox-revad --version v3.3.3
+nu scripts/dockypody.nu build --service cernbox-revad --version v3.3.3
 ```
 
 **Dependency resolution:**
@@ -314,11 +314,11 @@ To migrate an existing Dockerfile to support local sources:
 
    ```bash
    # Test with Git source (default)
-   nu scripts/build.nu --service my-service
+   nu scripts/dockypody.nu build --service my-service
 
    # Test with local source
    export REVA_PATH="../reva"
-   nu scripts/build.nu --service my-service
+   nu scripts/dockypody.nu build --service my-service
    ```
 
 ### When to Use Local vs Git Sources

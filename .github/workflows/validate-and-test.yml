@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Reusable CI engine workflow for validation and testing
 # Called by ci-pr.yml, cd-master-manual.yml, ci-master-scheduled.yml
+#
+# Note: dockypody.nu is the canonical CLI entrypoint
+# Local equivalent: nu -c "use scripts/dockypody.nu; dockypody test --suite all"
 
 name: Validate and Test
 
@@ -73,7 +76,7 @@ jobs:
       - name: Run top-level test suite
         run: |
           echo "Running top-level test suite (all suites)..."
-          nu scripts/test.nu --suite all
+          nu scripts/dockypody.nu test --suite all
 
       - name: Run service-level tests
         run: |

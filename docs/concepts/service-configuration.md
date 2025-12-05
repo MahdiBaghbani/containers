@@ -162,7 +162,7 @@ You can override local source paths using environment variables:
 
 ```bash
 export REVA_PATH="/path/to/local/reva"
-nu scripts/build.nu --service my-service
+nu scripts/dockypody.nu build --service my-service
 ```
 
 **Where to Define Local Sources:**
@@ -492,12 +492,12 @@ Build args can be overridden via environment variables:
 ```bash
 # Override the ref
 export REVAD_REF="v4.0.0"
-nu scripts/build.nu --service revad-base
+nu scripts/dockypody.nu build --service revad-base
 
 # Override the URL (e.g., for fork testing)
 export REVAD_URL="https://github.com/myorg/reva"
 export REVAD_REF="my-feature-branch"
-nu scripts/build.nu --service revad-base
+nu scripts/dockypody.nu build --service revad-base
 ```
 
 ### Validation

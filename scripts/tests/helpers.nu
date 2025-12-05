@@ -28,7 +28,7 @@ use ./mocks.nu [
   set-mock-platform-behavior
   clear-mock-platform-registry
 ]
-use ../lib/manifest.nu [get-version-or-null]
+use ../lib/manifest/core.nu [get-version-or-null]
 
 # Setup Functions
 

@@ -19,7 +19,7 @@
 
 # Tests for pull.nu - pre-pull orchestration
 
-use ../lib/pull.nu [parse-pull-modes compute-canonical-image-ref]
+use ../lib/build/pull.nu [parse-pull-modes compute-canonical-image-ref]
 use ./lib.nu [run-test print-test-summary]
 
 def main [--verbose] {

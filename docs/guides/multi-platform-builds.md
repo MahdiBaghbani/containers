@@ -37,7 +37,7 @@ If your service doesn't need multiple platforms, nothing changes:
 
 ```bash
 # Works exactly as before
-nu scripts/build.nu --service my-service --version v1.0.0
+nu scripts/dockypody.nu build --service my-service --version v1.0.0
 ```
 
 ### 2. Multi-Platform Service
@@ -79,14 +79,14 @@ services/
 ### Build All Platforms for a Version
 
 ```bash
-nu scripts/build.nu --service my-service --version v1.0.0
+nu scripts/dockypody.nu build --service my-service --version v1.0.0
 # Builds: my-service:v1.0.0-debian, my-service:v1.0.0-alpine
 ```
 
 ### Build Specific Platform
 
 ```bash
-nu scripts/build.nu --service my-service --version v1.0.0 --platform debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform debian
 # Builds only: my-service:v1.0.0-debian
 ```
 
@@ -577,10 +577,10 @@ Filter builds to a specific platform (requires platforms.nuon):
 
 ```bash
 # Build only debian variant
-nu scripts/build.nu --service my-service --version v1.0.0 --platform debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform debian
 
 # Build all debian versions
-nu scripts/build.nu --service my-service --all-versions --platform debian
+nu scripts/dockypody.nu build --service my-service --all-versions --platform debian
 ```
 
 ### Version Suffix Detection
@@ -591,10 +591,10 @@ You can specify platforms inline with version names:
 
 ```bash
 # Build only v1.0.0-debian (requires platforms.nuon)
-nu scripts/build.nu --service my-service --version v1.0.0-debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0-debian
 
 # Build multiple platform-specific versions
-nu scripts/build.nu --service my-service --versions "v1.0.0-debian,v1.0.0-alpine"
+nu scripts/dockypody.nu build --service my-service --versions "v1.0.0-debian,v1.0.0-alpine"
 ```
 
 **Rules:**
@@ -619,11 +619,11 @@ nu scripts/build.nu --service my-service --versions "v1.0.0-debian,v1.0.0-alpine
 
 ```bash
 # WRONG ERROR: Conflict
-nu scripts/build.nu --service my-service --version v1.0.0-debian --platform alpine
+nu scripts/dockypody.nu build --service my-service --version v1.0.0-debian --platform alpine
 
 # CORRECT CORRECT: Use one or the other
-nu scripts/build.nu --service my-service --version v1.0.0-debian
-nu scripts/build.nu --service my-service --version v1.0.0 --platform debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0-debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform debian
 ```
 
 ## Matrix Generation
@@ -679,10 +679,10 @@ steps:
     run: |
       if [ -z "${{ matrix.platform }}" ]; then
         # Single-platform: no --platform flag needed
-        nu scripts/build.nu --service $SERVICE --version ${{ matrix.version }}
+        nu scripts/dockypody.nu build --service $SERVICE --version ${{ matrix.version }}
       else
         # Multi-platform: pass --platform flag
-        nu scripts/build.nu --service $SERVICE --version ${{ matrix.version }} --platform ${{ matrix.platform }}
+        nu scripts/dockypody.nu build --service $SERVICE --version ${{ matrix.version }} --platform ${{ matrix.platform }}
       fi
 ```
 
@@ -691,7 +691,7 @@ steps:
 ### Platform Manifest Validation
 
 ```bash
-nu scripts/build.nu --service my-service --version v1.0.0
+nu scripts/dockypody.nu build --service my-service --version v1.0.0
 ```
 
 Validates:
@@ -820,13 +820,13 @@ Move platform-specific configuration from `services/{service-name}.nuon` to `pla
 
 ```bash
 # Test debian (default)
-nu scripts/build.nu --service my-service --version v1.0.0 --platform debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform debian
 
 # Test alpine
-nu scripts/build.nu --service my-service --version v1.0.0 --platform alpine
+nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform alpine
 
 # Test full expansion
-nu scripts/build.nu --service my-service --version v1.0.0
+nu scripts/dockypody.nu build --service my-service --version v1.0.0
 ```
 
 #### Step 6: Update Dependencies
@@ -933,11 +933,11 @@ Always test all platforms before release:
 ```bash
 # Test each platform individually
 for platform in debian alpine; do
-  nu scripts/build.nu --service my-service --version v1.0.0 --platform $platform
+  nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform $platform
 done
 
 # Test full expansion
-nu scripts/build.nu --service my-service --version v1.0.0
+nu scripts/dockypody.nu build --service my-service --version v1.0.0
 ```
 
 ### 4. Document Platform Differences
@@ -1003,7 +1003,7 @@ The platform suffix is added automatically during expansion.
 #### Problem: Platform Not Found in Manifest
 
 ```bash
-nu scripts/build.nu --service my-service --version v1.0.0-alpine
+nu scripts/dockypody.nu build --service my-service --version v1.0.0-alpine
 # Error: Platform 'alpine' not found in platforms manifest
 ```
 
@@ -1103,13 +1103,13 @@ Consider moving to platform-specific config in platforms.nuon
 
 ```bash
 # All platforms
-nu scripts/build.nu --service nginx --version v1.0.0
+nu scripts/dockypody.nu build --service nginx --version v1.0.0
 
 # Debian only
-nu scripts/build.nu --service nginx --version v1.0.0 --platform debian
+nu scripts/dockypody.nu build --service nginx --version v1.0.0 --platform debian
 
 # Alpine with custom tag
-nu scripts/build.nu --service nginx --version v1.0.0-alpine
+nu scripts/dockypody.nu build --service nginx --version v1.0.0-alpine
 ```
 
 ### Example 2: Platform-Specific Dependencies

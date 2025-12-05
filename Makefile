@@ -20,7 +20,7 @@
 .PHONY: lint-docs lint-docs-fix
 
 # Auto discover services in services/*.nuon files (using lib directly)
-SERVICES := $(shell nu -c "use scripts/lib/services.nu list-service-names; list-service-names | str join ' '")
+SERVICES := $(shell nu -c "use scripts/lib/services/core.nu list-service-names; list-service-names | str join ' '")
 
 # Default build flags
 PUSH ?= 0
@@ -29,17 +29,14 @@ PROVENANCE ?= 0
 TAG ?=
 EXTRA_TAG ?=
 
-# Build script path
-BUILD_SCRIPT := scripts/build.nu
-
-# TLS script paths (Nushell)
-TLS_CA_SCRIPT := scripts/tls/generate-ca.nu
-TLS_ALL_CERTS_SCRIPT := scripts/tls/generate-all-certs.nu
-TLS_CLEAN_SCRIPT := scripts/tls/clean.nu
+# Canonical CLI entry point
+# Use: nu scripts/dockypody.nu <command> [options]
 
 ## Show this help message
 help:
 	@echo "Open Cloud Mesh Container Build System"
+	@echo ""
+	@echo "Canonical CLI: nu scripts/dockypody.nu <command>"
 	@echo ""
 	@echo "Available targets:"
 	@echo "  build              Build all services (local, no push)"
@@ -83,23 +80,23 @@ help:
 ## List all available services
 list-services:
 	@echo "Available services:"
-	@nu -c 'use scripts/lib/services.nu list-service-names; list-service-names | each { |s| print (["  - ", $$s] | str join "") }'
+	@nu -c 'use scripts/lib/services/core.nu list-service-names; list-service-names | each { |s| print (["  - ", $$s] | str join "") }'
 	@echo ""
-	@nu -c 'use scripts/lib/services.nu list-service-names; print (["Total: ", (list-service-names | length | into string), " service(s)"] | str join "")'
+	@nu -c 'use scripts/lib/services/core.nu list-service-names; print (["Total: ", (list-service-names | length | into string), " service(s)"] | str join "")'
 
 ## Validate SERVICE variable if provided
 validate-service:
 ifneq ($(SERVICE),)
-	@nu -c 'use scripts/lib/services.nu [service-exists list-service-names]; if not (service-exists "$(SERVICE)") { print "Error: Service $(SERVICE) not found."; print ""; print "Available services:"; list-service-names | each { |s| print (["  - ", $$s] | str join "") }; exit 1 }'
+	@nu -c 'use scripts/lib/services/core.nu [service-exists list-service-names]; if not (service-exists "$(SERVICE)") { print "Error: Service $(SERVICE) not found."; print ""; print "Available services:"; list-service-names | each { |s| print (["  - ", $$s] | str join "") }; exit 1 }'
 endif
 
 ## Build service(s) locally or all if SERVICE not specified
 build: validate-service
-	@nu scripts/build.nu \
-		$(if $(SERVICE),--service "$(SERVICE)",) \
-		$(if $(filter 1,$(PUSH)),--push=true,) \
-		$(if $(filter 1,$(LATEST)),--latest=true,) \
-		$(if $(filter 1,$(PROVENANCE)),--provenance=true,) \
+	@nu scripts/dockypody.nu build \
+		$(if $(SERVICE),--service "$(SERVICE)",--all-services) \
+		$(if $(filter 1,$(PUSH)),--push,) \
+		$(if $(filter 1,$(LATEST)),--latest,) \
+		$(if $(filter 1,$(PROVENANCE)),--provenance,) \
 		$(if $(TAG),--version "$(TAG)",) \
 		$(if $(EXTRA_TAG),--extra-tag "$(EXTRA_TAG)",)
 
@@ -135,28 +132,25 @@ tls.help: tls
 ## Generate shared Certificate Authority
 ca: tls
 	@echo "Generating Certificate Authority..."
-	@nu $(TLS_CA_SCRIPT)
+	@nu scripts/dockypody.nu tls ca
 
 ## Generate certificates for all services
 ## Usage: make tls certs DOMAIN_SUFFIX=docker INSTANCE_COUNT=1 FILTER="service1,service2"
 certs: tls
 	@echo "Generating certificates for all services..."
-	@nu $(TLS_ALL_CERTS_SCRIPT) \
-		$(if $(DOMAIN_SUFFIX),--domain-suffix "$(DOMAIN_SUFFIX)",) \
-		$(if $(INSTANCE_COUNT),--instance-count "$(INSTANCE_COUNT)",) \
-		$(if $(FILTER),--filter [$(FILTER)],)
+	@nu scripts/dockypody.nu tls certs
 
 ## Generate CA and all certificates
 all: tls ca certs
 
 ## Clean up generated certificates
 clean: tls
-	@nu $(TLS_CLEAN_SCRIPT)
+	@nu scripts/dockypody.nu tls clean
 
 ## Lint documentation files for writing rule violations
 lint-docs:
-	@nu scripts/lint-docs.nu
+	@nu scripts/dockypody.nu docs lint
 
 ## Lint and fix documentation files
 lint-docs-fix:
-	@nu scripts/lint-docs.nu --fix
+	@nu scripts/dockypody.nu docs lint --fix

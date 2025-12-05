@@ -81,7 +81,7 @@ make tls all
 make build
 
 # Build specific version
-nu scripts/build.nu --service nextcloud --version v30.0.11
+nu scripts/dockypody.nu build --service nextcloud --version v30.0.11
 ```
 
 ### Running

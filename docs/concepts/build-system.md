@@ -23,6 +23,29 @@
 
 The DockyPody build system orchestrates the container image build process, handling configuration merging, build argument injection, and build execution.
 
+### Canonical CLI: dockypody
+
+The `dockypody.nu` script is the unified entry point for all build operations:
+
+```bash
+# Build a service
+nu scripts/dockypody.nu build --service gaia
+
+# Build all services
+nu scripts/dockypody.nu build --all-services
+
+# Show build order
+nu scripts/dockypody.nu build --service gaia --show-build-order
+
+# Run tests
+nu scripts/dockypody.nu test --suite all
+
+# Validate configurations
+nu scripts/dockypody.nu validate --all-services
+```
+
+See [CLI Reference](../reference/cli-reference.md) for complete documentation.
+
 ## Build Argument Injection Priority
 
 When injecting build arguments, the build system applies them in this order (later steps override earlier ones):
@@ -149,7 +172,7 @@ You can also set `CACHEBUST` environment variable:
 
 ```bash
 export CACHEBUST="custom-value"
-nu scripts/build.nu --service cernbox-web
+nu scripts/dockypody.nu build --service cernbox-web
 ```
 
 **Priority order (highest to lowest):**
@@ -272,13 +295,13 @@ Use `--show-build-order` flag to see build order without building:
 
 ```bash
 # Single version (default)
-nu scripts/build.nu --service cernbox-web --show-build-order
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order
 
 # All versions
-nu scripts/build.nu --service cernbox-web --show-build-order --all-versions
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --all-versions
 
 # Specific versions
-nu scripts/build.nu --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
 ```
 
 **Output (single version):**
@@ -312,13 +335,13 @@ The `--dep-cache` flag controls CI dependency reuse behavior:
 
 ```bash
 # Disable hash-based skip (always build deps)
-nu scripts/build.nu --service cernbox-web --dep-cache=off
+nu scripts/dockypody.nu build --service cernbox-web --dep-cache=off
 
 # Hash-based skip + auto-build on missing/stale (default for CI)
-nu scripts/build.nu --service cernbox-web --dep-cache=soft
+nu scripts/dockypody.nu build --service cernbox-web --dep-cache=soft
 
 # Strict validation, fail on missing/stale (no auto-build)
-nu scripts/build.nu --service cernbox-web --dep-cache=strict
+nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 ```
 
 | Mode | Behavior | Use Case |
@@ -445,13 +468,13 @@ The `--pull` flag accepts comma-separated values:
 
 ```bash
 # Cache warm-up for dependencies
-nu scripts/build.nu --service cernbox-web --pull=deps
+nu scripts/dockypody.nu build --service cernbox-web --pull=deps
 
 # Fail-fast validation for external images
-nu scripts/build.nu --service idp --pull=externals
+nu scripts/dockypody.nu build --service idp --pull=externals
 
 # Both modes
-nu scripts/build.nu --all-services --pull=deps,externals
+nu scripts/dockypody.nu build --all-services --pull=deps,externals
 ```
 
 ### Deps Mode (Cache Warm-Up)
@@ -547,7 +570,7 @@ The build system supports continue-on-failure for multi-version builds.
 Use `--fail-fast` to break on first failure (multi-version builds only):
 
 ```bash
-nu scripts/build.nu --service revad-base --all-versions --fail-fast
+nu scripts/dockypody.nu build --service revad-base --all-versions --fail-fast
 ```
 
 ### Build Summary
@@ -667,7 +690,7 @@ The global build order ensures:
 Use `--show-build-order` to display the merged build order without executing builds:
 
 ```bash
-nu scripts/build.nu --all-services --show-build-order
+nu scripts/dockypody.nu build --all-services --show-build-order
 ```
 
 ### Continue-on-Failure
@@ -683,7 +706,7 @@ By default, `--all-services` uses continue-on-failure mode:
 Use `--fail-fast` to stop on the first error:
 
 ```bash
-nu scripts/build.nu --all-services --fail-fast
+nu scripts/dockypody.nu build --all-services --fail-fast
 ```
 
 ### Matrix JSON Generation
@@ -697,13 +720,13 @@ The `--all-services` flag works with `--matrix-json` to generate a CI matrix for
 
 ```bash
 # Generate matrix with default versions
-nu scripts/build.nu --all-services --matrix-json
+nu scripts/dockypody.nu build --all-services --matrix-json
 
 # Generate matrix with all versions
-nu scripts/build.nu --all-services --matrix-json --all-versions
+nu scripts/dockypody.nu build --all-services --matrix-json --all-versions
 
 # Generate matrix for debian platform only
-nu scripts/build.nu --all-services --matrix-json --platform debian
+nu scripts/dockypody.nu build --all-services --matrix-json --platform debian
 ```
 
 ### Flag Conflicts
@@ -792,24 +815,40 @@ This logic is centralized in `scripts/lib/ci-deps.nu` and used by both the gener
 
 ```text
 scripts/
-- build.nu                    # Main entrypoint
-- gen-ci-build-workflow.nu    # CI workflow generator
-- ci-list-dep-services.nu     # List direct dependencies for a service
-- ci-load-dep-tarballs.nu     # Load dependency image tarballs
-- ci-load-owner-tarballs.nu   # Load owner service tarballs
-- ci-save-owner-tarballs.nu   # Save owner service tarballs
+- dockypody.nu                # Canonical CLI entrypoint
+- build.nu                    # Build orchestration (legacy, routes through dockypody)
 - lib/
-  - ci-deps.nu              # Direct dependency resolution for CI
-  - dep-cache.nu            # Dep-cache mode and tarball management
-  - meta.nu                 # Build context detection
-  - manifest.nu             # Version manifest loading
-  - matrix.nu               # CI matrix generation
-  - dependencies.nu         # Dependency resolution
-  - pull.nu                 # Pre-pull orchestration (--pull flag)
-  - buildx.nu               # Docker buildx wrapper
-  - registry/
-    - registry-info.nu    # Registry path construction
-    - registry.nu         # Registry authentication
+  - build/                    # Build domain
+    - cache.nu              # Dep-cache mode and tarball management
+    - config.nu             # Service config loading and flag parsing
+    - dependencies.nu       # Dependency resolution
+    - docker.nu             # Docker buildx wrapper
+    - hash.nu               # Service definition hash computation
+    - matrix.nu             # CI matrix generation
+    - meta.nu               # Build context detection
+    - order.nu              # Dependency graph and topological sort
+    - pull.nu               # Pre-pull orchestration (--pull flag)
+    - tags.nu               # Tag generation
+  - ci/                       # CI domain
+    - deps.nu               # Direct dependency resolution for CI
+    - tarballs.nu           # Tarball save/load operations
+    - workflow.nu           # CI workflow generation
+  - manifest/                 # Version manifest domain
+    - core.nu               # Manifest loading and version resolution
+  - platforms/                # Platform domain
+    - core.nu               # Platform manifest and multi-platform support
+  - registries/               # Registry domain
+    - core.nu               # Registry authentication
+    - info.nu               # Registry path construction
+  - services/                 # Service domain
+    - core.nu               # Service discovery and paths
+  - tls/                      # TLS domain
+    - validation.nu         # CA sync and validation
+  - validate/                 # Validation domain
+    - core.nu               # Config validation
+  - core/                     # Cross-cutting utilities
+    - records.nu            # Record manipulation (deep-merge)
+    - repo.nu               # Repository root detection
 ```
 
 ## Error Handling
@@ -907,7 +946,7 @@ overrides: {
 
 - Partial Git overrides reduce duplication when multiple versions share the same repository URL but different refs
 - Type switches (local to Git or vice versa) require complete replacement because `path` and `url`/`ref` are mutually exclusive
-- The implementation in `scripts/lib/manifest.nu` detects source types and routes to appropriate merge functions
+- The implementation in `scripts/lib/manifest/core.nu` detects source types and routes to appropriate merge functions
 
 For complete details on multi-platform builds, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
 
@@ -1018,7 +1057,7 @@ The service definition hash enables different behaviors for local and CI builds:
 In CI, the `--cache-match` flag provides diagnostic information about cache restoration:
 
 ```bash
-nu scripts/build.nu --service my-service --cache-match=exact
+nu scripts/dockypody.nu build --service my-service --cache-match=exact
 ```
 
 Values:
@@ -1039,10 +1078,10 @@ Use the `--disk-monitor` flag:
 
 ```bash
 # Enable basic disk monitoring
-nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=basic
+nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monitor=basic
 
 # Default: monitoring disabled
-nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=off
+nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monitor=off
 ```
 
 ### Monitoring Modes
@@ -1125,10 +1164,10 @@ Use the `--prune-cache-mounts` flag:
 
 ```bash
 # Enable cache pruning between version builds
-nu scripts/build.nu --service cernbox-web --all-versions --prune-cache-mounts
+nu scripts/dockypody.nu build --service cernbox-web --all-versions --prune-cache-mounts
 
 # Default: pruning disabled (local builds)
-nu scripts/build.nu --service cernbox-web --all-versions
+nu scripts/dockypody.nu build --service cernbox-web --all-versions
 ```
 
 ### When Pruning Occurs

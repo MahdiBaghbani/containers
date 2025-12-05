@@ -46,13 +46,13 @@ This generates:
 
 ```bash
 # Build default version
-nu scripts/build.nu --service revad-base
+nu scripts/dockypody.nu build --service revad-base
 
 # Build specific version
-nu scripts/build.nu --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.3.3
 
 # Build all versions
-nu scripts/build.nu --service revad-base --all-versions
+nu scripts/dockypody.nu build --service revad-base --all-versions
 ```
 
 ### 3. Build All Services
@@ -67,29 +67,29 @@ make build
 
 ```bash
 # Build all versions from manifest
-nu scripts/build.nu --service revad-base --all-versions
+nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Build specific versions
-nu scripts/build.nu --service revad-base --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
 
 # Build latest-marked only
-nu scripts/build.nu --service revad-base --latest-only
+nu scripts/dockypody.nu build --service revad-base --latest-only
 
 # Generate CI matrix
-nu scripts/build.nu --service revad-base --matrix-json
+nu scripts/dockypody.nu build --service revad-base --matrix-json
 ```
 
 ### Multi-Platform Builds
 
 ```bash
 # Build all platforms for a version (requires platforms.nuon)
-nu scripts/build.nu --service my-service --version v1.0.0
+nu scripts/dockypody.nu build --service my-service --version v1.0.0
 
 # Build specific platform only
-nu scripts/build.nu --service my-service --version v1.0.0 --platform debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform debian
 
 # Build with platform suffix
-nu scripts/build.nu --service my-service --version v1.0.0-alpine
+nu scripts/dockypody.nu build --service my-service --version v1.0.0-alpine
 ```
 
 ## Next Steps

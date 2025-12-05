@@ -169,10 +169,10 @@ ARG REVAD_URL="https://github.com/cs3org/reva"
 
 ```bash
 # Force cache invalidation
-nu scripts/build.nu --service revad-base --cache-bust "force-rebuild"
+nu scripts/dockypody.nu build --service revad-base --cache-bust "force-rebuild"
 
 # Disable cache entirely
-nu scripts/build.nu --service revad-base --no-cache
+nu scripts/dockypody.nu build --service revad-base --no-cache
 ```
 
 ### Inspect Images
@@ -219,7 +219,7 @@ If cache persists after source changes:
 
 1. Check `CACHEBUST` value: `docker buildx du` shows cache IDs
 2. Verify Dockerfile uses `${CACHEBUST:-${SOURCE_REF}}` in cache mount IDs
-3. Force rebuild: `nu scripts/build.nu --service <name> --cache-bust "force"`
+3. Force rebuild: `nu scripts/dockypody.nu build --service <name> --cache-bust "force"`
 
 ### Cache Taking Too Much Space
 

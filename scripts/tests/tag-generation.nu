@@ -19,7 +19,7 @@
 
 # Tag generation tests
 
-use ../lib/build-ops.nu [generate-tags]
+use ../lib/build/tags.nu [generate-tags]
 use ./lib.nu [run-test print-test-summary]
 
 def main [--verbose] {
@@ -43,6 +43,7 @@ def main [--verbose] {
     if $tags != $expected {
       error make {msg: $"Tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test1)
   
@@ -54,6 +55,7 @@ def main [--verbose] {
     if $tags != $expected {
       error make {msg: $"Tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test2)
   
@@ -65,6 +67,7 @@ def main [--verbose] {
     if $tags != $expected {
       error make {msg: $"Tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test3)
   
@@ -81,6 +84,7 @@ def main [--verbose] {
     if $tags_other != $expected_other {
       error make {msg: $"Other platform tag mismatch. Expected: ($expected_other | to json), Got: ($tags_other | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test4)
   
@@ -97,6 +101,7 @@ def main [--verbose] {
     if $tags_other != $expected_other {
       error make {msg: $"Other platform tag mismatch. Expected: ($expected_other | to json), Got: ($tags_other | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test5)
   
@@ -122,6 +127,7 @@ def main [--verbose] {
         error make {msg: $"Missing GHCR tag: ($ghcr_tag)"}
       }
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test6)
   
@@ -153,6 +159,7 @@ def main [--verbose] {
         error make {msg: $"Missing Forgejo tag: ($forgejo_tag)"}
       }
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test6b)
   
@@ -164,6 +171,7 @@ def main [--verbose] {
     if $tags != $expected {
       error make {msg: $"Tag order mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test7)
   
@@ -175,6 +183,7 @@ def main [--verbose] {
     if $tags != $expected {
       error make {msg: $"Tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test8)
   
@@ -187,6 +196,7 @@ def main [--verbose] {
     if $tags != $expected {
       error make {msg: $"Tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test9)
   
@@ -198,6 +208,7 @@ def main [--verbose] {
     if $tags != $expected {
       error make {msg: $"Tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test10)
   

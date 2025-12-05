@@ -19,9 +19,9 @@
 
 # Comprehensive tests for top-level defaults feature
 
-use ../lib/manifest.nu [apply-version-defaults get-version-spec load-versions-manifest]
-use ../lib/platforms.nu [apply-platform-defaults get-platform-spec load-platforms-manifest expand-version-to-platforms get-default-platform]
-use ../lib/validate.nu [validate-version-manifest validate-platforms-manifest]
+use ../lib/manifest/core.nu [apply-version-defaults get-version-spec load-versions-manifest]
+use ../lib/platforms/core.nu [apply-platform-defaults get-platform-spec load-platforms-manifest expand-version-to-platforms get-default-platform]
+use ../lib/validate/core.nu [validate-version-manifest validate-platforms-manifest]
 use ./lib.nu [run-test print-test-summary]
 
 def main [--verbose] {

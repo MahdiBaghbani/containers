@@ -77,13 +77,13 @@ Create `services/{service-name}/versions.nuon`:
 ### 2. Build Specific Version
 
 ```bash
-nu scripts/build.nu --service revad-base --version v1.29.0
+nu scripts/dockypody.nu build --service revad-base --version v1.29.0
 ```
 
 ### 3. Build All Versions
 
 ```bash
-nu scripts/build.nu --service revad-base --all-versions
+nu scripts/dockypody.nu build --service revad-base --all-versions
 ```
 
 ---
@@ -480,27 +480,27 @@ Dependencies resolve their version in this order:
 
 ```bash
 # Build default version from manifest
-nu scripts/build.nu --service revad-base
+nu scripts/dockypody.nu build --service revad-base
 
 # Build specific version from manifest
-nu scripts/build.nu --service revad-base --version v1.29.0
+nu scripts/dockypody.nu build --service revad-base --version v1.29.0
 
 # Build custom version (not in manifest)
-nu scripts/build.nu --service revad-base --version v1.30.0-rc1
+nu scripts/dockypody.nu build --service revad-base --version v1.30.0-rc1
 ```
 
 ### Multi-Version Builds
 
 ```bash
 # Build all versions in manifest
-nu scripts/build.nu --service revad-base --all-versions
+nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Build specific versions (comma-separated list)
 # Note: --versions (plural) for multiple versions, --version (singular) for single version
-nu scripts/build.nu --service revad-base --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
 
 # Build only versions marked as "latest"
-nu scripts/build.nu --service revad-base --latest-only
+nu scripts/dockypody.nu build --service revad-base --latest-only
 ```
 
 **Flag Distinction:**
@@ -512,7 +512,7 @@ nu scripts/build.nu --service revad-base --latest-only
 
 ```bash
 # Output GitHub Actions matrix JSON
-nu scripts/build.nu --service revad-base --matrix-json
+nu scripts/dockypody.nu build --service revad-base --matrix-json
 ```
 
 Output:
@@ -532,19 +532,19 @@ Use `--show-build-order` to preview dependency chains for multiple versions with
 
 ```bash
 # Show build order for default version
-nu scripts/build.nu --service revad-base --show-build-order
+nu scripts/dockypody.nu build --service revad-base --show-build-order
 
 # Show build order for all versions
-nu scripts/build.nu --service revad-base --show-build-order --all-versions
+nu scripts/dockypody.nu build --service revad-base --show-build-order --all-versions
 
 # Show build order for specific versions
-nu scripts/build.nu --service revad-base --show-build-order --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --show-build-order --versions v1.29.0,v1.28.0
 
 # Show build order for latest versions only
-nu scripts/build.nu --service revad-base --show-build-order --latest-only
+nu scripts/dockypody.nu build --service revad-base --show-build-order --latest-only
 
 # Show build order for all versions, filtered to specific platform
-nu scripts/build.nu --service revad-base --show-build-order --all-versions --platform production
+nu scripts/dockypody.nu build --service revad-base --show-build-order --all-versions --platform production
 ```
 
 **Output Format:**
@@ -601,13 +601,13 @@ All standard build flags work with version manifests:
 
 ```bash
 # Build and push
-nu scripts/build.nu --service revad-base --version v1.29.0 --push
+nu scripts/dockypody.nu build --service revad-base --version v1.29.0 --push
 
 # Build with progress output
-nu scripts/build.nu --service revad-base --all-versions --progress plain
+nu scripts/dockypody.nu build --service revad-base --all-versions --progress plain
 
 # Build without latest tag
-nu scripts/build.nu --service revad-base --version v1.28.0 --latest false
+nu scripts/dockypody.nu build --service revad-base --version v1.28.0 --latest false
 ```
 
 ---
@@ -639,7 +639,7 @@ jobs:
       - name: Generate revad-base matrix
         id: reva
         run: |
-          matrix=$(nu scripts/build.nu --service revad-base --matrix-json)
+          matrix=$(nu scripts/dockypody.nu build --service revad-base --matrix-json)
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   # Build all versions in parallel
@@ -653,7 +653,7 @@ jobs:
 
       - name: Build revad-base:${{ matrix.version }}
         run: |
-          nu scripts/build.nu \
+          nu scripts/dockypody.nu build \
             --service revad-base \
             --version ${{ matrix.version }} \
             --push
@@ -665,7 +665,7 @@ jobs:
 - name: Build with latest tag
   if: matrix.latest == true
   run: |
-    nu scripts/build.nu \
+    nu scripts/dockypody.nu build \
       --service revad-base \
       --version ${{ matrix.version }} \
       --push
@@ -712,7 +712,7 @@ Build commands:
 
 ```bash
 # Build both versions
-nu scripts/build.nu --service revad-base --all-versions
+nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Result:
 # - revad-base:v1.29.0, revad-base:latest, revad-base:v1.29
@@ -882,8 +882,8 @@ nu scripts/build.nu --service revad-base --all-versions
 **Solution:** Build the required dependency version first:
 
 ```bash
-nu scripts/build.nu --service revad-base --version v2
-nu scripts/build.nu --service cernbox-revad --version v2
+nu scripts/dockypody.nu build --service revad-base --version v2
+nu scripts/dockypody.nu build --service cernbox-revad --version v2
 ```
 
 ---

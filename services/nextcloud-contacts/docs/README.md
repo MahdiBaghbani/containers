@@ -145,13 +145,13 @@ Hooks execute alphabetically:
 
 ```bash
 # Build default version
-nu scripts/build.nu --service nextcloud-contacts
+nu scripts/dockypody.nu build --service nextcloud-contacts
 
 # Build specific version
-nu scripts/build.nu --service nextcloud-contacts --version ocm-testing
+nu scripts/dockypody.nu build --service nextcloud-contacts --version ocm-testing
 
 # Build with local source
-CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/build.nu --service nextcloud-contacts
+CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/dockypody.nu build --service nextcloud-contacts
 ```
 
 ## Troubleshooting

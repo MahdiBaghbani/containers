@@ -19,7 +19,7 @@
 
 # Service discovery and configuration tests
 
-use ../lib/services.nu [list-services list-service-names service-exists get-service]
+use ../lib/services/core.nu [list-services list-service-names service-exists get-service]
 use ./lib.nu [run-test print-test-summary]
 
 def main [--verbose] {
@@ -32,14 +32,16 @@ def main [--verbose] {
     if ($services | is-empty) {
       error make {msg: "No services found"}
     }
-    if $verbose_flag { print $"    Found ($services | length) service(s)" }
+    if $verbose_flag { print $"    Found ($services | length) services" }
+    true
   } $verbose_flag)
   $results = ($results | append $test1)
   
   # Test 2: TLS filtering
   let test2 = (run-test "TLS filtering (--tls-only)" {
     let tls_services = (list-services --tls-only)
-    if $verbose_flag { print $"    Found ($tls_services | length) TLS-enabled service(s)" }
+    if $verbose_flag { print $"    Found ($tls_services | length) TLS-enabled services" }
+    true
   } $verbose_flag)
   $results = ($results | append $test2)
   
@@ -51,6 +53,7 @@ def main [--verbose] {
     if (service-exists "nonexistent-service") {
       error make {msg: "nonexistent-service should not exist"}
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test3)
   
@@ -61,12 +64,13 @@ def main [--verbose] {
       error make {msg: "Service config missing 'name' field"}
     }
     if $verbose_flag { print $"    Config name: ($config.name)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test4)
   
   # Test 5: Service config completeness
   let test5 = (run-test "Service config completeness" {
-    use ../lib/platforms.nu [check-platforms-manifest-exists]
+    use ../lib/platforms/core.nu [check-platforms-manifest-exists]
     let all_services = (list-service-names)
     for svc in $all_services {
       let config = (get-service $svc)
@@ -91,6 +95,7 @@ def main [--verbose] {
       }
     }
     if $verbose_flag { print $"    All services have required fields" }
+    true
   } $verbose_flag)
   $results = ($results | append $test5)
   

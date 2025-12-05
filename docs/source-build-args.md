@@ -157,14 +157,14 @@ You can override source build args using environment variables:
 ```bash
 export REVA_REF="custom-branch"
 export REVA_URL="https://github.com/custom/reva"
-nu scripts/build.nu --service my-service
+nu scripts/dockypody.nu build --service my-service
 ```
 
 ### Local Source Override
 
 ```bash
 export REVA_PATH="/path/to/local/reva"
-nu scripts/build.nu --service my-service
+nu scripts/dockypody.nu build --service my-service
 ```
 
 **Note:** When using environment variable overrides, the build system detects the source type based on which env vars are set:

@@ -32,7 +32,7 @@ This repository hosts scripts and resources to build and publish container image
 2. **Build a service:**
 
    ```bash
-   nu scripts/build.nu --service <service-name>
+   nu scripts/dockypody.nu build --service <service-name>
    ```
 
 For complete setup instructions, see [Getting Started Guide](docs/guides/getting-started.md).

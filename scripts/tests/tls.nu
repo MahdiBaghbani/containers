@@ -19,7 +19,8 @@
 
 # TLS certificate generation and management tests
 
-use ../tls/lib.nu [get-repo-root get-services-dir get-shared-ca-dir build-subject build-san-config]
+use ../lib/core/repo.nu [get-repo-root]
+use ../lib/tls/lib.nu [get-services-dir get-shared-ca-dir build-subject build-san-config]
 use ./lib.nu [run-test print-test-summary]
 
 def main [--verbose] {
@@ -33,6 +34,7 @@ def main [--verbose] {
       error make {msg: $"Repo root not found: ($repo_root)"}
     }
     if $verbose_flag { print $"    Repo root: ($repo_root)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test1)
   
@@ -43,6 +45,7 @@ def main [--verbose] {
       error make {msg: $"Services directory not found: ($services_dir)"}
     }
     if $verbose_flag { print $"    Services dir: ($services_dir)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test2)
   
@@ -56,6 +59,7 @@ def main [--verbose] {
       error make {msg: $"CA dir mismatch: expected ($expected), got ($ca_dir)"}
     }
     if $verbose_flag { print $"    CA dir: ($ca_dir)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test3)
   
@@ -66,6 +70,7 @@ def main [--verbose] {
       error make {msg: $"Subject missing CN: ($subject)"}
     }
     if $verbose_flag { print $"    Subject: ($subject)" }
+    true
   } $verbose_flag)
   $results = ($results | append $test4)
   
@@ -82,6 +87,7 @@ def main [--verbose] {
       print $"    SAN config preview:"
       print $"($san_config | lines | first 3 | str join '\n' | str replace -a '\n' '\n      ')"
     }
+    true
   } $verbose_flag)
   $results = ($results | append $test5)
   

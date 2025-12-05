@@ -22,10 +22,76 @@
 
 Complete reference for all CLI commands and flags used in the DockyPody build system.
 
+## Unified CLI: dockypody
+
+The `dockypody.nu` script is the canonical entry point for the DockyPody build system. It provides a unified interface to all build, test, validation, TLS, and CI operations.
+
+### Basic Usage
+
+```bash
+# Show help
+nu scripts/dockypody.nu --help
+
+# Build commands
+nu scripts/dockypody.nu build --service gaia
+nu scripts/dockypody.nu build --all-services --show-build-order
+
+# Test commands
+nu scripts/dockypody.nu test --suite defaults
+nu scripts/dockypody.nu test --suite all --verbose
+
+# TLS commands
+nu scripts/dockypody.nu tls ca
+nu scripts/dockypody.nu tls certs
+nu scripts/dockypody.nu tls clean
+
+# CI commands
+nu scripts/dockypody.nu ci list-deps --service nextcloud
+nu scripts/dockypody.nu ci gen-workflow
+nu scripts/dockypody.nu ci images --service nextcloud
+
+# Validate commands
+nu scripts/dockypody.nu validate --all-services
+nu scripts/dockypody.nu validate --service gaia
+nu scripts/dockypody.nu validate --service gaia --manifests-only
+
+# Docs commands
+nu scripts/dockypody.nu docs lint
+nu scripts/dockypody.nu docs lint --fix
+```
+
+### Available Subcommands
+
+| Subcommand | Description | Domain CLI |
+|------------|-------------|------------|
+| `build` | Build container images | `build/cli.nu [build-cli]` |
+| `test` | Run test suites | `test/cli.nu [test-cli]` |
+| `validate` | Validate service configurations | `validate/cli.nu [validate-cli]` |
+| `tls ca` | Generate CA certificate | `tls/cli.nu [tls-cli]` |
+| `tls certs` | Generate service certificates | `tls/cli.nu [tls-cli]` |
+| `tls clean` | Remove TLS artifacts | `tls/cli.nu [tls-cli]` |
+| `tls sync` | Sync CA to services | `tls/cli.nu [tls-cli]` |
+| `ci list-deps` | List dependency services | `ci/cli.nu [ci-cli]` |
+| `ci load-deps` | Load dependency tarballs | `ci/cli.nu [ci-cli]` |
+| `ci load-owner` | Load owner tarballs | `ci/cli.nu [ci-cli]` |
+| `ci save-owner` | Save owner tarballs | `ci/cli.nu [ci-cli]` |
+| `ci gen-workflow` | Generate CI workflow | `ci/cli.nu [ci-cli]` |
+| `ci images` | List canonical image references | `ci/cli.nu [ci-cli]` |
+| `docs lint` | Lint documentation files | `docs/cli.nu [docs-cli]` |
+
+### CLI Architecture
+
+`dockypody.nu` acts as a thin router that delegates to domain-specific CLI entrypoints:
+
+- Each domain under `scripts/lib/` exposes a `<domain>-cli` function in `cli.nu`
+- The router parses top-level commands and flags, then calls the appropriate domain CLI
+- Domain CLIs handle subcommand routing and flag processing internally
+- This pattern enables clean separation of concerns and testable domain logic
+
 ## Build Command
 
 ```bash
-nu scripts/build.nu --service <service-name> [options]
+nu scripts/dockypody.nu build --service <service-name> [options]
 ```
 
 ## Service Selection Flags
@@ -35,7 +101,7 @@ nu scripts/build.nu --service <service-name> [options]
 Build a specific service:
 
 ```bash
-nu scripts/build.nu --service revad-base
+nu scripts/dockypody.nu build --service revad-base
 ```
 
 ### `--all-services`
@@ -43,7 +109,7 @@ nu scripts/build.nu --service revad-base
 Build all discovered services in dependency order:
 
 ```bash
-nu scripts/build.nu --all-services
+nu scripts/dockypody.nu build --all-services
 ```
 
 Discovers all services in the `services/` directory, resolves dependencies, computes the global build order, and builds all services in topological order.
@@ -78,22 +144,22 @@ Discovers all services in the `services/` directory, resolves dependencies, comp
 
 ```bash
 # Build all services with default versions
-nu scripts/build.nu --all-services
+nu scripts/dockypody.nu build --all-services
 
 # Build all services, all versions
-nu scripts/build.nu --all-services --all-versions
+nu scripts/dockypody.nu build --all-services --all-versions
 
 # Build only latest versions of all services
-nu scripts/build.nu --all-services --latest-only
+nu scripts/dockypody.nu build --all-services --latest-only
 
 # Build all services for debian platform only
-nu scripts/build.nu --all-services --platform debian
+nu scripts/dockypody.nu build --all-services --platform debian
 
 # Generate CI matrix for all services
-nu scripts/build.nu --all-services --matrix-json
+nu scripts/dockypody.nu build --all-services --matrix-json
 
 # Show build order without building
-nu scripts/build.nu --all-services --show-build-order
+nu scripts/dockypody.nu build --all-services --show-build-order
 ```
 
 ## Version Flags
@@ -103,7 +169,7 @@ nu scripts/build.nu --all-services --show-build-order
 Build a specific version from the manifest:
 
 ```bash
-nu scripts/build.nu --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.3.3
 ```
 
 ### `--all-versions`
@@ -111,7 +177,7 @@ nu scripts/build.nu --service revad-base --version v3.3.3
 Build all versions defined in the manifest:
 
 ```bash
-nu scripts/build.nu --service revad-base --all-versions
+nu scripts/dockypody.nu build --service revad-base --all-versions
 ```
 
 ### `--latest-only`
@@ -119,7 +185,7 @@ nu scripts/build.nu --service revad-base --all-versions
 Build only versions marked with `latest: true`:
 
 ```bash
-nu scripts/build.nu --service revad-base --latest-only
+nu scripts/dockypody.nu build --service revad-base --latest-only
 ```
 
 ### `--versions <string>`
@@ -127,7 +193,7 @@ nu scripts/build.nu --service revad-base --latest-only
 Build multiple specific versions (comma-separated list):
 
 ```bash
-nu scripts/build.nu --service revad-base --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
 ```
 
 **Note:** `--version` (singular) for single version, `--versions` (plural) for multiple versions.
@@ -140,10 +206,10 @@ Filter builds to a specific platform (requires `platforms.nuon`):
 
 ```bash
 # Build only debian variant
-nu scripts/build.nu --service my-service --version v1.0.0 --platform debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform debian
 
 # Build all debian versions
-nu scripts/build.nu --service my-service --all-versions --platform debian
+nu scripts/dockypody.nu build --service my-service --all-versions --platform debian
 ```
 
 ### Platform Suffix in Version
@@ -152,10 +218,10 @@ You can specify platforms inline with version names:
 
 ```bash
 # Build only v1.0.0-debian
-nu scripts/build.nu --service my-service --version v1.0.0-debian
+nu scripts/dockypody.nu build --service my-service --version v1.0.0-debian
 
 # Build multiple platform-specific versions
-nu scripts/build.nu --service my-service --versions "v1.0.0-debian,v1.0.0-alpine"
+nu scripts/dockypody.nu build --service my-service --versions "v1.0.0-debian,v1.0.0-alpine"
 ```
 
 **Rules:**
@@ -177,7 +243,7 @@ nu scripts/build.nu --service my-service --versions "v1.0.0-debian,v1.0.0-alpine
 Output GitHub Actions matrix JSON:
 
 ```bash
-nu scripts/build.nu --service revad-base --matrix-json
+nu scripts/dockypody.nu build --service revad-base --matrix-json
 ```
 
 **Output format:**
@@ -229,7 +295,7 @@ Override cache busting for all services in the build with a custom value:
 
 ```bash
 # Use custom cache bust value for all services
-nu scripts/build.nu --service cernbox-web --cache-bust "abc123"
+nu scripts/dockypody.nu build --service cernbox-web --cache-bust "abc123"
 ```
 
 When set, this value applies to:
@@ -246,7 +312,7 @@ Force cache invalidation by generating a random UUID for all services:
 
 ```bash
 # Force rebuild of all services (no cache)
-nu scripts/build.nu --service cernbox-web --no-cache
+nu scripts/dockypody.nu build --service cernbox-web --no-cache
 ```
 
 This is equivalent to `--cache-bust <random-uuid>` but more convenient for forcing full rebuilds.
@@ -261,13 +327,13 @@ Control dependency reuse behavior for CI builds:
 
 ```bash
 # Disable hash-based skip (always build deps)
-nu scripts/build.nu --service cernbox-web --dep-cache=off
+nu scripts/dockypody.nu build --service cernbox-web --dep-cache=off
 
 # Hash-based skip + auto-build on missing/stale (default for CI)
-nu scripts/build.nu --service cernbox-web --dep-cache=soft
+nu scripts/dockypody.nu build --service cernbox-web --dep-cache=soft
 
 # Strict validation, fail on missing/stale (no auto-build)
-nu scripts/build.nu --service cernbox-web --dep-cache=strict
+nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 ```
 
 **Modes:**
@@ -295,10 +361,10 @@ Push dependencies to registry (independent of `--push` flag):
 
 ```bash
 # Push dependencies but not target service
-nu scripts/build.nu --service cernbox-web --push-deps
+nu scripts/dockypody.nu build --service cernbox-web --push-deps
 
 # Push both dependencies and target service
-nu scripts/build.nu --service cernbox-web --push --push-deps
+nu scripts/dockypody.nu build --service cernbox-web --push --push-deps
 ```
 
 **Behavior:**
@@ -313,13 +379,13 @@ Tag dependencies with `--latest` and/or `--extra-tag` (independent of target ser
 
 ```bash
 # Tag dependencies as latest
-nu scripts/build.nu --service cernbox-web --latest --tag-deps
+nu scripts/dockypody.nu build --service cernbox-web --latest --tag-deps
 
 # Tag dependencies with custom tag
-nu scripts/build.nu --service cernbox-web --extra-tag stable --tag-deps
+nu scripts/dockypody.nu build --service cernbox-web --extra-tag stable --tag-deps
 
 # Tag both dependencies and target
-nu scripts/build.nu --service cernbox-web --latest --tag-deps
+nu scripts/dockypody.nu build --service cernbox-web --latest --tag-deps
 ```
 
 **Behavior:**
@@ -338,19 +404,19 @@ Display the dependency build order without actually building:
 
 ```bash
 # Show build order for service (default version)
-nu scripts/build.nu --service cernbox-web --show-build-order
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order
 
 # Show build order for specific version
-nu scripts/build.nu --service cernbox-web --show-build-order --version v1.0.0
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --version v1.0.0
 
 # Show build order for all versions
-nu scripts/build.nu --service cernbox-web --show-build-order --all-versions
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --all-versions
 
 # Show build order for specific versions
-nu scripts/build.nu --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
 
 # Show build order for latest versions only
-nu scripts/build.nu --service cernbox-web --show-build-order --latest-only
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --latest-only
 ```
 
 **Single-Version Output Format:**
@@ -418,7 +484,7 @@ Break on first failure (only applies to multi-version builds):
 
 ```bash
 # Build all versions, stop on first failure
-nu scripts/build.nu --service revad-base --all-versions --fail-fast
+nu scripts/dockypody.nu build --service revad-base --all-versions --fail-fast
 ```
 
 **Default behavior:**
@@ -441,7 +507,7 @@ nu scripts/build.nu --service revad-base --all-versions --fail-fast
 Push built images to registry:
 
 ```bash
-nu scripts/build.nu --service revad-base --version v3.3.3 --push
+nu scripts/dockypody.nu build --service revad-base --version v3.3.3 --push
 ```
 
 ### `--progress <string>`
@@ -449,7 +515,7 @@ nu scripts/build.nu --service revad-base --version v3.3.3 --push
 Set build progress output format:
 
 ```bash
-nu scripts/build.nu --service revad-base --all-versions --progress plain
+nu scripts/dockypody.nu build --service revad-base --all-versions --progress plain
 ```
 
 ### `--latest <boolean>`
@@ -457,7 +523,7 @@ nu scripts/build.nu --service revad-base --all-versions --progress plain
 Control latest tag generation:
 
 ```bash
-nu scripts/build.nu --service revad-base --version v1.28.0 --latest false
+nu scripts/dockypody.nu build --service revad-base --version v1.28.0 --latest false
 ```
 
 ## Disk Management Flags
@@ -468,10 +534,10 @@ Control disk monitoring output during builds:
 
 ```bash
 # Enable basic disk monitoring
-nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=basic
+nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monitor=basic
 
 # Default: monitoring disabled
-nu scripts/build.nu --service cernbox-web --all-versions --disk-monitor=off
+nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monitor=off
 ```
 
 **Modes:**
@@ -489,10 +555,10 @@ Prune BuildKit cache between version builds:
 
 ```bash
 # Enable cache pruning
-nu scripts/build.nu --service cernbox-web --all-versions --prune-cache-mounts
+nu scripts/dockypody.nu build --service cernbox-web --all-versions --prune-cache-mounts
 
 # Default: pruning disabled (local builds)
-nu scripts/build.nu --service cernbox-web --all-versions
+nu scripts/dockypody.nu build --service cernbox-web --all-versions
 ```
 
 **Behavior:**

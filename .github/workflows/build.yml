@@ -19,7 +19,7 @@
 # Use this for build verification without pushing to registries
 #
 # GENERATED FILE - Do not edit manually
-# Regenerate with: nu scripts/gen-ci-build-workflow.nu
+# Regenerate with: nu scripts/dockypody.nu ci gen-workflow
 
 name: Build All
 
@@ -31,6 +31,7 @@ on:
         required: false
         type: boolean
         default: false
+
 # Service dependency graph:
 #
 #   cernbox-revad - depends on: common-tools, gaia, revad-base
