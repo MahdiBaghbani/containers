@@ -1,5 +1,6 @@
 # Legacy directory
 legacy/
+.plans/
 
 # Operating System Files
 # macOS
