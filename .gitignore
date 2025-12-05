@@ -120,6 +120,7 @@ env/
 venv/
 ENV/
 build/
+!scripts/lib/build/
 develop-eggs/
 dist/
 downloads/
