@@ -2,6 +2,9 @@
 legacy/
 .plans/
 .snapshot/
+.logs/
+.resources/
+.issues/
 
 # Operating System Files
 # macOS
