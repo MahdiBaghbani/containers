@@ -61,6 +61,38 @@ docker run -d \
   - Example: `CONTACTS_MESH_PROVIDERS_SERVICE=https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download`
   - Note: Requires `CONTACTS_ENABLE_OCM_INVITES=true` to be useful. Will log a warning if command is not available.
 
+### OCM Invites Mode and Flags
+
+These variables control the OCM invites user experience. You can use a mode preset or override individual flags.
+
+- `CONTACTS_OCM_INVITES_MODE` - UX mode preset (optional)
+  - Type: String
+  - Values: `basic`, `advanced`
+  - Default: Unset (uses basic defaults)
+  - Description: Sets defaults for the granular flags below
+  - `basic`: Email is required, CC checkbox shown, encoded copy button hidden
+  - `advanced`: Email is optional, CC checkbox shown, encoded copy button shown
+
+- `CONTACTS_OCM_INVITES_OPTIONAL_MAIL` - Allow optional email (optional override)
+  - Type: Boolean
+  - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
+  - Default: Derived from mode (false for basic, true for advanced)
+  - Description: When true, users can create invites without sending email. The invite link must be shared manually.
+
+- `CONTACTS_OCM_INVITES_CC_SENDER` - Show CC checkbox (optional override)
+  - Type: Boolean
+  - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
+  - Default: Derived from mode (true for both modes)
+  - Description: When true, shows checkbox allowing senders to receive a copy of the invite email.
+
+- `CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON` - Show encoded copy button (optional override)
+  - Type: Boolean
+  - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
+  - Default: Derived from mode (false for basic, true for advanced)
+  - Description: When true, shows advanced button to copy base64-encoded invite. Hidden by default for simpler UX.
+
+**Note**: Per-flag environment variables override mode defaults. For example, setting `CONTACTS_OCM_INVITES_MODE=basic` with `CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON=true` uses basic defaults but enables the encoded copy button.
+
 ### Nextcloud Base Variables
 
 This service inherits all environment variables from `nextcloud-base`. See [nextcloud-base documentation](../nextcloud-base/docs/README.md#environment-variables) for:
@@ -92,19 +124,43 @@ This service inherits all environment variables from `nextcloud-base`. See [next
 The OCM Invites feature allows exchanging cloud IDs through OCM invitation workflow:
 
 - Button to invite remote users to exchange cloudIDs
-- **Email is optional** - invites can be shared manually via link
-- Button to manually accept invite to exchange cloudIDs
+- **Email is optional** (in advanced mode) - invites can be shared manually via link
+- Button to manually accept invite to exchange cloudIDs (supports invite links, codes, and encoded invites)
 - WAYF page allowing the receiver of the invite to open and accept the invitation
 - Listing of open invitations
 - Option to resend (only for invites with email), revoke open invitations
+- Optional CC to sender when sending invite emails
 
 ### Enabling OCM Invites
 
 1. Use `ocm-testing` version: `nextcloud-contacts:ocm-testing`
 2. Set environment variable: `CONTACTS_ENABLE_OCM_INVITES=true`
 3. Optionally configure mesh providers service: `CONTACTS_MESH_PROVIDERS_SERVICE=<URL>`
+4. Optionally set mode: `CONTACTS_OCM_INVITES_MODE=basic` or `advanced`
 
 The feature is automatically enabled during container initialization if the environment variable is set.
+
+### Basic vs Advanced Mode
+
+**Basic mode** (default) is designed for simpler deployments:
+- Email address is required when creating invites
+- CC checkbox is available for senders
+- Encoded copy button is hidden (cleaner UI)
+
+**Advanced mode** is for power users and testing:
+- Email address is optional (invites can be shared manually)
+- CC checkbox is available
+- Encoded copy button is shown for technical users
+
+Example with advanced mode:
+
+```bash
+docker run -d \
+  -e CONTACTS_ENABLE_OCM_INVITES=true \
+  -e CONTACTS_OCM_INVITES_MODE=advanced \
+  -e CONTACTS_MESH_PROVIDERS_SERVICE=https://example.com/providers.json \
+  nextcloud-contacts:ocm-testing
+```
 
 ### Manual Enablement
 
@@ -139,7 +195,7 @@ The Contacts app is built in multiple stages:
 Hooks execute alphabetically:
 
 1. `90-enable-contacts.nu` - Enables contacts app
-2. `91-enable-contacts-ocm-invites.nu` - Enables OCM Invites (if `CONTACTS_ENABLE_OCM_INVITES=true`)
+2. `91-enable-contacts-ocm-invites.nu` - Enables OCM Invites and configures mode/flags (if relevant env vars are set)
 
 ## Building
 

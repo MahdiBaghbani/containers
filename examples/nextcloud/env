@@ -1,7 +1,7 @@
 # Image versions (platform suffixes may be required - edit manually)
 IMAGE_VALKEY=9.0-alpine
 IMAGE_MARIADB=11.8
-IMAGE_NEXTCLOUD=v32.0.2-debian
+IMAGE_NEXTCLOUD=local-debian
 
 # Nextcloud Settings
 # External domain (Traefik routing + browser access)
@@ -12,12 +12,20 @@ MYSQL_HOST=nextcloud-1-test-db
 REDIS_HOST=nextcloud-1-test-redis
 
 # Nextcloud Admin Configuration
-NEXTCLOUD_ADMIN_USER=admin
+NEXTCLOUD_ADMIN_USER=admin-builtin
 NEXTCLOUD_ADMIN_PASSWORD=admin
 NEXTCLOUD_TRUSTED_DOMAINS=1.nextcloud.cloud.test.azadehafzar.io
 NEXTCLOUD_DATA_DIR=/var/www/html/data
 CONTACTS_ENABLE_OCM_INVITES=true
 CONTACTS_MESH_PROVIDERS_SERVICE=
+
+# OCM Invites UX Configuration
+# Mode: "basic" (email required, encoded hidden) or "advanced" (all features)
+CONTACTS_OCM_INVITES_MODE=advanced
+# Per-flag overrides (optional - leave empty to use mode defaults)
+CONTACTS_OCM_INVITES_OPTIONAL_MAIL=
+CONTACTS_OCM_INVITES_CC_SENDER=
+CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON=
 
 # Database Configuration (MariaDB/MySQL)
 MYSQL_ROOT_PASSWORD=rootpassword

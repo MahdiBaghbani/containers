@@ -46,7 +46,7 @@ services:
       start_period: 10s
 
   nextcloud-1-test:
-    image: "nextcloud:${IMAGE_NEXTCLOUD}"
+    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD}"
     container_name: nextcloud-1-test
     restart: "unless-stopped"
     security_opt:
@@ -62,6 +62,10 @@ services:
       NEXTCLOUD_DATA_DIR: "${NEXTCLOUD_DATA_DIR:-/var/www/html/data}"
       CONTACTS_ENABLE_OCM_INVITES: "${CONTACTS_ENABLE_OCM_INVITES:-false}"
       CONTACTS_MESH_PROVIDERS_SERVICE: ${CONTACTS_MESH_PROVIDERS_SERVICE:-""}
+      CONTACTS_OCM_INVITES_MODE: "${CONTACTS_OCM_INVITES_MODE:-}"
+      CONTACTS_OCM_INVITES_OPTIONAL_MAIL: "${CONTACTS_OCM_INVITES_OPTIONAL_MAIL:-}"
+      CONTACTS_OCM_INVITES_CC_SENDER: "${CONTACTS_OCM_INVITES_CC_SENDER:-}"
+      CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON: "${CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON:-}"
       MYSQL_HOST: "${MYSQL_HOST:-nextcloud-1-test-db}"
       MYSQL_DATABASE: "${MYSQL_DATABASE}"
       MYSQL_USER: "${MYSQL_USER}"
