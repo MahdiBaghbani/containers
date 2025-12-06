@@ -91,6 +91,7 @@ def main [
   --skip-shared-ca,
   --keep-empty-dirs,
   --force,
+  --target: string = "",
   --transitive,
   --debug,
   # Docs flags
@@ -162,7 +163,7 @@ def main [
     "ci" => {
       # Normalize help flags to "help" subcommand - ci-cli handles it internally
       let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $transitive $debug $dry_run
+      run-ci-command $subcmd $service $target $transitive $debug $dry_run
     }
     "docs" => {
       # Normalize help flags to "help" subcommand - docs-cli handles it internally
@@ -224,10 +225,11 @@ def run-tls-command [
   }
 }
 
-def run-ci-command [subcommand: string, service: string, transitive: bool, debug: bool, dry_run: bool] {
+def run-ci-command [subcommand: string, service: string, target: string, transitive: bool, debug: bool, dry_run: bool] {
   use ./lib/ci/cli.nu [ci-cli]
   ci-cli $subcommand {
     service: $service,
+    target: $target,
     transitive: $transitive,
     debug: $debug,
     dry_run: $dry_run

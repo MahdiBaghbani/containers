@@ -38,11 +38,12 @@ export def ci-help [] {
   print "  load-deps      Load dependency tarballs"
   print "  load-owner     Load owner tarballs"
   print "  save-owner     Save owner tarballs"
-  print "  gen-workflow   Generate CI workflow"
+  print "  workflow       Generate CI workflows (--target all|build|build-push|orchestrator)"
   print "  images         List canonical image references for a service"
   print ""
   print "Options:"
   print "  --service <name>   Target service"
+  print "  --target <name>    Workflow target (for workflow subcommand: all, build, build-push, orchestrator)"
   print "  --transitive       Include transitive dependencies"
   print "  --dry-run          Show what would be done"
 }
@@ -112,10 +113,11 @@ def list-service-images [service: string] {
 
 # CI CLI entrypoint - called from dockypody.nu
 export def ci-cli [
-  subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, gen-workflow, images, help
-  flags: record        # Flags: { service, transitive, debug, dry_run }
+  subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, workflow, images, help
+  flags: record        # Flags: { service, target, transitive, debug, dry_run }
 ] {
   let service = (try { $flags.service } catch { "" })
+  let target = (try { $flags.target } catch { "all" })
   let transitive = (try { $flags.transitive } catch { false })
   let debug = (try { $flags.debug } catch { false })
   let dry_run = (try { $flags.dry_run } catch { false })
@@ -136,8 +138,11 @@ export def ci-cli [
     "save-owner" => {
       save-owner --service $service
     }
-    "gen-workflow" => {
-      gen-workflow --dry-run=$dry_run
+    "workflow" => {
+      use ./workflow.nu [get-workflows-for-target write-workflows]
+      
+      let workflows = (get-workflows-for-target $target)
+      write-workflows $workflows --dry-run=$dry_run
     }
     "images" => {
       list-service-images $service

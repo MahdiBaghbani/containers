@@ -1,4 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 # Reusable workflow for building a single service (all versions)
 # Called by build.yml for per-service orchestration with cache-based image reuse
 #
@@ -235,6 +251,7 @@ jobs:
 
       - name: Build service
         run: |
+          echo "Push mode: ${{ inputs.push }}"
           echo "Cache match kind: ${{ steps.cache-match.outputs.match_kind }}"
           echo "Disk monitor mode: ${{ inputs.disk_monitor_mode }}"
           echo "Prune build cache: ${{ inputs.prune_build_cache }}"
@@ -245,7 +262,8 @@ jobs:
             --pull=deps,externals \
             --cache-match=${{ steps.cache-match.outputs.match_kind }} \
             --disk-monitor=${{ inputs.disk_monitor_mode }} \
-            ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }}
+            ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \
+            ${{ inputs.push && '--push' || '' }}
 
       # Save images using SHA-deduplicated tarballs
       - name: Save images to cache

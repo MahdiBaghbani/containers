@@ -15,130 +15,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Build all services and versions
-# Use this for build verification without pushing to registries
+# Build all services and versions - Use this for build verification without pushing to registries
 #
 # GENERATED FILE - Do not edit manually
-# Regenerate with: nu scripts/dockypody.nu ci gen-workflow
+# Regenerate with: nu scripts/dockypody.nu ci workflow --target build
 
 name: Build All
 
 on:
   workflow_dispatch:
-    inputs:
-      verbose:
-        description: "Enable verbose output"
-        required: false
-        type: boolean
-        default: false
-
-# Service dependency graph:
-#
-#   cernbox-revad - depends on: common-tools, gaia, revad-base
-#   cernbox-web - depends on: common-tools
-#   common-tools - (root service, no dependencies)
-#   gaia - depends on: common-tools
-#   idp - depends on: common-tools
-#   nextcloud - depends on: nextcloud-base
-#   nextcloud-base - depends on: common-tools
-#   nextcloud-contacts - depends on: common-tools, nextcloud
-#   revad-base - depends on: common-tools
-#
 
 jobs:
-  build_cernbox_revad:
-    needs: [build_common_tools, build_gaia, build_revad_base]
-    uses: ./.github/workflows/build-service.yml
+  run_build_all:
+    name: Build All Services
+    uses: ./.github/workflows/build-orchestrator.yml
     with:
-      service: cernbox-revad
       push: false
-      dependencies: "revad-base,gaia,common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_cernbox_web:
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: cernbox-web
-      push: false
-      dependencies: "common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_common_tools:
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: common-tools
-      push: false
-      dependencies: ""
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_gaia:
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: gaia
-      push: false
-      dependencies: "common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_idp:
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: idp
-      push: false
-      dependencies: "common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_nextcloud:
-    needs: [build_nextcloud_base]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: nextcloud
-      push: false
-      dependencies: "common-tools,nextcloud-base"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_nextcloud_base:
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: nextcloud-base
-      push: false
-      dependencies: "common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_nextcloud_contacts:
-    needs: [build_common_tools, build_nextcloud]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: nextcloud-contacts
-      push: false
-      dependencies: "nextcloud-base,nextcloud,common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_revad_base:
-    needs: [build_common_tools]
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: revad-base
-      push: false
-      dependencies: "common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
-  build_complete:
-    name: Build Complete
-    needs: [build_cernbox_revad, build_cernbox_web, build_common_tools, build_gaia, build_idp, build_nextcloud, build_nextcloud_base, build_nextcloud_contacts, build_revad_base]
-    runs-on: ubuntu-latest
-    steps:
-      - name: All builds completed
-        run: echo "All service builds completed successfully"

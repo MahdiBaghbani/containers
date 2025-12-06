@@ -47,7 +47,7 @@ nu scripts/dockypody.nu tls clean
 
 # CI commands
 nu scripts/dockypody.nu ci list-deps --service nextcloud
-nu scripts/dockypody.nu ci gen-workflow
+nu scripts/dockypody.nu ci workflow --target all
 nu scripts/dockypody.nu ci images --service nextcloud
 
 # Validate commands
@@ -75,7 +75,7 @@ nu scripts/dockypody.nu docs lint --fix
 | `ci load-deps` | Load dependency tarballs | `ci/cli.nu [ci-cli]` |
 | `ci load-owner` | Load owner tarballs | `ci/cli.nu [ci-cli]` |
 | `ci save-owner` | Save owner tarballs | `ci/cli.nu [ci-cli]` |
-| `ci gen-workflow` | Generate CI workflow | `ci/cli.nu [ci-cli]` |
+| `ci workflow` | Generate CI workflows (--target all\|build\|build-push\|orchestrator) | `ci/cli.nu [ci-cli]` |
 | `ci images` | List canonical image references | `ci/cli.nu [ci-cli]` |
 | `docs lint` | Lint documentation files | `docs/cli.nu [docs-cli]` |
 
