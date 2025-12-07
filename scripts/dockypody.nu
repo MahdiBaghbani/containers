@@ -94,6 +94,7 @@ def main [
   --target: string = "",
   --ref: string = "",
   --sha: string = "",
+  --dependencies: string = "",
   --transitive,
   --debug,
   # Docs flags
@@ -165,7 +166,7 @@ def main [
     "ci" => {
       # Normalize help flags to "help" subcommand - ci-cli handles it internally
       let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $target $ref $sha $transitive $debug $dry_run
+      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run
     }
     "docs" => {
       # Normalize help flags to "help" subcommand - docs-cli handles it internally
@@ -230,6 +231,9 @@ def run-tls-command [
 def run-ci-command [
   subcommand: string,
   service: string,
+  version: string,
+  platform: string,
+  dependencies: string,
   target: string,
   ref: string,
   sha: string,
@@ -240,6 +244,9 @@ def run-ci-command [
   use ./lib/ci/cli.nu [ci-cli]
   ci-cli $subcommand {
     service: $service,
+    version: $version,
+    platform: $platform,
+    dependencies: $dependencies,
     target: $target,
     ref: $ref,
     sha: $sha,

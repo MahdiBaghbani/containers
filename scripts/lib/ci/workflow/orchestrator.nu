@@ -60,6 +60,7 @@ def gen-orchestrator-service-job [svc_info: record] {
     let needs_yaml = (format-needs-list $svc_info.needs_job_ids)
 
     $"  ($job_id):
+    name: ($name)
 ($needs_yaml)    uses: ./.github/workflows/build-service.yml
     with:
       service: ($name)
@@ -75,10 +76,17 @@ def gen-build-complete-job [all_job_ids: list] {
 
     $"  build_complete:
     name: Build Complete
-($needs_yaml)    runs-on: ubuntu-latest
+($needs_yaml)    if: always\(\)
+    runs-on: ubuntu-latest
     steps:
+      - name: Clean up shard artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: shard-*
+          failOnError: false
+
       - name: All builds completed
-        run: echo \"All service builds completed successfully\"
+        run: echo \"Build orchestration finished\"
 "
 }
 

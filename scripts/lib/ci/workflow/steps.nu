@@ -146,6 +146,36 @@ fi'
     }
 }
 
+# Prepare dependency shards from artifacts (new artifact-based CI flow)
+export def step-prepare-node-deps [] {
+    {
+        name: "Prepare dependency shards"
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        run: 'nu scripts/dockypody.nu ci prepare-node-deps --service ${{ inputs.service }} --version ${{ matrix.version }} --platform "${{ matrix.platform }}" --dependencies "${{ inputs.dependencies }}"'
+    }
+}
+
+# Build node using artifact-based deps (new flow without actions/cache)
+export def step-build-node-artifact-deps [] {
+    {
+        name: "Build node"
+        run: "PLATFORM_FLAG=\"\"
+if [ -n \"${{ matrix.platform }}\" ]; then
+  PLATFORM_FLAG=\"--platform ${{ matrix.platform }}\"
+fi
+nu scripts/dockypody.nu build \\
+  --service ${{ inputs.service }} \\
+  --version ${{ matrix.version }} \\
+  $PLATFORM_FLAG \\
+  --dep-cache=soft \\
+  --pull=deps,externals \\
+  --disk-monitor=${{ inputs.disk_monitor_mode }} \\
+  ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \\
+  ${{ inputs.push && '--push' || '' }}"
+    }
+}
+
+# Legacy: Build node with cache-match (for backward compatibility, not used in new workflows)
 export def step-build-node [] {
     {
         name: "Build node"

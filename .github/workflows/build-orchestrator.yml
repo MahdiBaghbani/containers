@@ -46,6 +46,7 @@ on:
 
 jobs:
   build_cernbox_revad:
+    name: cernbox-revad
     needs:
       - build_common_tools
       - build_gaia
@@ -59,6 +60,7 @@ jobs:
       prune_build_cache: true
 
   build_cernbox_web:
+    name: cernbox-web
     needs:
       - build_common_tools
     uses: ./.github/workflows/build-service.yml
@@ -70,6 +72,7 @@ jobs:
       prune_build_cache: true
 
   build_common_tools:
+    name: common-tools
     uses: ./.github/workflows/build-service.yml
     with:
       service: common-tools
@@ -79,6 +82,7 @@ jobs:
       prune_build_cache: true
 
   build_gaia:
+    name: gaia
     needs:
       - build_common_tools
     uses: ./.github/workflows/build-service.yml
@@ -90,6 +94,7 @@ jobs:
       prune_build_cache: true
 
   build_idp:
+    name: idp
     needs:
       - build_common_tools
     uses: ./.github/workflows/build-service.yml
@@ -101,6 +106,7 @@ jobs:
       prune_build_cache: true
 
   build_nextcloud:
+    name: nextcloud
     needs:
       - build_nextcloud_base
     uses: ./.github/workflows/build-service.yml
@@ -112,6 +118,7 @@ jobs:
       prune_build_cache: true
 
   build_nextcloud_base:
+    name: nextcloud-base
     needs:
       - build_common_tools
     uses: ./.github/workflows/build-service.yml
@@ -123,6 +130,7 @@ jobs:
       prune_build_cache: true
 
   build_nextcloud_contacts:
+    name: nextcloud-contacts
     needs:
       - build_common_tools
       - build_nextcloud
@@ -135,6 +143,7 @@ jobs:
       prune_build_cache: true
 
   build_revad_base:
+    name: revad-base
     needs:
       - build_common_tools
     uses: ./.github/workflows/build-service.yml
@@ -157,7 +166,14 @@ jobs:
       - build_nextcloud_base
       - build_nextcloud_contacts
       - build_revad_base
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Clean up shard artifacts
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: shard-*
+          failOnError: false
+
       - name: All builds completed
-        run: echo "All service builds completed successfully"
+        run: echo "Build orchestration finished"

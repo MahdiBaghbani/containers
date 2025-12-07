@@ -16,13 +16,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Generator for build-service.yml workflow
+# Uses artifact-based dependency reuse
 
 use ./yaml.nu [indent yaml-steps]
 use ./steps.nu [
     step-checkout step-install-nushell step-common-setup
-    step-parse-deps step-restore-deps step-restore-owner-cache
-    step-cache-match-kind step-load-cached-images
-    step-build-node step-create-shard step-upload-shard
+    step-prepare-node-deps step-build-node-artifact-deps
+    step-create-shard step-upload-shard
 ]
 use ./constants.nu [gen-workflow-header]
 
@@ -39,7 +39,7 @@ const BUILD_SERVICE_TRIGGER = 'on:
         type: boolean
         default: false
       dependencies:
-        description: "Comma-separated list of dependency service names for cache restore"
+        description: "Comma-separated list of dependency service names for artifact loading"
         required: false
         type: string
         default: ""
@@ -71,60 +71,14 @@ echo \"$MATRIX_JSON\" | jq ."
 
 def gen-build-steps [] {
     let base = (step-common-setup)
-    let deps = [(step-parse-deps)] | append (step-restore-deps)
-    let cache = [
-        (step-restore-owner-cache)
-        (step-cache-match-kind)
-        (step-load-cached-images)
-    ]
+    let deps = [(step-prepare-node-deps)]
     let build = [
-        (step-build-node)
+        (step-build-node-artifact-deps)
         (step-create-shard)
         (step-upload-shard)
     ]
     
-    $base | append $deps | append $cache | append $build
-}
-
-def gen-update-cache-steps [] {
-    (step-common-setup) | append [
-        {
-            name: "Download all shard artifacts"
-            uses: "actions/download-artifact@v4"
-            with: {
-                pattern: "shard-${{ inputs.service }}-*"
-                path: "/tmp/docker-images/shards/${{ inputs.service }}/"
-                merge-multiple: "true"
-            }
-        }
-        {
-            name: "List downloaded shards"
-            run: 'echo "Downloaded shards:"
-ls -la /tmp/docker-images/shards/${{ inputs.service }}/ || echo "No shards directory"
-find /tmp/docker-images/shards/ -name "*.nuon" -o -name "*.tar.zst" 2>/dev/null || true'
-        }
-        {
-            name: "Merge cache shards"
-            run: 'nu scripts/dockypody.nu ci merge-cache-shards --service ${{ inputs.service }} --ref ${{ github.ref }} --sha ${{ github.sha }}'
-        }
-        {
-            name: "Save Docker image cache"
-            uses: "actions/cache/save@v4"
-            with: {
-                path: "/tmp/docker-images/${{ inputs.service }}/"
-                key: "images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}"
-            }
-        }
-        {
-            name: "Delete shard artifacts"
-            if: "always()"
-            uses: "geekyeggo/delete-artifact@v5"
-            with: {
-                name: "shard-${{ inputs.service }}-*"
-                failOnError: "false"
-            }
-        }
-    ]
+    $base | append $deps | append $build
 }
 
 export def generate [] {
@@ -136,7 +90,6 @@ export def generate [] {
 
     let setup_yaml = (yaml-steps (gen-setup-steps))
     let build_yaml = (yaml-steps (gen-build-steps))
-    let update_yaml = (yaml-steps (gen-update-cache-steps))
 
     $header + "
 
@@ -150,7 +103,7 @@ jobs:
 " + (indent $setup_yaml 3) + "
 
   build:
-    name: Build ${{ inputs.service }} (${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }})
+    name: v${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }}
     needs: [setup]
     runs-on: ubuntu-latest
     strategy:
@@ -159,13 +112,5 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
 " + (indent $build_yaml 3) + "
-
-  update_cache:
-    name: Update cache for ${{ inputs.service }}
-    needs: [setup, build]
-    if: always() && needs.setup.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-" + (indent $update_yaml 3) + "
 "
 }

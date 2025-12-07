@@ -35,7 +35,7 @@ on:
         type: boolean
         default: false
       dependencies:
-        description: "Comma-separated list of dependency service names for cache restore"
+        description: "Comma-separated list of dependency service names for artifact loading"
         required: false
         type: string
         default: ""
@@ -80,7 +80,7 @@ jobs:
           echo "$MATRIX_JSON" | jq .
 
   build:
-    name: Build ${{ inputs.service }} (${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }})
+    name: v${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }}
     needs: [setup]
     runs-on: ubuntu-latest
     strategy:
@@ -111,121 +111,10 @@ jobs:
         with:
           driver: docker
 
-      - name: Parse dependencies
-        id: deps
-        run: |
-          DEPS="${{ inputs.dependencies }}"
-          echo "Parsing dependencies: '$DEPS'"
-          IFS=',' read -ra DEP_ARRAY <<< "$DEPS"
-          COUNT=${#DEP_ARRAY[@]}
-          for i in {1..8}; do
-            IDX=$((i - 1))
-            if [ $IDX -lt $COUNT ] && [ -n "${DEP_ARRAY[$IDX]}" ]; then
-              DEP=$(echo "${DEP_ARRAY[$IDX]}" | xargs)
-              echo "dep${i}=${DEP}" >> $GITHUB_OUTPUT
-            else
-              echo "dep${i}=" >> $GITHUB_OUTPUT
-            fi
-          done
-          echo "Total dependencies: $COUNT (max 8 restored)"
-
-      - name: Restore dep1 cache
-        if: steps.deps.outputs.dep1 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep1 }}/
-          key: images-${{ steps.deps.outputs.dep1 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep1 }}-${{ github.ref }}-
-
-      - name: Restore dep2 cache
-        if: steps.deps.outputs.dep2 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep2 }}/
-          key: images-${{ steps.deps.outputs.dep2 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep2 }}-${{ github.ref }}-
-
-      - name: Restore dep3 cache
-        if: steps.deps.outputs.dep3 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep3 }}/
-          key: images-${{ steps.deps.outputs.dep3 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep3 }}-${{ github.ref }}-
-
-      - name: Restore dep4 cache
-        if: steps.deps.outputs.dep4 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep4 }}/
-          key: images-${{ steps.deps.outputs.dep4 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep4 }}-${{ github.ref }}-
-
-      - name: Restore dep5 cache
-        if: steps.deps.outputs.dep5 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep5 }}/
-          key: images-${{ steps.deps.outputs.dep5 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep5 }}-${{ github.ref }}-
-
-      - name: Restore dep6 cache
-        if: steps.deps.outputs.dep6 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep6 }}/
-          key: images-${{ steps.deps.outputs.dep6 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep6 }}-${{ github.ref }}-
-
-      - name: Restore dep7 cache
-        if: steps.deps.outputs.dep7 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep7 }}/
-          key: images-${{ steps.deps.outputs.dep7 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep7 }}-${{ github.ref }}-
-
-      - name: Restore dep8 cache
-        if: steps.deps.outputs.dep8 != ''
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ steps.deps.outputs.dep8 }}/
-          key: images-${{ steps.deps.outputs.dep8 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ steps.deps.outputs.dep8 }}-${{ github.ref }}-
-
-      - name: Restore Docker image cache
-        id: cache-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: /tmp/docker-images/${{ inputs.service }}/
-          key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: images-${{ inputs.service }}-${{ github.ref }}-
-
-      - name: Determine cache match kind
-        id: cache-match
-        run: |
-          PRIMARY_KEY="images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}"
-          MATCHED_KEY="${{ steps.cache-restore.outputs.cache-matched-key }}"
-          CACHE_HIT="${{ steps.cache-restore.outputs.cache-hit }}"
-          if [ "$CACHE_HIT" = "true" ]; then
-            if [ "$MATCHED_KEY" = "$PRIMARY_KEY" ]; then
-              MATCH_KIND="exact"
-            else
-              MATCH_KIND="fallback"
-            fi
-          else
-            MATCH_KIND="miss"
-          fi
-          echo "Cache match kind: $MATCH_KIND"
-          echo "match_kind=$MATCH_KIND" >> $GITHUB_OUTPUT
-
-      - name: Load cached images
-        if: steps.cache-restore.outputs.cache-hit == 'true'
-        run: |
-          if [ -d "/tmp/docker-images/${{ inputs.service }}" ]; then
-            echo "Loading cached images for ${{ inputs.service }}..."
-            nu scripts/dockypody.nu ci load-owner --service ${{ inputs.service }}
-          fi
+      - name: Prepare dependency shards
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: nu scripts/dockypody.nu ci prepare-node-deps --service ${{ inputs.service }} --version ${{ matrix.version }} --platform "${{ matrix.platform }}" --dependencies "${{ inputs.dependencies }}"
 
       - name: Build node
         run: |
@@ -239,7 +128,6 @@ jobs:
             $PLATFORM_FLAG \
             --dep-cache=soft \
             --pull=deps,externals \
-            --cache-match=${{ steps.cache-match.outputs.match_kind }} \
             --disk-monitor=${{ inputs.disk_monitor_mode }} \
             ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \
             ${{ inputs.push && '--push' || '' }}
@@ -256,61 +144,3 @@ jobs:
           path: /tmp/docker-images/shards/${{ inputs.service }}/
           retention-days: 1
           if-no-files-found: error
-
-  update_cache:
-    name: Update cache for ${{ inputs.service }}
-    needs: [setup, build]
-    if: always() && needs.setup.result == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Nushell
-        env:
-          NU_VERSION: 0.108.0
-        run: |
-          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz"
-          mkdir -p /tmp/nu
-          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
-          sudo mv /tmp/nu/nu /usr/local/bin/nu
-          nu --version
-
-      - name: Install zstd
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y zstd
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
-      - name: Download all shard artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: shard-${{ inputs.service }}-*
-          path: /tmp/docker-images/shards/${{ inputs.service }}/
-          merge-multiple: true
-
-      - name: List downloaded shards
-        run: |
-          echo "Downloaded shards:"
-          ls -la /tmp/docker-images/shards/${{ inputs.service }}/ || echo "No shards directory"
-          find /tmp/docker-images/shards/ -name "*.nuon" -o -name "*.tar.zst" 2>/dev/null || true
-
-      - name: Merge cache shards
-        run: nu scripts/dockypody.nu ci merge-cache-shards --service ${{ inputs.service }} --ref ${{ github.ref }} --sha ${{ github.sha }}
-
-      - name: Save Docker image cache
-        uses: actions/cache/save@v4
-        with:
-          path: /tmp/docker-images/${{ inputs.service }}/
-          key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}
-
-      - name: Delete shard artifacts
-        if: always()
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: shard-${{ inputs.service }}-*
-          failOnError: false

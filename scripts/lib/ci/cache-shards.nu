@@ -39,6 +39,17 @@ export def make-node-key [
   }
 }
 
+# Build shard artifact name: shard-<service>-<version>-<platform|single>
+# This is the single source of truth for artifact naming in CI workflows.
+export def make-shard-name [
+  service: string,
+  version: string,
+  platform: string = ""
+] {
+  let platform_part = (if ($platform | str length) > 0 { $platform } else { "single" })
+  $"shard-($service)-($version)-($platform_part)"
+}
+
 # Internal: get Docker image ID for a given image reference
 def get-docker-image-id [image_ref: string] {
   try {

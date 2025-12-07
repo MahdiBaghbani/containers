@@ -20,8 +20,10 @@
 use ./deps.nu [get-direct-dependency-services get-all-dependency-services]
 use ./tarballs.nu [load-dep-tarballs load-owner save-owner]
 use ./workflow.nu [gen-workflow]
-use ./cache-shards.nu [merge-node-shards]
+use ./cache-shards.nu [merge-node-shards make-shard-name]
+use ./artifacts.nu [get-github-run-context list-run-artifacts-github download-and-load-shard]
 use ../build/cache.nu [get-dep-nodes-for-service]
+use ../build/dep-nodes.nu [get-matching-dependency-shards]
 use ../build/pull.nu [compute-canonical-image-ref]
 use ../registries/info.nu [get-registry-info]
 
@@ -223,23 +225,132 @@ export def ci-cleanup-cache-shards-internal [
   true
 }
 
+# Prepare dependency shards by downloading artifacts from current workflow run
+# Soft-failure: returns true even on errors, letting dep-cache handle rebuilds
+export def prepare-node-deps-internal [
+  service: string,
+  version: string,
+  platform: string,
+  dependencies: string,
+  debug: bool
+] {
+  if ($service | str length) == 0 or ($version | str length) == 0 {
+    print --stderr "ERROR: --service and --version are required for ci prepare-node-deps"
+    return false
+  }
+
+  # Parse dependencies comma-separated string
+  let dep_services = (if ($dependencies | str length) == 0 {
+    []
+  } else {
+    $dependencies | split row "," | each {|s| $s | str trim} | where {|s| ($s | str length) > 0}
+  })
+
+  if ($dep_services | is-empty) {
+    if $debug {
+      print --stderr "DEBUG: No dependencies to prepare"
+    }
+    return true
+  }
+
+  if $debug {
+    print --stderr $"DEBUG: Preparing deps for ($service):($version):($platform)"
+    print --stderr $"DEBUG: Dependency services: ($dep_services | str join ', ')"
+  }
+
+  # Get GitHub run context - soft failure if not in CI
+  let ctx = (get-github-run-context)
+  if not $ctx.ok {
+    print --stderr $"INFO: Skipping artifact download - ($ctx.reason)"
+    print --stderr "INFO: Dependency images will be rebuilt by dep-cache if needed"
+    return true
+  }
+
+  if $debug {
+    print --stderr $"DEBUG: GitHub context: ($ctx.owner)/($ctx.repo) run ($ctx.run_id)"
+  }
+
+  # List artifacts for this run - cache the list
+  let artifacts = (list-run-artifacts-github $ctx)
+  if ($artifacts | is-empty) {
+    if $debug {
+      print --stderr "DEBUG: No artifacts found in current run"
+    }
+    return true
+  }
+
+  if $debug {
+    print --stderr $"DEBUG: Found ($artifacts | length) artifact(s) in run"
+  }
+
+  # Get candidate shards to load based on dep services and target platform
+  let candidates = (get-matching-dependency-shards $dep_services $platform)
+  
+  if ($candidates | is-empty) {
+    if $debug {
+      print --stderr "DEBUG: No dependency shard candidates computed"
+    }
+    return true
+  }
+
+  if $debug {
+    print --stderr $"DEBUG: Will attempt to load ($candidates | length) shard(s)"
+  }
+
+  # Try to download and load each candidate shard
+  mut requested = 0
+  mut found = 0
+  mut loaded = 0
+
+  for candidate in $candidates {
+    $requested = $requested + 1
+    let shard_name = (make-shard-name $candidate.service $candidate.version $candidate.platform)
+    
+    if $debug {
+      print --stderr $"DEBUG: Looking for shard: ($shard_name)"
+    }
+
+    let result = (download-and-load-shard $ctx $artifacts $candidate.service $candidate.version $candidate.platform)
+    
+    if $result.ok {
+      $found = $found + 1
+      $loaded = $loaded + (try { $result.loaded } catch { 1 })
+      print --stderr $"Loaded shard: ($shard_name)"
+    } else {
+      if $debug {
+        print --stderr $"DEBUG: ($result.reason)"
+      }
+    }
+  }
+
+  print --stderr $"Shard summary: requested=($requested) found=($found) images_loaded=($loaded)"
+  
+  # Always return true - missing shards are handled by dep-cache
+  true
+}
+
 # Show CI CLI help
 export def ci-help [] {
   print "Usage: nu scripts/dockypody.nu ci <subcommand> [options]"
   print ""
   print "Subcommands:"
-  print "  list-deps      List dependency services"
-  print "  load-deps      Load dependency tarballs"
-  print "  load-owner     Load owner tarballs"
-  print "  save-owner     Save owner tarballs"
-  print "  workflow       Generate CI workflows (--target all|build|build-push|orchestrator)"
-  print "  images         List canonical image references for a service"
+  print "  list-deps           List dependency services"
+  print "  load-deps           Load dependency tarballs"
+  print "  load-owner          Load owner tarballs"
+  print "  save-owner          Save owner tarballs"
+  print "  prepare-node-deps   Download and load dependency shards from artifacts (CI only)"
+  print "  workflow            Generate CI workflows (--target all|build|build-push|orchestrator)"
+  print "  images              List canonical image references for a service"
   print ""
   print "Options:"
-  print "  --service <name>   Target service"
-  print "  --target <name>    Workflow target (for workflow subcommand: all, build, build-push, orchestrator)"
-  print "  --transitive       Include transitive dependencies"
-  print "  --dry-run          Show what would be done"
+  print "  --service <name>        Target service"
+  print "  --version <name>        Target version (for prepare-node-deps)"
+  print "  --platform <name>       Target platform (for prepare-node-deps)"
+  print "  --dependencies <list>   Comma-separated dependency services (for prepare-node-deps)"
+  print "  --target <name>         Workflow target (for workflow: all, build, build-push, orchestrator)"
+  print "  --transitive            Include transitive dependencies"
+  print "  --dry-run               Show what would be done"
+  print "  --debug                 Enable verbose output"
 }
 
 # List dependencies for a service
@@ -307,10 +418,13 @@ def list-service-images [service: string] {
 
 # CI CLI entrypoint - called from dockypody.nu
 export def ci-cli [
-  subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, workflow, images, shard helpers, help
-  flags: record        # Flags: { service, target, ref, sha, transitive, debug, dry_run }
+  subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, prepare-node-deps, workflow, images, shard helpers, help
+  flags: record        # Flags: { service, version, platform, dependencies, target, ref, sha, transitive, debug, dry_run }
 ] {
   let service = (try { $flags.service } catch { "" })
+  let version = (try { $flags.version } catch { "" })
+  let platform = (try { $flags.platform } catch { "" })
+  let dependencies = (try { $flags.dependencies } catch { "" })
   let target = (try { $flags.target } catch { "all" })
   let transitive = (try { $flags.transitive } catch { false })
   let debug = (try { $flags.debug } catch { false })
@@ -333,6 +447,12 @@ export def ci-cli [
     }
     "save-owner" => {
       save-owner --service $service
+    }
+    "prepare-node-deps" => {
+      let ok = (prepare-node-deps-internal $service $version $platform $dependencies $debug)
+      if not $ok {
+        exit 1
+      }
     }
     "workflow" => {
       use ./workflow.nu [get-workflows-for-target write-workflows]
