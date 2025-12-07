@@ -103,7 +103,7 @@ jobs:
 " + (indent $setup_yaml 3) + "
 
   build:
-    name: v${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }}
+    name: ${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }}
     needs: [setup]
     runs-on: ubuntu-latest
     strategy:
