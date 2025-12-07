@@ -152,8 +152,13 @@ export def step-prepare-node-deps [] {
         name: "Prepare dependency shards"
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: 'DEPS="${{ inputs.dependencies }}"
+PLATFORM="${{ matrix.platform }}"
 if [ -n "$DEPS" ]; then
-  nu scripts/dockypody.nu ci prepare-node-deps --service ${{ inputs.service }} --version ${{ matrix.version }} --platform "${{ matrix.platform }}" --dependencies "$DEPS"
+  PLATFORM_FLAG=""
+  if [ -n "$PLATFORM" ]; then
+    PLATFORM_FLAG="--platform $PLATFORM"
+  fi
+  nu scripts/dockypody.nu ci prepare-node-deps --service ${{ inputs.service }} --version ${{ matrix.version }} $PLATFORM_FLAG --dependencies "$DEPS"
 else
   echo "No dependencies to prepare"
 fi'
