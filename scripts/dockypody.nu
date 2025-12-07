@@ -92,6 +92,8 @@ def main [
   --keep-empty-dirs,
   --force,
   --target: string = "",
+  --ref: string = "",
+  --sha: string = "",
   --transitive,
   --debug,
   # Docs flags
@@ -163,7 +165,7 @@ def main [
     "ci" => {
       # Normalize help flags to "help" subcommand - ci-cli handles it internally
       let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $target "" "" $transitive $debug $dry_run
+      run-ci-command $subcmd $service $target $ref $sha $transitive $debug $dry_run
     }
     "docs" => {
       # Normalize help flags to "help" subcommand - docs-cli handles it internally
