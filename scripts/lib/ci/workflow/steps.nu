@@ -84,20 +84,20 @@ export def step-parse-deps [] {
     {
         name: "Parse dependencies"
         id: "deps"
-        run: 'DEPS="${{ inputs.dependencies }}"
-echo "Parsing dependencies: ''$DEPS''"
-IFS='','' read -ra DEP_ARRAY <<< "$DEPS"
+        run: "DEPS=\"${{ inputs.dependencies }}\"
+echo \"Parsing dependencies: '$DEPS'\"
+IFS=',' read -ra DEP_ARRAY <<< \"$DEPS\"
 COUNT=${#DEP_ARRAY[@]}
 for i in {1..8}; do
   IDX=$((i - 1))
-  if [ $IDX -lt $COUNT ] && [ -n "${DEP_ARRAY[$IDX]}" ]; then
-    DEP=$(echo "${DEP_ARRAY[$IDX]}" | xargs)
-    echo "dep${i}=${DEP}" >> $GITHUB_OUTPUT
+  if [ $IDX -lt $COUNT ] && [ -n \"${DEP_ARRAY[$IDX]}\" ]; then
+    DEP=$(echo \"${DEP_ARRAY[$IDX]}\" | xargs)
+    echo \"dep${i}=${DEP}\" >> $GITHUB_OUTPUT
   else
-    echo "dep${i}=" >> $GITHUB_OUTPUT
+    echo \"dep${i}=\" >> $GITHUB_OUTPUT
   fi
 done
-echo "Total dependencies: $COUNT (max 8 restored)"'
+echo \"Total dependencies: $COUNT (max 8 restored)\""
     }
 }
 
@@ -149,20 +149,20 @@ fi'
 export def step-build-node [] {
     {
         name: "Build node"
-        run: 'PLATFORM_FLAG=""
-if [ -n "${{ matrix.platform }}" ]; then
-  PLATFORM_FLAG="--platform ${{ matrix.platform }}"
+        run: "PLATFORM_FLAG=\"\"
+if [ -n \"${{ matrix.platform }}\" ]; then
+  PLATFORM_FLAG=\"--platform ${{ matrix.platform }}\"
 fi
-nu scripts/dockypody.nu build \
-  --service ${{ inputs.service }} \
-  --version ${{ matrix.version }} \
-  $PLATFORM_FLAG \
-  --dep-cache=soft \
-  --pull=deps,externals \
-  --cache-match=${{ steps.cache-match.outputs.match_kind }} \
-  --disk-monitor=${{ inputs.disk_monitor_mode }} \
-  ${{ inputs.prune_build_cache && ''--prune-cache-mounts'' || '''' }} \
-  ${{ inputs.push && ''--push'' || '''' }}'
+nu scripts/dockypody.nu build \\
+  --service ${{ inputs.service }} \\
+  --version ${{ matrix.version }} \\
+  $PLATFORM_FLAG \\
+  --dep-cache=soft \\
+  --pull=deps,externals \\
+  --cache-match=${{ steps.cache-match.outputs.match_kind }} \\
+  --disk-monitor=${{ inputs.disk_monitor_mode }} \\
+  ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \\
+  ${{ inputs.push && '--push' || '' }}"
     }
 }
 
@@ -170,7 +170,7 @@ export def step-create-shard [] {
     {
         name: "Create cache shard"
         env: { SHARD_ROOT: "/tmp/docker-images/shards" }
-        run: 'nu -c "use scripts/lib/ci/cache-shards.nu [create-node-shard]; create-node-shard ''${{ inputs.service }}'' ''${{ matrix.version }}'' ''$SHARD_ROOT/${{ inputs.service }}'' ''${{ matrix.platform }}''"'
+        run: "nu -c \"use scripts/lib/ci/cache-shards.nu [create-node-shard]; create-node-shard '${{ inputs.service }}' '${{ matrix.version }}' '$SHARD_ROOT/${{ inputs.service }}' '${{ matrix.platform }}'\""
     }
 }
 

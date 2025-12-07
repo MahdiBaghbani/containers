@@ -61,10 +61,10 @@ def gen-setup-steps [] {
         {
             name: "Generate service matrix"
             id: "matrix"
-            run: 'MATRIX_JSON=$(nu -c "use scripts/lib/build/matrix.nu [generate-service-matrix]; generate-service-matrix ''${{ inputs.service }}'' --include-metadata=false | to json -r")
-echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-echo "Generated matrix for ${{ inputs.service }}:"
-echo "$MATRIX_JSON" | jq .'
+            run: "MATRIX_JSON=$(nu -c \"use scripts/lib/build/matrix.nu [generate-service-matrix]; generate-service-matrix '${{ inputs.service }}' --include-metadata=false | to json -r\")
+echo \"matrix=$MATRIX_JSON\" >> $GITHUB_OUTPUT
+echo \"Generated matrix for ${{ inputs.service }}:\"
+echo \"$MATRIX_JSON\" | jq ."
         }
     ]
 }
@@ -138,7 +138,7 @@ export def generate [] {
     let build_yaml = (yaml-steps (gen-build-steps))
     let update_yaml = (yaml-steps (gen-update-cache-steps))
 
-    $header + '
+    $header + "
 
 jobs:
   setup:
@@ -147,10 +147,10 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-' + (indent $setup_yaml 3) + '
+" + (indent $setup_yaml 3) + "
 
   build:
-    name: Build ${{ inputs.service }} (${{ matrix.version }}${{ matrix.platform != '''' && format(''-{0}'', matrix.platform) || '''' }})
+    name: Build ${{ inputs.service }} (${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }})
     needs: [setup]
     runs-on: ubuntu-latest
     strategy:
@@ -158,14 +158,14 @@ jobs:
       max-parallel: 10
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
-' + (indent $build_yaml 3) + '
+" + (indent $build_yaml 3) + "
 
   update_cache:
     name: Update cache for ${{ inputs.service }}
     needs: [setup, build]
-    if: always() && needs.setup.result == ''success''
+    if: always() && needs.setup.result == 'success'
     runs-on: ubuntu-latest
     steps:
-' + (indent $update_yaml 3) + '
-'
+" + (indent $update_yaml 3) + "
+"
 }

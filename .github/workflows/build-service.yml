@@ -74,13 +74,13 @@ jobs:
       - name: Generate service matrix
         id: matrix
         run: |
-          MATRIX_JSON=$(nu -c "use scripts/lib/build/matrix.nu [generate-service-matrix]; generate-service-matrix ''${{ inputs.service }}'' --include-metadata=false | to json -r")
+          MATRIX_JSON=$(nu -c "use scripts/lib/build/matrix.nu [generate-service-matrix]; generate-service-matrix '${{ inputs.service }}' --include-metadata=false | to json -r")
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
           echo "Generated matrix for ${{ inputs.service }}:"
           echo "$MATRIX_JSON" | jq .
 
   build:
-    name: Build ${{ inputs.service }} (${{ matrix.version }}${{ matrix.platform != '''' && format(''-{0}'', matrix.platform) || '''' }})
+    name: Build ${{ inputs.service }} (${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }})
     needs: [setup]
     runs-on: ubuntu-latest
     strategy:
@@ -115,8 +115,8 @@ jobs:
         id: deps
         run: |
           DEPS="${{ inputs.dependencies }}"
-          echo "Parsing dependencies: ''$DEPS''"
-          IFS='','' read -ra DEP_ARRAY <<< "$DEPS"
+          echo "Parsing dependencies: '$DEPS'"
+          IFS=',' read -ra DEP_ARRAY <<< "$DEPS"
           COUNT=${#DEP_ARRAY[@]}
           for i in {1..8}; do
             IDX=$((i - 1))
@@ -241,13 +241,13 @@ jobs:
             --pull=deps,externals \
             --cache-match=${{ steps.cache-match.outputs.match_kind }} \
             --disk-monitor=${{ inputs.disk_monitor_mode }} \
-            ${{ inputs.prune_build_cache && ''--prune-cache-mounts'' || '''' }} \
-            ${{ inputs.push && ''--push'' || '''' }}
+            ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \
+            ${{ inputs.push && '--push' || '' }}
 
       - name: Create cache shard
         env:
           SHARD_ROOT: /tmp/docker-images/shards
-        run: nu -c "use scripts/lib/ci/cache-shards.nu [create-node-shard]; create-node-shard ''${{ inputs.service }}'' ''${{ matrix.version }}'' ''$SHARD_ROOT/${{ inputs.service }}'' ''${{ matrix.platform }}''"
+        run: nu -c "use scripts/lib/ci/cache-shards.nu [create-node-shard]; create-node-shard '${{ inputs.service }}' '${{ matrix.version }}' '$SHARD_ROOT/${{ inputs.service }}' '${{ matrix.platform }}'"
 
       - name: Upload shard artifact
         uses: actions/upload-artifact@v4
@@ -260,7 +260,7 @@ jobs:
   update_cache:
     name: Update cache for ${{ inputs.service }}
     needs: [setup, build]
-    if: always() && needs.setup.result == ''success''
+    if: always() && needs.setup.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
