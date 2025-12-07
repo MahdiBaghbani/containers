@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Build and push all services and versions - Manual workflow for pushing to ghcr.io
+# Build and push all services - Manual workflow for pushing to ghcr.io
 #
 # GENERATED FILE - Do not edit manually
 # Regenerate with: nu scripts/dockypody.nu ci workflow --target build-push

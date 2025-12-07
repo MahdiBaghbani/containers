@@ -15,11 +15,10 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Reusable workflow for building a single service (all versions)
-# Called by build.yml for per-service orchestration with cache-based image reuse
+# Reusable workflow for building a single service using a dynamic version+platform matrix
 #
-# Note: dockypody.nu is the canonical CLI entrypoint
-# Local equivalent: nu scripts/dockypody.nu build --service <name>
+# GENERATED FILE - Do not edit manually
+# Regenerate with: nu scripts/dockypody.nu ci workflow --target build-service
 
 name: Build Service
 
@@ -31,41 +30,72 @@ on:
         required: true
         type: string
       push:
-        description: "Push images to registry (not used in build-only workflow)"
+        description: "Push images to registry"
         required: false
         type: boolean
         default: false
       dependencies:
-        description: "Comma-separated list of direct dependency service names for cache restore"
+        description: "Comma-separated list of dependency service names for cache restore"
         required: false
         type: string
         default: ""
       disk_monitor_mode:
-        description: "Disk monitoring mode: off (default), basic (emit disk usage snapshots)"
+        description: "Disk monitoring mode: off, basic"
         required: false
         type: string
         default: "off"
       prune_build_cache:
-        description: "Enable pruning of BuildKit cache mounts between version builds"
+        description: "Enable pruning of BuildKit cache mounts"
         required: false
         type: boolean
         default: true
 
-jobs:
-  build-service:
-    name: Build ${{ inputs.service }}
-    runs-on: ubuntu-latest
 
+jobs:
+  setup:
+    name: Setup matrix for ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install Nushell
         env:
-          NU_VERSION: "0.108.0"
+          NU_VERSION: 0.108.0
         run: |
-          curl -fsSL -o /tmp/nu.tar.gz \
-            "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+
+      - name: Generate service matrix
+        id: matrix
+        run: |
+          MATRIX_JSON=$(nu -c "use scripts/lib/build/matrix.nu [generate-service-matrix]; generate-service-matrix ''${{ inputs.service }}'' --include-metadata=false | to json -r")
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "Generated matrix for ${{ inputs.service }}:"
+          echo "$MATRIX_JSON" | jq .
+
+  build:
+    name: Build ${{ inputs.service }} (${{ matrix.version }}${{ matrix.platform != '''' && format(''-{0}'', matrix.platform) || '''' }})
+    needs: [setup]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nushell
+        env:
+          NU_VERSION: 0.108.0
+        run: |
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz"
           mkdir -p /tmp/nu
           tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
           sudo mv /tmp/nu/nu /usr/local/bin/nu
@@ -81,48 +111,31 @@ jobs:
         with:
           driver: docker
 
-      # Parse dependencies input into fixed slots for cache restore
-      # Supports up to 8 direct dependencies per service
       - name: Parse dependencies
         id: deps
         run: |
           DEPS="${{ inputs.dependencies }}"
-          echo "Parsing dependencies: '$DEPS'"
-          
-          # Split by comma and assign to slots
-          IFS=',' read -ra DEP_ARRAY <<< "$DEPS"
+          echo "Parsing dependencies: ''$DEPS''"
+          IFS='','' read -ra DEP_ARRAY <<< "$DEPS"
           COUNT=${#DEP_ARRAY[@]}
-          
-          # Write each dep to its slot (dep1 through dep8)
           for i in {1..8}; do
             IDX=$((i - 1))
             if [ $IDX -lt $COUNT ] && [ -n "${DEP_ARRAY[$IDX]}" ]; then
-              DEP=$(echo "${DEP_ARRAY[$IDX]}" | xargs)  # trim whitespace
+              DEP=$(echo "${DEP_ARRAY[$IDX]}" | xargs)
               echo "dep${i}=${DEP}" >> $GITHUB_OUTPUT
-              echo "  Slot dep${i}: ${DEP}"
             else
               echo "dep${i}=" >> $GITHUB_OUTPUT
             fi
           done
-          
-          # Warn if truncated
-          if [ $COUNT -gt 8 ]; then
-            echo "WARNING: Service has $COUNT dependencies but only 8 slots available"
-            echo "  Included: ${DEP_ARRAY[@]:0:8}"
-            echo "  Truncated: ${DEP_ARRAY[@]:8}"
-          fi
-          
           echo "Total dependencies: $COUNT (max 8 restored)"
 
-      # Restore dependency caches (up to 8 direct dependencies)
       - name: Restore dep1 cache
         if: steps.deps.outputs.dep1 != ''
         uses: actions/cache/restore@v4
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep1 }}/
           key: images-${{ steps.deps.outputs.dep1 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep1 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep1 }}-${{ github.ref }}-
 
       - name: Restore dep2 cache
         if: steps.deps.outputs.dep2 != ''
@@ -130,8 +143,7 @@ jobs:
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep2 }}/
           key: images-${{ steps.deps.outputs.dep2 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep2 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep2 }}-${{ github.ref }}-
 
       - name: Restore dep3 cache
         if: steps.deps.outputs.dep3 != ''
@@ -139,8 +151,7 @@ jobs:
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep3 }}/
           key: images-${{ steps.deps.outputs.dep3 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep3 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep3 }}-${{ github.ref }}-
 
       - name: Restore dep4 cache
         if: steps.deps.outputs.dep4 != ''
@@ -148,8 +159,7 @@ jobs:
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep4 }}/
           key: images-${{ steps.deps.outputs.dep4 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep4 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep4 }}-${{ github.ref }}-
 
       - name: Restore dep5 cache
         if: steps.deps.outputs.dep5 != ''
@@ -157,8 +167,7 @@ jobs:
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep5 }}/
           key: images-${{ steps.deps.outputs.dep5 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep5 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep5 }}-${{ github.ref }}-
 
       - name: Restore dep6 cache
         if: steps.deps.outputs.dep6 != ''
@@ -166,8 +175,7 @@ jobs:
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep6 }}/
           key: images-${{ steps.deps.outputs.dep6 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep6 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep6 }}-${{ github.ref }}-
 
       - name: Restore dep7 cache
         if: steps.deps.outputs.dep7 != ''
@@ -175,8 +183,7 @@ jobs:
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep7 }}/
           key: images-${{ steps.deps.outputs.dep7 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep7 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep7 }}-${{ github.ref }}-
 
       - name: Restore dep8 cache
         if: steps.deps.outputs.dep8 != ''
@@ -184,39 +191,22 @@ jobs:
         with:
           path: /tmp/docker-images/${{ steps.deps.outputs.dep8 }}/
           key: images-${{ steps.deps.outputs.dep8 }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ steps.deps.outputs.dep8 }}-${{ github.ref }}-
+          restore-keys: images-${{ steps.deps.outputs.dep8 }}-${{ github.ref }}-
 
-      # Load dependency tarballs into Docker daemon
-      - name: Load dependency images
-        if: inputs.service != 'common-tools'
-        run: |
-          echo "Loading dependency images for ${{ inputs.service }}..."
-          nu scripts/dockypody.nu ci load-deps --service ${{ inputs.service }}
-
-      # Cache restore for the service's own images
-      # Each commit gets its own cache key; cross-commit reuse via prefix restore
-      # Uses directory-based cache with per-image-ID .tar.zst files
       - name: Restore Docker image cache
         id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: /tmp/docker-images/${{ inputs.service }}/
           key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            images-${{ inputs.service }}-${{ github.ref }}-
+          restore-keys: images-${{ inputs.service }}-${{ github.ref }}-
 
-      # Compute cache match kind for diagnostics
-      # exact: cache key matched exactly (same commit)
-      # fallback: cache restored from older commit on same branch
-      # miss: no cache found
       - name: Determine cache match kind
         id: cache-match
         run: |
           PRIMARY_KEY="images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}"
           MATCHED_KEY="${{ steps.cache-restore.outputs.cache-matched-key }}"
           CACHE_HIT="${{ steps.cache-restore.outputs.cache-hit }}"
-          
           if [ "$CACHE_HIT" = "true" ]; then
             if [ "$MATCHED_KEY" = "$PRIMARY_KEY" ]; then
               MATCH_KIND="exact"
@@ -226,10 +216,7 @@ jobs:
           else
             MATCH_KIND="miss"
           fi
-          
           echo "Cache match kind: $MATCH_KIND"
-          echo "  Primary key: $PRIMARY_KEY"
-          echo "  Matched key: $MATCHED_KEY"
           echo "match_kind=$MATCH_KIND" >> $GITHUB_OUTPUT
 
       - name: Load cached images
@@ -238,45 +225,92 @@ jobs:
           if [ -d "/tmp/docker-images/${{ inputs.service }}" ]; then
             echo "Loading cached images for ${{ inputs.service }}..."
             nu scripts/dockypody.nu ci load-owner --service ${{ inputs.service }}
-            echo "Cache load complete"
-          else
-            echo "Cache directory not found, will build from scratch"
           fi
 
-      # Build the service with dep-cache=soft for hash-based dependency reuse
-      - name: Show build order
+      - name: Build node
         run: |
-          echo "Build order for ${{ inputs.service }}:"
-          nu scripts/dockypody.nu build --service ${{ inputs.service }} --all-versions --show-build-order
-
-      - name: Build service
-        run: |
-          echo "Push mode: ${{ inputs.push }}"
-          echo "Cache match kind: ${{ steps.cache-match.outputs.match_kind }}"
-          echo "Disk monitor mode: ${{ inputs.disk_monitor_mode }}"
-          echo "Prune build cache: ${{ inputs.prune_build_cache }}"
+          PLATFORM_FLAG=""
+          if [ -n "${{ matrix.platform }}" ]; then
+            PLATFORM_FLAG="--platform ${{ matrix.platform }}"
+          fi
           nu scripts/dockypody.nu build \
             --service ${{ inputs.service }} \
-            --all-versions \
+            --version ${{ matrix.version }} \
+            $PLATFORM_FLAG \
             --dep-cache=soft \
             --pull=deps,externals \
             --cache-match=${{ steps.cache-match.outputs.match_kind }} \
             --disk-monitor=${{ inputs.disk_monitor_mode }} \
-            ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \
-            ${{ inputs.push && '--push' || '' }}
+            ${{ inputs.prune_build_cache && ''--prune-cache-mounts'' || '''' }} \
+            ${{ inputs.push && ''--push'' || '''' }}
 
-      # Save images using SHA-deduplicated tarballs
-      - name: Save images to cache
-        if: success()
+      - name: Create cache shard
+        env:
+          SHARD_ROOT: /tmp/docker-images/shards
+        run: nu -c "use scripts/lib/ci/cache-shards.nu [create-node-shard]; create-node-shard ''${{ inputs.service }}'' ''${{ matrix.version }}'' ''$SHARD_ROOT/${{ inputs.service }}'' ''${{ matrix.platform }}''"
+
+      - name: Upload shard artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ inputs.service }}-${{ matrix.version }}-${{ matrix.platform != '' && matrix.platform || 'single' }}
+          path: /tmp/docker-images/shards/${{ inputs.service }}/
+          retention-days: 1
+          if-no-files-found: error
+
+  update_cache:
+    name: Update cache for ${{ inputs.service }}
+    needs: [setup, build]
+    if: always() && needs.setup.result == ''success''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nushell
+        env:
+          NU_VERSION: 0.108.0
         run: |
-          echo "Saving image tarballs for ${{ inputs.service }}..."
-          nu scripts/dockypody.nu ci save-owner --service ${{ inputs.service }}
-          echo "Cache directory contents:"
-          ls -lh /tmp/docker-images/${{ inputs.service }}/ || echo "No tarballs saved"
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+
+      - name: Install zstd
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y zstd
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Download all shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: shard-${{ inputs.service }}-*
+          path: /tmp/docker-images/shards/${{ inputs.service }}/
+          merge-multiple: true
+
+      - name: List downloaded shards
+        run: |
+          echo "Downloaded shards:"
+          ls -la /tmp/docker-images/shards/${{ inputs.service }}/ || echo "No shards directory"
+          find /tmp/docker-images/shards/ -name "*.nuon" -o -name "*.tar.zst" 2>/dev/null || true
+
+      - name: Merge cache shards
+        run: nu scripts/dockypody.nu ci merge-cache-shards --service ${{ inputs.service }} --ref ${{ github.ref }} --sha ${{ github.sha }}
 
       - name: Save Docker image cache
-        if: success()
         uses: actions/cache/save@v4
         with:
           path: /tmp/docker-images/${{ inputs.service }}/
           key: images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}
+
+      - name: Delete shard artifacts
+        if: always()
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: shard-${{ inputs.service }}-*
+          failOnError: false

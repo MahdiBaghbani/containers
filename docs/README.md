@@ -73,4 +73,4 @@ All markdown files must pass linting checks. Common requirements:
 - **Bold headers:** Convert `**Text:**` used as section headers to proper headings (`###` or `####`)
 - **Duplicate headings:** Make headings unique by adding context (e.g., `#### Problem: Specific Issue`)
 
-Before committing, run linting checks and fix all errors. See `.cursor/rules/writing.mdc` for complete markdown linting guidelines and common mistakes.
+Before committing, run linting checks and fix all errors, and make sure your changes follow these formatting rules.

@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Reusable workflow for orchestrating service builds - Called by build.yml and build-push.yml entry workflows
+# Reusable workflow for orchestrating service builds
 #
 # GENERATED FILE - Do not edit manually
 # Regenerate with: nu scripts/dockypody.nu ci workflow --target orchestrator
@@ -35,7 +35,7 @@ on:
 #
 #   cernbox-revad - depends on: common-tools, gaia, revad-base
 #   cernbox-web - depends on: common-tools
-#   common-tools - (root service, no dependencies)
+#   common-tools - (root service)
 #   gaia - depends on: common-tools
 #   idp - depends on: common-tools
 #   nextcloud - depends on: nextcloud-base
