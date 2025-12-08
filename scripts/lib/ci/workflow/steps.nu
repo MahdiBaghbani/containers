@@ -146,6 +146,15 @@ fi'
     }
 }
 
+# Log in to container registry (only when push is enabled)
+export def step-login-registry [] {
+    {
+        name: "Log in to container registry"
+        if: "${{ inputs.push }}"
+        run: "nu scripts/dockypody.nu ci login-registry"
+    }
+}
+
 # Prepare dependency shards from artifacts (new artifact-based CI flow)
 export def step-prepare-node-deps [] {
     {
@@ -181,7 +190,8 @@ nu scripts/dockypody.nu build \\
   --pull=deps,externals \\
   --disk-monitor=${{ inputs.disk_monitor_mode }} \\
   ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \\
-  ${{ inputs.push && '--push' || '' }}"
+  ${{ inputs.push && '--push' || '' }} \\
+  ${{ inputs.push && '--provenance' || '' }}"
     }
 }
 

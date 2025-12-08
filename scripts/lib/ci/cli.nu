@@ -26,6 +26,7 @@ use ../build/cache.nu [get-dep-nodes-for-service]
 use ../build/dep-nodes.nu [get-matching-dependency-shards]
 use ../build/pull.nu [compute-canonical-image-ref]
 use ../registries/info.nu [get-registry-info]
+use ../registries/core.nu [login-default-registry]
 
 # Re-export for direct module usage
 export use ./deps.nu [get-direct-dependency-services get-all-dependency-services]
@@ -341,6 +342,7 @@ export def ci-help [] {
   print "  prepare-node-deps   Download and load dependency shards from artifacts (CI only)"
   print "  workflow            Generate CI workflows (--target all|build|build-push|orchestrator)"
   print "  images              List canonical image references for a service"
+  print "  login-registry      Log in to container registry (CI only)"
   print ""
   print "Options:"
   print "  --service <name>        Target service"
@@ -383,6 +385,24 @@ export def list-deps [
     for dep in $dep_services {
         print $dep
     }
+}
+
+# Log in to container registry (CI helper)
+def login-registry [--debug] {
+  let result = (login-default-registry)
+  
+  if not $result.ok {
+    print --stderr $"ERROR: Failed to log in to registry ($result.registry): ($result.reason)"
+    exit 1
+  }
+  
+  if $debug {
+    if ($result.registry | str length) > 0 {
+      print --stderr $"DEBUG: Successfully logged in to ($result.registry)"
+    } else {
+      print --stderr $"DEBUG: ($result.reason)"
+    }
+  }
 }
 
 # List canonical image references for a service (for CI caching)
@@ -462,6 +482,9 @@ export def ci-cli [
     }
     "images" => {
       list-service-images $service
+    }
+    "login-registry" => {
+      login-registry --debug=$debug
     }
     "merge-cache-shards" => {
       let ok = (ci-merge-cache-shards-internal $service $ref $sha $debug (get-shard-root))

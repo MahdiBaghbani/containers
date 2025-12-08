@@ -18,24 +18,66 @@
 # Registry login operations
 # See docs/concepts/build-system.md for registry configuration
 
-export def login-ghcr [] {
-  let user = ((try { $env.GITHUB_ACTOR } catch { "" }) | default "")
-  let token = ((try { $env.GITHUB_TOKEN } catch { "" }) | default ((try { $env.GHCR_PAT } catch { "" }) | default ""))
-  if ($token == "") {
-    return { ok: false, registry: "ghcr.io", reason: "no token" }
+use ../registries/info.nu [get-registry-info]
+
+# Get first non-empty environment variable from a list of keys
+def get-env-first-non-empty [keys: list<string>] {
+  for $key in $keys {
+    let value = (try { $env | get $key } catch { "" })
+    if ($value | str length) > 0 {
+      return $value
+    }
   }
-  let u = (if $user == "" { "oauth2" } else { $user })
-  ^docker login ghcr.io -u $u --password-stdin <<< $token | ignore
-  { ok: true, registry: "ghcr.io" }
+  ""
+}
+
+# Internal registry login helper
+def login-registry-internal [
+  registry: string,
+  token_env_keys: list<string>,
+  user_env_keys: list<string>
+] {
+  if ($registry | str length) == 0 {
+    return { ok: false, registry: $registry, reason: "registry not set" }
+  }
+  
+  let token = (get-env-first-non-empty $token_env_keys)
+  if ($token | str length) == 0 {
+    return { ok: false, registry: $registry, reason: "no token" }
+  }
+  
+  let user = (get-env-first-non-empty $user_env_keys)
+  let u = (if ($user | str length) == 0 { "oauth2" } else { $user })
+  
+  let login_result = (^docker login $registry -u $u --password-stdin <<< $token | complete)
+  
+  if $login_result.exit_code != 0 {
+    let stderr_summary = (try {
+      ($login_result.stderr | lines | where {|l| ($l | str length) > 0 } | first 1 | str join " ")
+    } catch {
+      "docker login failed"
+    })
+    return { ok: false, registry: $registry, reason: $stderr_summary }
+  }
+  
+  { ok: true, registry: $registry }
+}
+
+export def login-ghcr [] {
+  login-registry-internal "ghcr.io" ["GITHUB_TOKEN"] ["GITHUB_ACTOR"]
 }
 
 export def login-forgejo [forgejo_registry: string] {
-  let user = ((try { $env.FORGEJO_REGISTRY_USER } catch { "" }) | default "")
-  let token = ((try { $env.FORGEJO_REGISTRY_TOKEN } catch { "" }) | default "")
-  if ($token == "" or $forgejo_registry == "") {
-    return { ok: false, registry: $forgejo_registry, reason: "missing creds or registry" }
+  login-registry-internal $forgejo_registry ["FORGEJO_REGISTRY_TOKEN"] ["FORGEJO_REGISTRY_USER"]
+}
+
+export def login-default-registry [] {
+  let registry_info = (get-registry-info)
+  let is_github_ci = ($registry_info.ci_platform == "github") and ((try { $env.GITHUB_ACTIONS } catch { "" }) == "true")
+  
+  if $is_github_ci {
+    login-ghcr
+  } else {
+    { ok: true, registry: "", reason: "no-op for local or non-GitHub CI" }
   }
-  let u = (if $user == "" { "oauth2" } else { $user })
-  ^docker login $forgejo_registry -u $u --password-stdin <<< $token | ignore
-  { ok: true, registry: $forgejo_registry }
 }

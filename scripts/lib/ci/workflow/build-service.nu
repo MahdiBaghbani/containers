@@ -21,7 +21,7 @@
 use ./yaml.nu [indent yaml-steps]
 use ./steps.nu [
     step-checkout step-install-nushell step-common-setup
-    step-prepare-node-deps step-build-node-artifact-deps
+    step-login-registry step-prepare-node-deps step-build-node-artifact-deps
     step-create-shard step-upload-shard
 ]
 use ./constants.nu [gen-workflow-header]
@@ -71,6 +71,7 @@ echo \"$MATRIX_JSON\" | jq ."
 
 def gen-build-steps [] {
     let base = (step-common-setup)
+    let login = [(step-login-registry)]
     let deps = [(step-prepare-node-deps)]
     let build = [
         (step-build-node-artifact-deps)
@@ -78,7 +79,7 @@ def gen-build-steps [] {
         (step-upload-shard)
     ]
     
-    $base | append $deps | append $build
+    $base | append $login | append $deps | append $build
 }
 
 export def generate [] {
@@ -106,6 +107,11 @@ jobs:
     name: ${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }}
     needs: [setup]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     strategy:
       fail-fast: false
       max-parallel: 10

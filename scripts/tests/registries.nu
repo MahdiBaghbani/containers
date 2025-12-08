@@ -20,6 +20,7 @@
 # Registries domain test suite
 
 use ../lib/registries/info.nu [get-registry-info]
+use ../lib/registries/core.nu [login-ghcr login-default-registry]
 use ./lib.nu [run-test print-test-summary]
 
 def main [--verbose] {
@@ -58,6 +59,35 @@ def main [--verbose] {
     ($info.owner | str length) > 0
   } $verbose)
   $results = ($results | append $test4)
+
+  # Test: login-ghcr returns ok: false when GITHUB_TOKEN is missing
+  let test5 = (run-test "login-ghcr fails without GITHUB_TOKEN" {
+    with-env { GITHUB_TOKEN: "", GITHUB_ACTOR: "" } {
+      let result = (login-ghcr)
+      (not $result.ok) and ($result.reason | str contains "no token")
+    }
+  } $verbose)
+  $results = ($results | append $test5)
+
+  # Test: login-default-registry returns no-op for local platform
+  let test6 = (run-test "login-default-registry no-op for local platform" {
+    with-env {} {
+      # When GITHUB_ACTIONS is not set, should return no-op
+      let result = (login-default-registry)
+      $result.ok and ($result.reason | str contains "no-op")
+    }
+  } $verbose)
+  $results = ($results | append $test6)
+
+  # Test: login-default-registry returns no-op when ci_platform detects github but GITHUB_ACTIONS is not "true"
+  let test7 = (run-test "login-default-registry no-op when GITHUB_ACTIONS not true" {
+    with-env { GITHUB_REPOSITORY: "test/owner" } {
+      # Even if GITHUB_REPOSITORY is set, if GITHUB_ACTIONS is not "true", should return no-op
+      let result = (login-default-registry)
+      $result.ok and ($result.reason | str contains "no-op")
+    }
+  } $verbose)
+  $results = ($results | append $test7)
 
   print-test-summary $results
 
