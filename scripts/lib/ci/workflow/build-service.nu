@@ -93,7 +93,6 @@ export def generate [] {
     let build_yaml = (yaml-steps (gen-build-steps))
 
     $header + "
-
 jobs:
   setup:
     name: Setup matrix for ${{ inputs.service }}
@@ -107,11 +106,6 @@ jobs:
     name: ${{ matrix.version }}${{ matrix.platform != '' && format('-{0}', matrix.platform) || '' }}
     needs: [setup]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      attestations: write
-      id-token: write
     strategy:
       fail-fast: false
       max-parallel: 10

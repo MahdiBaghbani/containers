@@ -133,6 +133,9 @@ export def generate-build-push [] {
 jobs:
   run_build_push_all:
     name: Build and Push All Services
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/build-orchestrator.yml
     with:
       push: true

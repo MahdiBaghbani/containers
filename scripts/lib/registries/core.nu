@@ -49,7 +49,7 @@ def login-registry-internal [
   let user = (get-env-first-non-empty $user_env_keys)
   let u = (if ($user | str length) == 0 { "oauth2" } else { $user })
   
-  let login_result = (^docker login $registry -u $u --password-stdin <<< $token | complete)
+  let login_result = ($token | ^docker login $registry -u $u --password-stdin | complete)
   
   if $login_result.exit_code != 0 {
     let stderr_summary = (try {

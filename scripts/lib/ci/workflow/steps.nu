@@ -151,6 +151,10 @@ export def step-login-registry [] {
     {
         name: "Log in to container registry"
         if: "${{ inputs.push }}"
+        env: {
+            GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+            GITHUB_ACTOR: "${{ github.actor }}"
+        }
         run: "nu scripts/dockypody.nu ci login-registry"
     }
 }
@@ -190,8 +194,7 @@ nu scripts/dockypody.nu build \\
   --pull=deps,externals \\
   --disk-monitor=${{ inputs.disk_monitor_mode }} \\
   ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \\
-  ${{ inputs.push && '--push' || '' }} \\
-  ${{ inputs.push && '--provenance' || '' }}"
+  ${{ inputs.push && '--push' || '' }}"
     }
 }
 

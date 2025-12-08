@@ -50,7 +50,6 @@ on:
         type: boolean
         default: true
 
-
 jobs:
   setup:
     name: Setup matrix for ${{ inputs.service }}
@@ -110,6 +109,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver: docker
+
+      - name: Log in to container registry
+        if: ${{ inputs.push }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: nu scripts/dockypody.nu ci login-registry
 
       - name: Prepare dependency shards
         env:
