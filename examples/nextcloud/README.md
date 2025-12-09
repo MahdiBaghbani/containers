@@ -62,6 +62,25 @@ Redis is optional but recommended for caching. To disable:
 2. Remove `REDIS_HOST` environment variable from Nextcloud service
 3. Remove Redis dependency from Nextcloud service
 
+### HTTPS Mode
+
+The `NEXTCLOUD_HTTPS_MODE` environment variable controls Apache HTTP/HTTPS behavior:
+
+- **`off`** (default): HTTP-only mode. Use this when behind a reverse proxy (like Traefik) that handles HTTPS termination. Only port 80 is enabled.
+- **`https-only`**: HTTPS-only mode. Port 80 redirects to HTTPS, port 443 serves HTTPS. Requires TLS certificates at `/tls/server.crt` and `/tls/server.key`.
+- **`http-and-https`**: Both HTTP and HTTPS enabled. Port 80 serves HTTP, port 443 serves HTTPS without forced redirect. Requires TLS certificates.
+
+**For this example (Traefik setup):**
+
+- Use `NEXTCLOUD_HTTPS_MODE=off` (default) since Traefik handles HTTPS termination
+- The container runs HTTP-only internally, Traefik terminates TLS
+
+**For direct HTTPS access (no reverse proxy):**
+
+- Set `NEXTCLOUD_HTTPS_MODE=https-only` or `http-and-https`
+- Ensure TLS certificates are available in the container at `/tls/server.crt` and `/tls/server.key`
+- Uncomment and expose ports 80 and/or 443 in `docker-compose.yaml`
+
 ## Services
 
 - **nextcloud-1-test-db**: MariaDB database server

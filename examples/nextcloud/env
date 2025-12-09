@@ -7,6 +7,11 @@ IMAGE_NEXTCLOUD=local-debian
 # External domain (Traefik routing + browser access)
 NEXTCLOUD_DOMAIN=1.nextcloud.cloud.test.azadehafzar.io
 
+# HTTPS Mode: off (HTTP-only, default for reverse proxy), https-only (redirect HTTP to HTTPS), http-and-https (both ports)
+# When using Traefik or other reverse proxy handling HTTPS termination, use "off"
+# For direct HTTPS access without reverse proxy, use "https-only" or "http-and-https"
+NEXTCLOUD_HTTPS_MODE=off
+
 # Internal service names (Docker networking)
 MYSQL_HOST=nextcloud-1-test-db
 REDIS_HOST=nextcloud-1-test-redis

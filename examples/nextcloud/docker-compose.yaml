@@ -56,6 +56,7 @@ services:
         ipv4_address: 172.16.86.4
     environment:
       APACHE_SERVER_NAME: "${NEXTCLOUD_DOMAIN}"
+      NEXTCLOUD_HTTPS_MODE: "${NEXTCLOUD_HTTPS_MODE:-off}"
       NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD_ADMIN_USER}"
       NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD_ADMIN_PASSWORD}"
       NEXTCLOUD_TRUSTED_DOMAINS: "${NEXTCLOUD_TRUSTED_DOMAINS}"
@@ -97,3 +98,8 @@ services:
       - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
       - "traefik.http.routers.nextcloud.tls.certResolver=letsencrypt-cloudflare-global"
       - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+    # Ports: When using Traefik (default), ports are not exposed externally.
+    # For direct HTTPS access without reverse proxy, uncomment and expose:
+    # ports:
+    #   - "80:80"   # HTTP (or redirect to HTTPS if NEXTCLOUD_HTTPS_MODE=https-only)
+    #   - "443:443" # HTTPS (if NEXTCLOUD_HTTPS_MODE=https-only or http-and-https)
