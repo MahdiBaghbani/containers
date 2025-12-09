@@ -60,6 +60,31 @@ $y = 15            # update mutable variable
 const Z = 20       # compile-time constant
 ```
 
+**CRITICAL**: Mutable variable syntax:
+
+```nu
+# CORRECT - Use "mut" keyword only (no "let")
+mut new_lines = []
+mut redirect_added = false
+
+# WRONG - "let mut" causes parse error
+let mut new_lines = []  # ERROR: Extra tokens in code
+
+# CORRECT - Reassign with $ prefix
+$new_lines = ($new_lines | append $item)
+$redirect_added = true
+
+# WRONG - Missing $ prefix causes parse error
+new_lines = ($new_lines | append $item)  # ERROR: Assignment operations require a variable
+redirect_added = true                     # ERROR: Assignment operations require a variable
+```
+
+**Key Points:**
+
+- Declare mutable variables with `mut var = ...`, NOT `let mut var = ...`
+- Reassign mutable variables with `$var = ...`, NOT `var = ...`
+- The `$` prefix is required for reassignment, even though it's not used in declaration
+
 ## Function Definitions
 
 ### Basic Syntax
@@ -838,6 +863,25 @@ let result = (^docker image inspect $image_ref | complete)
 - **DO NOT use Nushell redirection** (`out+err> /dev/null`) with `complete` - it breaks the command
 - `complete` already captures all output - just check `exit_code` if you don't need output
 - Use `try-catch` around `complete` for error handling
+
+**CRITICAL**: Always use try-catch when accessing `stderr` or `stdout` fields from `complete` results. These fields may not exist if the command output was empty or redirected, causing crashes:
+
+```nu
+# CORRECT - Safe field access with try-catch
+let result = (^apachectl configtest | complete)
+if $result.exit_code != 0 {
+  let stderr_msg = (try { $result.stderr } catch { "Unknown error" })
+  print $"Error: ($stderr_msg)"
+}
+
+# WRONG - Direct field access may crash if field missing
+let result = (^apachectl configtest | complete)
+if $result.exit_code != 0 {
+  print $"Error: ($result.stderr)"  # May crash if stderr field doesn't exist
+}
+```
+
+**Why**: The `complete` command always returns `exit_code`, but `stdout` and `stderr` fields may be missing in edge cases (empty output, redirected streams, etc.). Always wrap field access in try-catch to handle these cases gracefully.
 
 ## Debugging
 
