@@ -270,6 +270,9 @@ COPY --chmod=755 ./scripts/lib/*.nu /usr/bin/lib/
 RUN mkdir -p /usr/src/nextcloud/config
 COPY ./config/*.php /usr/src/nextcloud/config/
 
+# Copy Apache site configs
+COPY ./config/apache/*.conf /etc/apache2/sites-available/
+
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
 
 CMD ["apache2-foreground"]

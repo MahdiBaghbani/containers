@@ -1,7 +1,4 @@
 <?php
-// SPDX-License-Identifier: AGPL-3.0-or-later
-// Reverse proxy configuration - reads from environment variables
-
 $overwriteHost = getenv('OVERWRITEHOST');
 if ($overwriteHost) {
   $CONFIG['overwritehost'] = $overwriteHost;
@@ -36,4 +33,3 @@ $forwardedForHeaders = getenv('FORWARDED_FOR_HEADERS');
 if ($forwardedForHeaders) {
   $CONFIG['forwarded_for_headers'] = array_filter(array_map('trim', explode(' ', $forwardedForHeaders)));
 }
-
