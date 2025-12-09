@@ -146,14 +146,59 @@ docker run -d \
 
 ### Apache
 
-- `APACHE_RUN_USER` - Apache user (default: www-data)
-- `APACHE_RUN_GROUP` - Apache group (default: www-data)
+- `APACHE_SERVER_NAME` - Apache ServerName (overrides default)
 - `APACHE_DISABLE_REWRITE_IP` - Disable remoteip module (any value)
+- `NEXTCLOUD_HTTPS_MODE` - HTTPS mode control (see HTTPS Modes section below)
+- `NEXTCLOUD_APACHE_LOGLEVEL` - Apache log level (default: warn)
 
 ### Maintenance
 
 - `NEXTCLOUD_UPDATE` - Force initialization even if not apache/php-fpm (set to 1)
 - `NEXTCLOUD_INIT_HTACCESS` - Update htaccess after init (any value)
+
+## HTTPS Modes
+
+`nextcloud-base` supports explicit HTTPS configuration via the `NEXTCLOUD_HTTPS_MODE` environment variable:
+
+### Modes
+
+- **`off`** (default): HTTP-only mode. Only port 80 is enabled. Use this when behind a reverse proxy (like Traefik) that handles HTTPS termination.
+- **`https-only`**: HTTPS-only mode. Port 80 redirects to HTTPS, port 443 serves HTTPS. Requires TLS certificates at `/tls/server.crt` and `/tls/server.key`.
+- **`http-and-https`**: Both HTTP and HTTPS enabled. Port 80 serves HTTP, port 443 serves HTTPS without forced redirect. Requires TLS certificates.
+
+### Usage
+
+```bash
+# HTTP-only (default, for reverse proxy)
+docker run -d -p 80:80 \
+  -e NEXTCLOUD_HTTPS_MODE=off \
+  nextcloud:v30.0.11-debian
+
+# HTTPS-only (direct HTTPS access)
+docker run -d -p 80:80 -p 443:443 \
+  -e NEXTCLOUD_HTTPS_MODE=https-only \
+  nextcloud:v30.0.11-debian
+
+# Both HTTP and HTTPS
+docker run -d -p 80:80 -p 443:443 \
+  -e NEXTCLOUD_HTTPS_MODE=http-and-https \
+  nextcloud:v30.0.11-debian
+```
+
+### TLS Requirements
+
+For HTTPS modes (`https-only` or `http-and-https`), TLS certificates must be available at:
+
+- `/tls/server.crt` - Server certificate
+- `/tls/server.key` - Server private key
+
+These are automatically provisioned when building with DockyPody's TLS system (`make tls all`).
+
+### Configuration Source
+
+**Canonical source**: `nextcloud-base` is the canonical source for generic Nextcloud PHP configuration files. All official Nextcloud configs from `.repos/docker/32/apache/config/` are baked into the image at build time in `services/nextcloud-base/config/`.
+
+The OCM test suite uses `https-only` mode for WAYF (Where Are You From) tests.
 
 ## Architecture
 
