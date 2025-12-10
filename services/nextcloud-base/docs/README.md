@@ -188,11 +188,10 @@ docker run -d -p 80:80 -p 443:443 \
 ### TLS Requirements
 
 For HTTPS modes (`https-only` or `http-and-https`), TLS certificates must be available at:
+- `/tls/nextcloud.crt` - Server certificate
+- `/tls/nextcloud.key` - Server private key
 
-- `/tls/server.crt` - Server certificate
-- `/tls/server.key` - Server private key
-
-These are automatically provisioned when building with DockyPody's TLS system (`make tls all`).
+These certificates are **baked into the image at build time** when TLS is enabled in the service manifest and certificates are generated (`make tls all`). The certificate files are named after the service's `cert_name` from the service manifest (`nextcloud-base.nuon`). The build system's TLS helper (`copy-tls.nu`) copies certificates into `/tls/` during the Docker build process, ensuring they are available at runtime without requiring volume mounts.
 
 ### Configuration Source
 
