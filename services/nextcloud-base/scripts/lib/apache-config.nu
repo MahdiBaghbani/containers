@@ -41,6 +41,12 @@ export def configure_apache [cmd_args: list<string>] {
       $"ServerName ($server_name)" | save -f /etc/apache2/conf-available/servername.conf
     }
     
+    # Set LogLevel in HTTPS vhost if NEXTCLOUD_APACHE_LOGLEVEL is set
+    let log_level = (try { $env.NEXTCLOUD_APACHE_LOGLEVEL? } catch { null })
+    if $log_level != null and ($log_level | str length) > 0 {
+      update_https_loglevel $log_level
+    }
+    
     # Configure HTTPS modes
     configure_https_mode
   }
@@ -200,4 +206,27 @@ def remove_http_redirect [] {
   
   ($new_lines | str join "\n") | save -f $http_conf
   print "Removed redirect rule from HTTP vhost"
+}
+
+# Update LogLevel in HTTPS vhost config
+def update_https_loglevel [log_level: string] {
+  let https_conf = "/etc/apache2/sites-available/nextcloud-https.conf"
+  if not ($https_conf | path exists) {
+    return
+  }
+  
+  let content = (open $https_conf)
+  let lines = ($content | lines)
+  mut new_lines = []
+  
+  for line in $lines {
+    if ($line | str contains "LogLevel") {
+      $new_lines = ($new_lines | append $"    LogLevel ($log_level)")
+    } else {
+      $new_lines = ($new_lines | append $line)
+    }
+  }
+  
+  ($new_lines | str join "\n") | save -f $https_conf
+  print $"Updated HTTPS vhost LogLevel to: ($log_level)"
 }
