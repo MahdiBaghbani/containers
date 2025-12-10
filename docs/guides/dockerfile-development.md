@@ -79,9 +79,11 @@ Local folder sources, multi-stage builds, and the buildx workflow impose a few h
      --mode "'$TLS_MODE'"
      ```
 
-     The pattern `"'$VAR'"` means: outer double quotes for shell expansion, inner single quotes passed as literal to nushell. When `$TLS_ENABLED` is `true`, shell expands to `'true'` and nushell receives the string `"true"`.
+     The pattern `"'$VAR'"` means: outer double quotes for shell expansion, inner single quotes passed as literal to nushell. When `$TLS_ENABLED` is `true`, shell expands to `'true'` and nushell receives the string value with literal quotes.
 
    - **Why**: Nushell is strongly typed. If a script parameter is `--enabled: string`, it must receive a string, not a boolean. Shell variables expand to unquoted values that nushell interprets as their native types.
+
+   - **Normalization**: Well-designed nushell scripts (like `copy-tls.nu`) normalize quoted values internally - stripping surrounding quotes and handling case variations. This means `'true'`, `'TRUE'`, and `"true"` all work correctly.
 
    - **Pattern**: Always use `"'$SHELL_VAR'"` when passing shell variables to nushell scripts that expect string parameters.
 

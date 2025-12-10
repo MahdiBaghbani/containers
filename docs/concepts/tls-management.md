@@ -217,9 +217,10 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
 - Requires nushell to be available in the image (provided via `common-tools` dependency)
 - Copies only service-specific certificates (CA bundle handled separately via `common-tools`)
 - Automatically copied to service context by build system (canonical version from `scripts/tls/copy-tls.nu`)
+- **Normalizes quoted values**: All string parameters are normalized at function entry to handle Docker/shell quoting. Surrounding quotes are stripped (`'true'` -> `true`), boolean values are case-insensitive (`TRUE` -> `true`), and mode values are validated.
 - Parameters:
-  - `--enabled`: "true" or "false"
-  - `--mode`: TLS mode - "ca-and-cert" or "cert-only" (required, provided by build system)
+  - `--enabled`: "true" or "false" (case-insensitive, quoted values accepted)
+  - `--mode`: TLS mode - "ca-and-cert" or "cert-only" (case-insensitive, quoted values accepted)
   - `--ca-name`: CA certificate name (required for multi-CA readiness)
   - `--cert-name`: Service certificate name (required for ca-and-cert and cert-only modes)
   - `--source-certs`: Source directory for service certificates

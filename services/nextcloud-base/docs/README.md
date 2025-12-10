@@ -188,6 +188,7 @@ docker run -d -p 80:80 -p 443:443 \
 ### TLS Requirements
 
 For HTTPS modes (`https-only` or `http-and-https`), TLS certificates must be available at:
+
 - `/tls/nextcloud.crt` - Server certificate
 - `/tls/nextcloud.key` - Server private key
 
