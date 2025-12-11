@@ -26,6 +26,7 @@ use ./lib/source-prep.nu [prepare_source, merge_apps]
 use ./lib/nextcloud-init.nu [version_greater get_installed_version get_image_version sync_source install_nextcloud upgrade_nextcloud]
 use ./lib/hooks.nu [run_path]
 use ./lib/post-install.nu [run_custom_post_install, setup_log_files]
+use ./lib/ca-bundle-sync.nu [sync-ca-bundle]
 
 def main [...cmd_args: string] {
   print "Nextcloud entrypoint initialization started"
@@ -115,6 +116,9 @@ def main [...cmd_args: string] {
   
   check_config_differences
   setup_log_files
+
+  sync-ca-bundle
+
   run_path "before-starting" $user_info.user
 
   print "Nextcloud entrypoint initialization completed"
