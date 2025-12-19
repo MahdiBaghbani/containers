@@ -25,6 +25,7 @@ def get-prohibited-patterns [] {
     {pattern: "❌", name: "X mark emoji", replacement: "ERROR:"},
     {pattern: "→", name: "Unicode right arrow", replacement: "->"},
     {pattern: "←", name: "Unicode left arrow", replacement: "<-"},
+    {pattern: "↔", name: "Unicode left-right arrow", replacement: "<->"},
     {pattern: "ℹ️", name: "Info emoji", replacement: "INFO:"},
     {pattern: "🔍", name: "Magnifying glass emoji", replacement: ""},
     {pattern: "📝", name: "Memo emoji", replacement: ""},
@@ -32,6 +33,9 @@ def get-prohibited-patterns [] {
     {pattern: "✨", name: "Sparkles emoji", replacement: ""},
     {pattern: "⭐", name: "Star emoji", replacement: ""},
     {pattern: "🎯", name: "Target emoji", replacement: ""},
+    {pattern: "—", name: "Em dash", replacement: "-"},
+    {pattern: """, name: "Left double quotation mark", replacement: "\""},
+    {pattern: """, name: "Right double quotation mark", replacement: "\""},
   ]
 }
 
