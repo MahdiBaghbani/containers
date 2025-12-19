@@ -6,6 +6,7 @@ legacy/
 .resources/
 .issues/
 .impl/
+.milestones/
 
 # Operating System Files
 # macOS
