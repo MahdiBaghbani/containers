@@ -1,0 +1,27 @@
+{
+  "name": "opencloudmehs-go",
+  "context": "services/opencloudmehs-go",
+  "labels": {
+    "org.opencloudmesh.service": "opencloudmehs-go",
+    "org.opencontainers.image.title": "Open Cloud Mesh Golang Reference Implementation Image",
+    "org.opencontainers.image.description": "Image for Open Cloud Mesh Reference Implementation in Golang",
+    "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
+    "org.opencontainers.image.source": "https://github.com/MahdiBaghbani/opencloudmesh-go",
+    "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
+    "org.opencontainers.image.vendor": "Open Cloud Mesh",
+    "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "ocm-go",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:ocm-go1.docker",
+      "DNS:ocm-go2.docker",
+      "DNS:ocm-go3.docker",
+      "DNS:ocm-go4.docker"
+    ]
+  }
+}
