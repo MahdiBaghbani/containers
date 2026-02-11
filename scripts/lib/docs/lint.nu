@@ -34,8 +34,8 @@ def get-prohibited-patterns [] {
     {pattern: "⭐", name: "Star emoji", replacement: ""},
     {pattern: "🎯", name: "Target emoji", replacement: ""},
     {pattern: "—", name: "Em dash", replacement: "-"},
-    {pattern: """, name: "Left double quotation mark", replacement: "\""},
-    {pattern: """, name: "Right double quotation mark", replacement: "\""},
+    {pattern: "\u{201C}", name: "Left double quotation mark", replacement: "\""},
+    {pattern: "\u{201D}", name: "Right double quotation mark", replacement: "\""},
   ]
 }
 
