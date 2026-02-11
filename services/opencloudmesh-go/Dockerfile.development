@@ -1,0 +1,233 @@
+# syntax=docker/dockerfile:1.7
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
+ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+
+############################################
+###  Build opencloudmesh-go from source  ###
+############################################
+FROM ${BASE_BUILD_IMAGE} AS build
+
+ENV CGO_ENABLED=1
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    git \
+    bash \
+    make \
+    build-essential \
+    libsqlite3-dev \
+    binutils;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /
+
+ARG REVAD_URL="https://github.com/cs3org/opencloudmesh-go"
+ARG REVAD_REF="v3.3.3"
+ARG REVAD_SHA=""
+ARG REVAD_PATH=""
+ARG REVAD_MODE=""
+ARG CACHEBUST="default"
+
+# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
+RUN --mount=type=cache,id=revad-base-revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
+    --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
+    if [ "$REVAD_MODE" = "local" ]; then \
+    mkdir -p /revad-git && \
+    cp -a /src/local-revad/. /revad-git; \
+    else \
+    mkdir -p /src/reva-git-cache && \
+    if [ ! -d /src/reva-git-cache/.git ]; then \
+    git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_REF}" ${REVAD_URL} /src/reva-git-cache; \
+    fi && \
+    cp -a /src/reva-git-cache/. /revad-git; \
+    fi
+
+WORKDIR /revad-git
+RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    go mod download
+RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    make revad-static
+
+RUN ldd /revad-git/cmd/revad/revad 2>&1 | grep -q "not a dynamic executable" || \
+    (echo "ERROR: Binary is not statically linked" && exit 1) && \
+    echo "Binary is statically linked"
+
+####################################
+###  Compress binaries with UPX  ###
+####################################
+FROM ${COMMON_TOOLS_IMAGE} AS compress
+
+RUN mkdir -p /tmp/binaries
+
+COPY --from=build /revad-git/cmd/revad/revad /tmp/binaries/revad
+
+ARG PACK_WITH_UPX="true"
+RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
+    strip -s /tmp/binaries/revad || true; \
+    upx -qq --best --lzma /tmp/binaries/revad && upx -t /tmp/binaries/revad; \
+    fi
+
+################################
+###     Directory builder    ###
+################################
+FROM ${BASE_RUNTIME_IMAGE} AS directory
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+ARG COMMON_TOOLS_IMAGE
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    bash \
+    ca-certificates;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --from=compress /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
+RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
+    mkdir -p /etc/ssl/certs && \
+    cp /tmp/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt && \
+    echo "CA bundle copied from common-tools"; \
+    else \
+    echo "Cert-only mode: Skipping internal CA bundle (using public CA from base image)"; \
+    fi && \
+    rm -f /tmp/ca-bundle.crt
+
+COPY --chmod=755 --from=compress /usr/local/bin/nu /usr/local/bin/nu
+
+COPY ./tls /tmp/tls-source/
+COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
+
+RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
+    echo "CA-only mode: CA bundle copied via COPY --from=common-tools, copy-tls.nu skipped" && \
+    rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
+    elif [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "ca-only" ]; then \
+    if [ ! -f /tmp/copy-tls.nu ]; then \
+    echo "Error: copy-tls.nu not found. This should not happen for non-ca-only modes." && exit 1; \
+    fi && \
+    nu /tmp/copy-tls.nu \
+    --enabled "'$TLS_ENABLED'" \
+    --mode "'$TLS_MODE'" \
+    --ca-name "'$TLS_CA_NAME'" \
+    --cert-name "'$TLS_CERT_NAME'" \
+    --source-certs /tmp/tls-source/certificates/ \
+    --dest /tls/ && \
+    rm -rf /tmp/tls-source /tmp/copy-tls.nu; \
+    else \
+    rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
+    fi
+
+RUN mkdir -p /tls
+
+RUN mkdir -p /etc/revad /revad /var/run /var/tmp/reva && \
+    chmod 755 /etc/revad /revad /var/run /var/tmp/reva
+
+COPY --chmod=755 --from=compress /tmp/binaries/revad /revad-git/cmd/revad
+
+COPY ./configs /configs/revad
+
+COPY ./configs/partial /tmp/revad-partials
+RUN if [ -d /tmp/revad-partials ] && [ -n "$(find /tmp/revad-partials -name '*.toml' 2>/dev/null)" ]; then \
+    mkdir -p /configs/partial && \
+    find /tmp/revad-partials -type f -name '*.toml' -exec cp {} /configs/partial/ \; && \
+    rm -rf /tmp/revad-partials; \
+    else \
+    rm -rf /tmp/revad-partials; \
+    fi
+
+COPY ./scripts /tmp/scripts
+RUN mkdir -p /usr/bin/lib && \
+    cp -r /tmp/scripts/lib/* /usr/bin/lib/ && \
+    find /tmp/scripts -maxdepth 1 -type f \( -name '*.nu' -o -name '*.sh' \) -exec cp {} /usr/bin/ \; && \
+    rm -rf /tmp/scripts
+
+RUN if [ -d /configs/partial ] && [ -n "$(find /configs/partial -name '*.toml' 2>/dev/null)" ]; then \
+    nu -c "use /usr/bin/lib/merge-partials.nu [merge_partial_configs_build]; merge_partial_configs_build '/configs/revad' '/configs/partial'"; \
+    fi
+
+# Remove partials directory after merge (build-time partials should not be in final image)
+RUN rm -rf /configs/partial || true
+
+###################################
+###        Runtime image        ###
+###################################
+FROM ${BASE_RUNTIME_IMAGE}
+
+ENV TZ=Etc/UTC
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    bash \
+    curl \
+    tzdata \
+    iproute2 \
+    ca-certificates;
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=755 --from=directory /etc/revad /etc/revad
+COPY --chmod=755 --from=directory /revad /revad
+COPY --chmod=755 --from=directory /revad-git/cmd/revad /revad-git/cmd/revad
+COPY --chmod=755 --from=directory /var/run /var/run
+COPY --chmod=755 --from=directory /var/tmp/reva /var/tmp/reva
+COPY --chmod=755 --from=directory /configs /configs
+COPY --chmod=755 --from=directory /usr/bin /usr/bin
+COPY --chmod=700 --from=directory /tls /tls
+COPY --chmod=755 --from=directory /etc/ssl /etc/ssl
+COPY --chmod=755 --from=directory /usr/local/bin/nu /usr/local/bin/nu
+
+RUN if [ -d /tls ]; then \
+    find /tls -type f -name "*.key" -exec chmod 600 {} \; && \
+    find /tls -type f -name "*.crt" -exec chmod 644 {} \; || true; \
+    fi
+
+ENV PATH="/revad/cmd:${PATH}"
+
+ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+
+CMD ["tail", "-F", "/var/log/revad.log"]
