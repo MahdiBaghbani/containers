@@ -33,8 +33,8 @@ FROM ${BASE_BUILD_IMAGE} AS build
 
 ENV CGO_ENABLED=1
 
-RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=opencloudmesh-go-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=opencloudmesh-go-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive \
@@ -52,36 +52,35 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /
 
-ARG REVAD_URL="https://github.com/cs3org/opencloudmesh-go"
-ARG REVAD_REF="v3.3.3"
-ARG REVAD_SHA=""
-ARG REVAD_PATH=""
-ARG REVAD_MODE=""
+ARG OCM_GO_URL="https://github.com/MahdiBaghbani/opencloudmesh-go"
+ARG OCM_GO_REF="master"
+ARG OCM_GO_SHA=""
+ARG OCM_GO_PATH=""
+ARG OCM_GO_MODE=""
 ARG CACHEBUST="default"
 
-# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
-RUN --mount=type=cache,id=revad-base-revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
-    --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
-    if [ "$REVAD_MODE" = "local" ]; then \
-    mkdir -p /revad-git && \
-    cp -a /src/local-revad/. /revad-git; \
+RUN --mount=type=cache,id=opencloudmesh-go-source-${CACHEBUST:-${OCM_GO_REF}},target=/src/ocm-go-git-cache,sharing=shared \
+    --mount=type=bind,source=${OCM_GO_PATH:-.},target=/src/local-ocm-go,ro \
+    if [ "$OCM_GO_MODE" = "local" ]; then \
+    mkdir -p /ocm-go-git && \
+    cp -a /src/local-ocm-go/. /ocm-go-git; \
     else \
-    mkdir -p /src/reva-git-cache && \
-    if [ ! -d /src/reva-git-cache/.git ]; then \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_REF}" ${REVAD_URL} /src/reva-git-cache; \
+    mkdir -p /src/ocm-go-git-cache && \
+    if [ ! -d /src/ocm-go-git-cache/.git ]; then \
+    git clone --depth 1 --recursive --shallow-submodules --branch "${OCM_GO_REF}" ${OCM_GO_URL} /src/ocm-go-git-cache; \
     fi && \
-    cp -a /src/reva-git-cache/. /revad-git; \
+    if [ -n "${OCM_GO_SHA}" ]; then \
+    git -C /src/ocm-go-git-cache fetch --depth 1 origin "${OCM_GO_SHA}" && \
+    git -C /src/ocm-go-git-cache checkout "${OCM_GO_SHA}"; \
+    fi && \
+    cp -a /src/ocm-go-git-cache/. /ocm-go-git; \
     fi
 
-WORKDIR /revad-git
-RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+WORKDIR /ocm-go-git
+RUN --mount=type=cache,id=opencloudmesh-go-go-mod-cache,target=/go/pkg/mod,sharing=locked \
     go mod download
-RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-    make revad-static
-
-RUN ldd /revad-git/cmd/revad/revad 2>&1 | grep -q "not a dynamic executable" || \
-    (echo "ERROR: Binary is not statically linked" && exit 1) && \
-    echo "Binary is statically linked"
+RUN --mount=type=cache,id=opencloudmesh-go-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    make build
 
 ####################################
 ###  Compress binaries with UPX  ###
@@ -90,12 +89,12 @@ FROM ${COMMON_TOOLS_IMAGE} AS compress
 
 RUN mkdir -p /tmp/binaries
 
-COPY --from=build /revad-git/cmd/revad/revad /tmp/binaries/revad
+COPY --from=build /ocm-go-git/bin/opencloudmesh-go /tmp/binaries/opencloudmesh-go
 
 ARG PACK_WITH_UPX="true"
 RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
-    strip -s /tmp/binaries/revad || true; \
-    upx -qq --best --lzma /tmp/binaries/revad && upx -t /tmp/binaries/revad; \
+    strip -s /tmp/binaries/opencloudmesh-go || true; \
+    upx -qq --best --lzma /tmp/binaries/opencloudmesh-go && upx -t /tmp/binaries/opencloudmesh-go; \
     fi
 
 ################################
@@ -109,8 +108,8 @@ ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
 ARG COMMON_TOOLS_IMAGE
 
-RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=opencloudmesh-go-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=opencloudmesh-go-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive \
@@ -136,14 +135,9 @@ COPY --chmod=755 --from=compress /usr/local/bin/nu /usr/local/bin/nu
 
 COPY ./tls /tmp/tls-source/
 COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
-
 RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
-    echo "CA-only mode: CA bundle copied via COPY --from=common-tools, copy-tls.nu skipped" && \
-    rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
+    echo "CA-only mode: CA bundle copied via COPY --from=common-tools, copy-tls.nu skipped" && rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     elif [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "ca-only" ]; then \
-    if [ ! -f /tmp/copy-tls.nu ]; then \
-    echo "Error: copy-tls.nu not found. This should not happen for non-ca-only modes." && exit 1; \
-    fi && \
     nu /tmp/copy-tls.nu \
     --enabled "'$TLS_ENABLED'" \
     --mode "'$TLS_MODE'" \
@@ -152,40 +146,20 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
     --source-certs /tmp/tls-source/certificates/ \
     --dest /tls/ && \
     rm -rf /tmp/tls-source /tmp/copy-tls.nu; \
-    else \
-    rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
-    fi
+    else rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; fi
 
-RUN mkdir -p /tls
+RUN mkdir -p /tls /app/bin /var/log
 
-RUN mkdir -p /etc/revad /revad /var/run /var/tmp/reva && \
-    chmod 755 /etc/revad /revad /var/run /var/tmp/reva
+COPY --chmod=755 --from=compress /tmp/binaries/opencloudmesh-go /app/bin/opencloudmesh-go
 
-COPY --chmod=755 --from=compress /tmp/binaries/revad /revad-git/cmd/revad
-
-COPY ./configs /configs/revad
-
-COPY ./configs/partial /tmp/revad-partials
-RUN if [ -d /tmp/revad-partials ] && [ -n "$(find /tmp/revad-partials -name '*.toml' 2>/dev/null)" ]; then \
-    mkdir -p /configs/partial && \
-    find /tmp/revad-partials -type f -name '*.toml' -exec cp {} /configs/partial/ \; && \
-    rm -rf /tmp/revad-partials; \
-    else \
-    rm -rf /tmp/revad-partials; \
-    fi
+COPY ./configs /configs/
 
 COPY ./scripts /tmp/scripts
 RUN mkdir -p /usr/bin/lib && \
-    cp -r /tmp/scripts/lib/* /usr/bin/lib/ && \
+    if [ -d /tmp/scripts/lib ]; then cp -r /tmp/scripts/lib/. /usr/bin/lib/; fi && \
     find /tmp/scripts -maxdepth 1 -type f \( -name '*.nu' -o -name '*.sh' \) -exec cp {} /usr/bin/ \; && \
+    find /usr/bin -maxdepth 1 -type f \( -name '*.nu' -o -name '*.sh' \) -exec chmod 755 {} \; && \
     rm -rf /tmp/scripts
-
-RUN if [ -d /configs/partial ] && [ -n "$(find /configs/partial -name '*.toml' 2>/dev/null)" ]; then \
-    nu -c "use /usr/bin/lib/merge-partials.nu [merge_partial_configs_build]; merge_partial_configs_build '/configs/revad' '/configs/partial'"; \
-    fi
-
-# Remove partials directory after merge (build-time partials should not be in final image)
-RUN rm -rf /configs/partial || true
 
 ###################################
 ###        Runtime image        ###
@@ -194,8 +168,8 @@ FROM ${BASE_RUNTIME_IMAGE}
 
 ENV TZ=Etc/UTC
 
-RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=opencloudmesh-go-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=opencloudmesh-go-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive \
@@ -203,31 +177,26 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --no-install-recommends \
     --assume-yes \
     bash \
-    curl \
-    tzdata \
-    iproute2 \
     ca-certificates;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY --chmod=755 --from=directory /etc/revad /etc/revad
-COPY --chmod=755 --from=directory /revad /revad
-COPY --chmod=755 --from=directory /revad-git/cmd/revad /revad-git/cmd/revad
-COPY --chmod=755 --from=directory /var/run /var/run
-COPY --chmod=755 --from=directory /var/tmp/reva /var/tmp/reva
+COPY --chmod=755 --from=directory /app /app
 COPY --chmod=755 --from=directory /configs /configs
 COPY --chmod=755 --from=directory /usr/bin /usr/bin
 COPY --chmod=700 --from=directory /tls /tls
 COPY --chmod=755 --from=directory /etc/ssl /etc/ssl
 COPY --chmod=755 --from=directory /usr/local/bin/nu /usr/local/bin/nu
 
+RUN mkdir -p /var/log
+
 RUN if [ -d /tls ]; then \
     find /tls -type f -name "*.key" -exec chmod 600 {} \; && \
     find /tls -type f -name "*.crt" -exec chmod 644 {} \; || true; \
     fi
 
-ENV PATH="/revad/cmd:${PATH}"
+ENV PATH="/app/bin:${PATH}"
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
 
-CMD ["tail", "-F", "/var/log/revad.log"]
+CMD ["tail", "-F", "/var/log/opencloudmesh-go.log"]
