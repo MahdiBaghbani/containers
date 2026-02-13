@@ -1,0 +1,37 @@
+{
+  "default": "master",
+  "defaults": {
+    "sources": {
+      "ocm_go": {
+        "url": "https://github.com/MahdiBaghbani/opencloudmesh-go",
+        "ref": "master"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      }
+    },
+    "external_images": {
+      "build": {
+        "tag": "1.25-trixie"
+      }
+    },
+    "platforms": {
+      "development": {
+        "external_images": {
+          "runtime": {
+            "tag": "trixie-slim"
+          }
+        }
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "master",
+      "latest": true,
+      "overrides": {}
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "default": "development",
+  "defaults": {
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      }
+    }
+  },
+  "platforms": [
+    {
+      "name": "development",
+      "dockerfile": "services/opencloudmesh-go/Dockerfile.development",
+      "external_images": {
+        "build": {
+          "name": "golang",
+          "build_arg": "BASE_BUILD_IMAGE"
+        },
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      }
+    }
+  ]
+}
