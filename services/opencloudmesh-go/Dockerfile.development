@@ -70,10 +70,6 @@ RUN --mount=type=cache,id=opencloudmesh-go-git-${CACHEBUST:-${OCM_GO_REF}},targe
     if [ ! -d /src/ocm-go-git-cache/.git ]; then \
     git clone --depth 1 --recursive --shallow-submodules --branch "${OCM_GO_REF}" ${OCM_GO_URL} /src/ocm-go-git-cache; \
     fi && \
-    if [ -n "${OCM_GO_SHA}" ]; then \
-    git -C /src/ocm-go-git-cache fetch --depth 1 origin "${OCM_GO_SHA}" && \
-    git -C /src/ocm-go-git-cache checkout "${OCM_GO_SHA}"; \
-    fi && \
     cp -a /src/ocm-go-git-cache/. /ocm-go-git; \
     fi
 
@@ -136,6 +132,7 @@ COPY --chmod=755 --from=compress /usr/local/bin/nu /usr/local/bin/nu
 
 COPY ./tls /tmp/tls-source/
 COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
+
 RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
     echo "CA-only mode: CA bundle copied via COPY --from=common-tools, copy-tls.nu skipped" && rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     elif [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "ca-only" ]; then \
