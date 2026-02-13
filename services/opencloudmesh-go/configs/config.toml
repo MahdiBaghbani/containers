@@ -1,0 +1,7 @@
+mode = "strict"
+listen_addr = ":443"
+
+[tls]
+mode = "static"
+cert_file = "/tls/ocm-go.crt"
+key_file = "/tls/ocm-go.key"

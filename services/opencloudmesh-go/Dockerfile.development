@@ -33,8 +33,8 @@ FROM ${BASE_BUILD_IMAGE} AS build
 
 ENV CGO_ENABLED=1
 
-RUN --mount=type=cache,id=opencloudmesh-go-debian-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=opencloudmesh-go-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive \
@@ -59,7 +59,8 @@ ARG OCM_GO_PATH=""
 ARG OCM_GO_MODE=""
 ARG CACHEBUST="default"
 
-RUN --mount=type=cache,id=opencloudmesh-go-source-${CACHEBUST:-${OCM_GO_REF}},target=/src/ocm-go-git-cache,sharing=shared \
+# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
+RUN --mount=type=cache,id=opencloudmesh-go-git-${CACHEBUST:-${OCM_GO_REF}},target=/src/ocm-go-git-cache,sharing=shared \
     --mount=type=bind,source=${OCM_GO_PATH:-.},target=/src/local-ocm-go,ro \
     if [ "$OCM_GO_MODE" = "local" ]; then \
     mkdir -p /ocm-go-git && \
