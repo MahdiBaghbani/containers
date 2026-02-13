@@ -64,7 +64,7 @@ export def test-cli [
       nu $"scripts/tests/($suite_name).nu" | complete
     })
     
-    if $result.exit_code == 0 {
+    let next_result = if $result.exit_code == 0 {
       let counts = ($result.stdout | lines | last 2)
       print $"($counts.0)\n($counts.1)"
       {passed: ($acc.passed + 1), failed: $acc.failed}
@@ -73,7 +73,8 @@ export def test-cli [
       print $result.stderr
       {passed: $acc.passed, failed: ($acc.failed + 1)}
     }
-    | do {|r| print ""; $r}  # Print newline and return record
+    print ""
+    $next_result
   })
   
   print "================================"
