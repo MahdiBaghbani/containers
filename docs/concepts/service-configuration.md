@@ -156,6 +156,26 @@ Local sources use the `path` field instead of `url`/`ref`:
 }
 ```
 
+**Example - Version Override (opencloudmesh-go):**
+
+Add a dedicated version that uses a local path from `versions.nuon`:
+
+```nuon
+{
+  "name": "local",
+  "latest": false,
+  "overrides": {
+    "sources": {
+      "ocm_go": {
+        "path": ".repos/opencloudmesh-go"
+      }
+    }
+  }
+}
+```
+
+Build with: `nu scripts/dockypody.nu build --service opencloudmesh-go --version local`
+
 **Example - Environment Variable Override:**
 
 You can override local source paths using environment variables:
