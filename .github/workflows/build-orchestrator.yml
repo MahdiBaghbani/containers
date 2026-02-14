@@ -41,6 +41,7 @@ on:
 #   nextcloud - depends on: nextcloud-base
 #   nextcloud-base - depends on: common-tools
 #   nextcloud-contacts - depends on: common-tools, nextcloud
+#   opencloudmesh-go - depends on: common-tools
 #   revad-base - depends on: common-tools
 #
 
@@ -142,6 +143,18 @@ jobs:
       disk_monitor_mode: basic
       prune_build_cache: true
 
+  build_opencloudmesh_go:
+    name: opencloudmesh-go
+    needs:
+      - build_common_tools
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: opencloudmesh-go
+      push: ${{ inputs.push }}
+      dependencies: "common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
+
   build_revad_base:
     name: revad-base
     needs:
@@ -165,6 +178,7 @@ jobs:
       - build_nextcloud
       - build_nextcloud_base
       - build_nextcloud_contacts
+      - build_opencloudmesh_go
       - build_revad_base
     if: always()
     runs-on: ubuntu-latest

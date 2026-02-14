@@ -34,12 +34,12 @@
       "overrides": {}
     },
     {
-      "name": "v1.0.0-local",
+      "name": "v1.0.0",
       "latest": false,
       "overrides": {
         "sources": {
           "ocm_go": {
-            "path": ".repos/opencloudmesh-go"
+            "ref": "v1.0.0"
           }
         }
       }
