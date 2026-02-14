@@ -29,34 +29,17 @@
   },
 
   "versions": [
-    {
-      "name": "mahdi_fix_localhome",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "revad": {
-            "url": "https://github.com/MahdiBaghbani/reva-opencloud",
-            "ref": "feature/multi-reva-setup-with-localhome"
-          }
-        },
-        "platforms": {
-          "production": {
-            "dependencies": {
-              "revad-base": {
-                "version": "mahdi_fix_localhome-production"
-              }
-            }
-          },
-          "development": {
-            "dependencies": {
-              "revad-base": {
-                "version": "mahdi_fix_localhome-development"
-              }
-            }
-          }
-        }
-      }
-    },
+    // {
+    //   "name": "local",
+    //   "latest": false,
+    //   "overrides": {
+    //     "sources": {
+    //       "revad": {
+    //         "path": ".repos/revad"
+    //       }
+    //     }
+    //   }
+    // },
     {
       "name": "master",
       "latest": true,
