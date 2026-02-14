@@ -20,5 +20,11 @@ role = "user"
 realm = ""
 storage_root = "/data/einstein"
 
+[outbound_http]
+ssrf_mode = "off"
+
 [http.services.api]
 allowed_paths = ["/tmp", "/data"]
+
+[http.services.ui.wayf]
+enabled = true

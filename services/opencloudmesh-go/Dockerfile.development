@@ -176,6 +176,9 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --no-install-recommends \
     --assume-yes \
     bash \
+    curl \
+    tzdata \
+    iproute2 \
     ca-certificates;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
