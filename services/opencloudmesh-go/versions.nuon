@@ -32,6 +32,17 @@
       "name": "master",
       "latest": true,
       "overrides": {}
+    },
+    {
+      "name": "v1.0.0-local",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "ocm_go": {
+            "path": ".repos/opencloudmesh-go"
+          }
+        }
+      }
     }
   ]
 }

@@ -151,6 +151,7 @@ RUN mkdir -p /tls /app/bin /var/log
 COPY --chmod=755 --from=compress /tmp/binaries/opencloudmesh-go /app/bin/opencloudmesh-go
 
 COPY ./configs /configs/
+COPY ./data /data/
 
 COPY ./scripts /tmp/scripts
 RUN mkdir -p /usr/bin/lib && \
@@ -182,6 +183,7 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY --chmod=755 --from=directory /app /app
 COPY --chmod=755 --from=directory /configs /configs
 COPY --chmod=755 --from=directory /usr/bin /usr/bin
+COPY --chmod=755 --from=directory /data /data
 COPY --chmod=700 --from=directory /tls /tls
 COPY --chmod=755 --from=directory /etc/ssl /etc/ssl
 COPY --chmod=755 --from=directory /usr/local/bin/nu /usr/local/bin/nu

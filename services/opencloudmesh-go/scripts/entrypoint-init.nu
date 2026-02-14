@@ -18,6 +18,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use ./lib/utils.nu [get_env_or_default]
+use ./lib/merge-partials-ocmgo.nu [merge_partial_configs]
 
 def write_nsswitch [] {
   "hosts: files dns\n" | save -f /etc/nsswitch.conf
@@ -99,8 +100,9 @@ def ensure_logfile [] {
   ^touch /var/log/opencloudmesh-go.log
 }
 
-def start_ocm_go [origin: string, mode: string] {
+def start_ocm_go [origin: string, mode: string, admin_user: string, admin_pass: string] {
   mut command = $"/app/bin/opencloudmesh-go --config /configs/config.toml --public-origin \"($origin)\""
+  $command = $command + $" --admin-username \"($admin_user)\" --admin-password \"($admin_pass)\""
   if ($mode | str length) > 0 {
     $command = $command + $" --mode \"($mode)\""
   }
@@ -120,9 +122,22 @@ def main [] {
   }
 
   ensure_hosts $validated_host
+
+  merge_partial_configs "/configs" "/configs/partial"
+
+  let admin_user = (get_env_or_default "OCM_GO_ADMIN_USER" "" | str trim)
+  if ($admin_user | str length) == 0 {
+    error make { msg: "OCM_GO_ADMIN_USER must be set" }
+  }
+
+  let admin_pass = (get_env_or_default "OCM_GO_ADMIN_PASSWORD" "" | str trim)
+  if ($admin_pass | str length) == 0 {
+    error make { msg: "OCM_GO_ADMIN_PASSWORD must be set" }
+  }
+
   ensure_logfile
 
   let origin = (resolve_public_origin $validated_host)
   let mode = (validate_mode)
-  start_ocm_go $origin $mode
+  start_ocm_go $origin $mode $admin_user $admin_pass
 }
