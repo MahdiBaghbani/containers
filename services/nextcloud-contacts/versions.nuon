@@ -23,17 +23,6 @@
   },
 
   "versions": [
-    // {
-    //   "name": "local",
-    //   "latest": false,
-    //   "overrides": {
-    //     "sources": {
-    //       "contacts": {
-    //         "path": ".repos/nextcloud-contacts"
-    //       }
-    //     }
-    //   }
-    // },
     {
       "name": "v8.1.0-ocm-nc-master",
       "latest": false,

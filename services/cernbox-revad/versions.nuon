@@ -29,17 +29,6 @@
   },
 
   "versions": [
-    // {
-    //   "name": "local",
-    //   "latest": false,
-    //   "overrides": {
-    //     "sources": {
-    //       "revad": {
-    //         "path": ".repos/revad"
-    //       }
-    //     }
-    //   }
-    // },
     {
       "name": "master",
       "latest": true,

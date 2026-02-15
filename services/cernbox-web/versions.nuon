@@ -42,17 +42,6 @@
   },
 
   "versions": [
-    // {
-    //   "name": "local",
-    //   "latest": false,
-    //   "overrides": {
-    //     "sources": {
-    //       "web": {
-    //         "path": ".repos/web"
-    //       }
-    //     }
-    //   }
-    // },
     {
       "name": "testing",
       "latest": false,
