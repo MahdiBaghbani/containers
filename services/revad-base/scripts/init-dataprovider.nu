@@ -112,6 +112,11 @@ export def init_dataprovider [dataprovider_type: string] {
   # Gateway's datagateway service will proxy /data requests to this URL
   let data_server_url_internal = $"($dataprovider_protocol)://($dataprovider_host):($dataprovider_port)/data"
     
+  # Get OCM receiver client configuration (used by sciencemesh dataprovider)
+  let ocm_timeout = (get_env_or_default "OCM_TIMEOUT" "10")
+  let ocm_insecure_raw = (get_env_or_default "OCM_CLIENT_INSECURE" "false" | str trim)
+  let ocm_insecure = (if (($ocm_insecure_raw | str downcase) == "true") { "true" } else { "false" })
+
   # Build placeholder map
   let placeholder_map = {
     "log-level": $log_level
@@ -122,6 +127,8 @@ export def init_dataprovider [dataprovider_type: string] {
     "http-address": $":($dataprovider_port)"
     "machine-api-key": $machine_api_key
     $"data-server-url-internal.($dataprovider_type)": $data_server_url_internal
+    "ocm-timeout": $ocm_timeout
+    "ocm-insecure": $ocm_insecure
     "config-dir": $revad_config_dir
   }
   
@@ -129,6 +136,12 @@ export def init_dataprovider [dataprovider_type: string] {
   # Always process placeholders to ensure they're replaced even if file exists
   process_placeholders $config_path $placeholder_map
   
+  # Convert OCM driver config strings to native TOML types for sciencemesh
+  if $dataprovider_type == "sciencemesh" {
+    replace_in_file $config_path $"ocm_insecure = \"($ocm_insecure)\"" $"ocm_insecure = ($ocm_insecure)"
+    replace_in_file $config_path $"ocm_timeout = \"($ocm_timeout)\"" $"ocm_timeout = ($ocm_timeout)"
+  }
+
   # Disable TLS certificate configuration in HTTP mode
   # Comment out certfile and keyfile lines when TLS is disabled
   let revad_tls_enabled = (get_env_or_default "REVAD_TLS_ENABLED" "false")

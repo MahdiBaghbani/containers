@@ -26,7 +26,15 @@ mount_id = "ocm-received"
 expose_data_server = true
 data_server_url = "{{placeholder:data-server-url-internal.sciencemesh}}"
 
+[grpc.services.storageprovider.drivers.ocmreceived]
+ocm_timeout = {{placeholder:ocm-timeout:10}}
+ocm_insecure = {{placeholder:ocm-insecure:false}}
+
 ### HTTP DATAPROVIDER ###
 
 [[http.services.dataprovider]]
 driver = "ocmreceived"
+
+[http.services.dataprovider.drivers.ocmreceived]
+ocm_timeout = {{placeholder:ocm-timeout:10}}
+ocm_insecure = {{placeholder:ocm-insecure:false}}

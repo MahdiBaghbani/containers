@@ -55,6 +55,34 @@
           }
         }
       }
+    },
+    // Local build for OCM code-flow development (reva from .repos/reva, plugins from git)
+    {
+      "name": "local-ocm-code-flow",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "revad": {
+            "path": ".repos/reva"
+          }
+        },
+        "platforms": {
+          "production": {
+            "dependencies": {
+              "revad-base": {
+                "version": "local-ocm-code-flow-production"
+              }
+            }
+          },
+          "development": {
+            "dependencies": {
+              "revad-base": {
+                "version": "local-ocm-code-flow-development"
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

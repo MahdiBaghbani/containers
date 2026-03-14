@@ -14,7 +14,7 @@ REVAD_DOMAIN=1.cernbox.cloud.test.azadehafzar.io
 IDP_HOST=cernbox-1-test-idp
 
 # Container mode (REQUIRED) - determines which services run in container
-# Valid modes: gateway, dataprovider-localhome, dataprovider-ocm, dataprovider-sciencemesh, authprovider-oidc, authprovider-machine, authprovider-ocmshares, authprovider-publicshares, shareproviders, groupuserproviders
+# Valid modes: gateway, dataprovider-localhome, dataprovider-ocm, dataprovider-sciencemesh, authprovider-oidc, authprovider-machine, authprovider-ocmshares, authprovider-ocmsharecode, authprovider-ocmexchangedtoken, authprovider-publicshares, shareproviders, groupuserproviders
 REVAD_CONTAINER_MODE=gateway
 
 # TLS configuration (HTTP internally, Traefik terminates SSL)
@@ -69,6 +69,14 @@ REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT=9166
 REVAD_AUTHPROVIDER_OCMSHARES_HOST=cernbox-1-test-revad-authprovider-ocmshares
 REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT=9278
 
+# Auth Provider OCM Share Code configuration (validates exchange codes for /ocm/token)
+REVAD_AUTHPROVIDER_OCMSHARECODE_HOST=cernbox-1-test-revad-authprovider-ocmsharecode
+REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT=9280
+
+# Auth Provider OCM Exchanged Token configuration (validates exchanged JWTs for DAV access)
+REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST=cernbox-1-test-revad-authprovider-ocmexchangedtoken
+REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT=9282
+
 # Auth Provider Public Shares configuration
 # Port matches CERN production pattern (9160)
 REVAD_AUTHPROVIDER_PUBLICSHARES_HOST=cernbox-1-test-revad-authprovider-publicshares
@@ -107,6 +115,10 @@ REVAD_JWT_SECRET=reva-secret
 # Optional: Mesh Directory configuration (for ScienceMesh)
 # MESHDIR_DOMAIN=meshdir.docker
 # MESHDIR_URL=https://meshdir.docker/meshdir
+
+# OCM code-flow token exchange (requires matching Reva build with code-flow support)
+OCM_ENABLE_CODE_FLOW=true
+OCM_TIMEOUT=10
 
 # Optional: Directory Service URLs (new, for directory_service_urls field)
 # Space-separated list of directory service URLs for ScienceMesh WAYF handler

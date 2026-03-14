@@ -163,7 +163,16 @@ export def init_gateway [] {
   let authprovider_publicshares_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT" "9160")
   let authprovider_ocmshares_host = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARES_HOST" "revad-authprovider-ocmshares")
   let authprovider_ocmshares_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT" "9278")
+  let authprovider_ocmsharecode_host = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARECODE_HOST" "revad-authprovider-ocmsharecode")
+  let authprovider_ocmsharecode_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT" "9280")
+  let authprovider_ocmexchangedtoken_host = (get_env_or_default "REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST" "revad-authprovider-ocmexchangedtoken")
+  let authprovider_ocmexchangedtoken_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT" "9282")
   
+  # Get OCM code-flow configuration
+  let enable_code_flow_raw = (get_env_or_default "OCM_ENABLE_CODE_FLOW" "false" | str trim)
+  let enable_code_flow = (if (($enable_code_flow_raw | str downcase) == "true") { "true" } else { "false" })
+  let jwt_expire = (get_env_or_default "REVAD_JWT_EXPIRE" "86400")
+
   # Get share providers and user/group providers addresses
   # Gateway needs these to route requests to appropriate providers
   # Defaults use generic names (ports match common patterns: 9144=Share Providers, 9145=User/Group Providers)
@@ -198,6 +207,10 @@ export def init_gateway [] {
     "authprovider.machine.address": $"($authprovider_machine_host):($authprovider_machine_grpc_port)"
     "authprovider.publicshares.address": $"($authprovider_publicshares_host):($authprovider_publicshares_grpc_port)"
     "authprovider.ocmshares.address": $"($authprovider_ocmshares_host):($authprovider_ocmshares_grpc_port)"
+    "authprovider.ocmsharecode.address": $"($authprovider_ocmsharecode_host):($authprovider_ocmsharecode_grpc_port)"
+    "authprovider.ocmexchangedtoken.address": $"($authprovider_ocmexchangedtoken_host):($authprovider_ocmexchangedtoken_grpc_port)"
+    "enable-code-flow": $enable_code_flow
+    "jwt-expire": $jwt_expire
     "shareproviders.address": $"($shareproviders_host):($shareproviders_grpc_port)"
     "groupuserproviders.address": $"($groupuserproviders_host):($groupuserproviders_grpc_port)"
   }
@@ -215,6 +228,13 @@ export def init_gateway [] {
   # real TOML boolean for sciencemesh.ocm_client_insecure.
   replace_in_file $config_path 'ocm_client_insecure = "{{ vars.ocm_client_insecure }}"' $"ocm_client_insecure = ($sciencemesh_ocm_client_insecure)"
   replace_in_file $config_path $"ocm_client_insecure = \"($sciencemesh_ocm_client_insecure)\"" $"ocm_client_insecure = ($sciencemesh_ocm_client_insecure)"
+
+  # Convert enable_code_flow string to TOML boolean
+  replace_in_file $config_path $"enable_code_flow = \"($enable_code_flow)\"" $"enable_code_flow = ($enable_code_flow)"
+
+  # Convert jwt expire string to TOML integer
+  replace_in_file $config_path $"expire = \"($jwt_expire)\"" $"expire = ($jwt_expire)"
+
   # Verify no placeholders remain
   let remaining_placeholders = (open --raw $config_path | str contains "{{placeholder:")
   if $remaining_placeholders {
