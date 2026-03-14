@@ -118,6 +118,22 @@ export def init_gateway [] {
   } else {
     ""
   })
+
+  # ScienceMesh WAYF discovery TLS behavior
+  # Env: OCM_CLIENT_INSECURE (specific) overrides OC_INSECURE (general). Parity with OpenCloud.
+  # Strict parsing: only case-insensitive "true" enables. Everything else is false.
+  let ocm_insecure_env = (get_env_or_default "OCM_CLIENT_INSECURE" "" | str trim)
+  let oc_insecure_env = (get_env_or_default "OC_INSECURE" "" | str trim)
+  let sciencemesh_ocm_client_insecure_raw = (if ($ocm_insecure_env | str length) > 0 {
+    $ocm_insecure_env
+  } else {
+    $oc_insecure_env
+  })
+  let sciencemesh_ocm_client_insecure = (if (($sciencemesh_ocm_client_insecure_raw | str downcase) == "true") {
+    "true"
+  } else {
+    "false"
+  })
   
   # Get identity provider URL
   let idp_domain = (get_env_or_default "IDP_DOMAIN" "idp.docker")
@@ -171,6 +187,7 @@ export def init_gateway [] {
     "ocmshares-json-file": $ocmshares_json_file
     "mesh-directory-url": $mesh_directory_url
     "directory-service-urls": $directory_service_urls
+    "sciencemesh-ocm-client-insecure": $sciencemesh_ocm_client_insecure
     "idp-url": $idp_url
     "rclone-endpoint": $rclone_endpoint
     "config-dir": $revad_config_dir
@@ -192,6 +209,12 @@ export def init_gateway [] {
   }
   print $"Processing placeholders in config file: ($config_path)"
   process_placeholders $config_path $placeholder_map
+
+  # Keep the gateway.toml template TOML-parseable by keeping reva template
+  # expressions inside strings, but ensure the final processed config contains a
+  # real TOML boolean for sciencemesh.ocm_client_insecure.
+  replace_in_file $config_path 'ocm_client_insecure = "{{ vars.ocm_client_insecure }}"' $"ocm_client_insecure = ($sciencemesh_ocm_client_insecure)"
+  replace_in_file $config_path $"ocm_client_insecure = \"($sciencemesh_ocm_client_insecure)\"" $"ocm_client_insecure = ($sciencemesh_ocm_client_insecure)"
   # Verify no placeholders remain
   let remaining_placeholders = (open --raw $config_path | str contains "{{placeholder:")
   if $remaining_placeholders {

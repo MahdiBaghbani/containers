@@ -10,6 +10,7 @@ machine_api_key = "{{placeholder:machine-api-key}}"
 ocmshares_json_file = "{{placeholder:ocmshares-json-file}}"
 mesh_directory_url = "{{placeholder:mesh-directory-url}}"
 directory_service_urls = "{{placeholder:directory-service-urls}}"
+ocm_client_insecure = "{{placeholder:sciencemesh-ocm-client-insecure:false}}"
 
 [http]
 address = "{{placeholder:http-address}}"
@@ -161,6 +162,7 @@ prefix = "data"
 provider_domain = "{{ vars.provider_domain }}"
 mesh_directory_url = "{{ vars.mesh_directory_url }}"
 directory_service_urls = "{{ vars.directory_service_urls }}"
+ocm_client_insecure = "{{ vars.ocm_client_insecure }}"
 ocm_mount_point = "/sciencemesh"
 
 [http.services.sciencemesh.smtp_credentials]
