@@ -46,7 +46,6 @@
         }
       }
     },
-    // Contacts layer built on top of Enrique's Nextcloud code-flow branch
     {
       "name": "v8.1.0-ocm-nc-v33-codeflow",
       "latest": false,
@@ -64,7 +63,6 @@
         }
       }
     },
-    // Local build for OCM code-flow development (contacts from .repos/nextcloud-contacts)
     {
       "name": "local-ocm-code-flow",
       "latest": false,

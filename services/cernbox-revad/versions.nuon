@@ -56,7 +56,6 @@
         }
       }
     },
-    // Local build for OCM code-flow development (reva from .repos/reva, plugins from git)
     {
       "name": "local-ocm-code-flow",
       "latest": false,
