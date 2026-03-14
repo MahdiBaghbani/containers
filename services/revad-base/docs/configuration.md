@@ -130,6 +130,14 @@ MESHDIR_DOMAIN=meshdir.docker
 # Independent of MESHDIR_URL/MESHDIR_DOMAIN (mesh_directory_url field)
 # Invalid URLs are automatically removed with warnings
 OCM_DIRECTORY_SERVICE_URLS="https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download https://another.example.com/dir"
+
+# Dev-only: skip TLS verification for ScienceMesh WAYF discovery client
+# Affects both directory service fetch and OCM provider discovery
+# OCM_CLIENT_INSECURE (specific) overrides OC_INSECURE (general). Parity with OpenCloud.
+# Strict parsing: only "true" (case-insensitive) enables; everything else is false
+# Do not set this in production environments
+OCM_CLIENT_INSECURE=false
+# OC_INSECURE=true   # General fallback; OCM_CLIENT_INSECURE overrides when both set
 ```
 
 **Note**: `directory_service_urls` and `mesh_directory_url` are independent fields. Both can be set simultaneously. The `directory_service_urls` field supports multiple space-separated URLs, while `mesh_directory_url` is a single URL.
