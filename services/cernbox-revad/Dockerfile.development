@@ -61,6 +61,7 @@ ARG REVAD_PATH=""
 ARG REVAD_MODE=""
 ARG REVAD_PLUGINS_URL="https://github.com/cernbox/reva-plugins"
 ARG REVAD_PLUGINS_REF="master"
+ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
@@ -85,11 +86,19 @@ RUN --mount=type=cache,id=cernbox-revad-reva-plugins-git-${CACHEBUST:-${REVAD_PL
     cp -a /src/reva-plugins-git-cache/. /reva-plugins-git
 
 RUN --mount=type=cache,id=cernbox-revad-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    if [ -n "$GO_BUILD_GOPROXY" ]; then \
+    GOPROXY="$GO_BUILD_GOPROXY" gaia build \
+    --with github.com/cernbox/reva-plugins=/reva-plugins-git \
+    --with github.com/cs3org/reva/v3=/reva-git \
+    --static-musl \
+    --output /revad; \
+    else \
     gaia build \
     --with github.com/cernbox/reva-plugins=/reva-plugins-git \
     --with github.com/cs3org/reva/v3=/reva-git \
     --static-musl \
-    --output /revad
+    --output /revad; \
+    fi
 
 RUN ldd /revad 2>&1 | grep -q "not a dynamic executable" || \
     (echo "ERROR: Binary is not statically linked" && exit 1) && \

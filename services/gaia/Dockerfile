@@ -46,6 +46,7 @@ ARG GAIA_REF="master"
 ARG GAIA_SHA=""
 ARG GAIA_PATH=""
 ARG GAIA_MODE=""
+ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
@@ -64,9 +65,17 @@ RUN --mount=type=cache,id=gaia-git-${CACHEBUST:-${GAIA_REF}},target=/src/gaia-gi
 
 WORKDIR /gaia-git
 RUN --mount=type=cache,id=gaia-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-  go mod download
+  if [ -n "$GO_BUILD_GOPROXY" ]; then \
+  GOPROXY="$GO_BUILD_GOPROXY" go mod download; \
+  else \
+  go mod download; \
+  fi
 RUN --mount=type=cache,id=gaia-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-  go build -o /gaia .
+  if [ -n "$GO_BUILD_GOPROXY" ]; then \
+  GOPROXY="$GO_BUILD_GOPROXY" go build -o /gaia .; \
+  else \
+  go build -o /gaia .; \
+  fi
 
 ####################################
 ###  Compress binary with UPX    ###
