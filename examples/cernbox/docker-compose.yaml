@@ -82,8 +82,14 @@ services:
       REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT: "${REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT}"
       REVAD_AUTHPROVIDER_OCMSHARES_HOST: "${REVAD_AUTHPROVIDER_OCMSHARES_HOST}"
       REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "${REVAD_AUTHPROVIDER_OCMSHARECODE_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT}"
       REVAD_AUTHPROVIDER_PUBLICSHARES_HOST: "${REVAD_AUTHPROVIDER_PUBLICSHARES_HOST}"
       REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT}"
+      OCM_ENABLE_CODE_FLOW: "${OCM_ENABLE_CODE_FLOW:-false}"
+      OCM_TIMEOUT: "${OCM_TIMEOUT:-10}"
       REVAD_SHAREPROVIDERS_HOST: "${REVAD_SHAREPROVIDERS_HOST}"
       REVAD_SHAREPROVIDERS_GRPC_PORT: "${REVAD_SHAREPROVIDERS_GRPC_PORT}"
       REVAD_GROUPUSERPROVIDERS_HOST: "${REVAD_GROUPUSERPROVIDERS_HOST}"
@@ -195,6 +201,72 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "${PWD}/volumes/config/reva-authprovider-ocmshares:/etc/revad"
+      - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
+
+  # OCM Share Code auth provider container (validates exchange codes for /ocm/token)
+  cernbox-1-test-revad-authprovider-ocmsharecode:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: cernbox-1-test-revad-authprovider-ocmsharecode
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      traefik-net:
+        ipv4_address: 172.16.85.14
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmsharecode"
+      DOMAIN: "${REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "cernbox-1-test-revad-authprovider-ocmsharecode"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      cernbox-1-test-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/config/reva-authprovider-ocmsharecode:/etc/revad"
+      - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
+
+  # OCM Exchanged Token auth provider container (validates exchanged JWTs for DAV access)
+  cernbox-1-test-revad-authprovider-ocmexchangedtoken:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: cernbox-1-test-revad-authprovider-ocmexchangedtoken
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      traefik-net:
+        ipv4_address: 172.16.85.15
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmexchangedtoken"
+      DOMAIN: "${REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "cernbox-1-test-revad-authprovider-ocmexchangedtoken"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      cernbox-1-test-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/config/reva-authprovider-ocmexchangedtoken:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
   # Public Shares auth provider container
@@ -396,6 +468,8 @@ services:
       REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      OCM_TIMEOUT: "${OCM_TIMEOUT:-10}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-false}"
     depends_on:
       cernbox-1-test-revad-gateway:
         condition: service_started

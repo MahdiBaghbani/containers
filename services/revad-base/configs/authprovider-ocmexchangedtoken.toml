@@ -1,0 +1,22 @@
+## OCM Exchanged Token auth provider configuration for multi-container CERNBox deployment
+## This config runs OCM Exchanged Token auth provider only (validates exchanged JWTs for DAV access)
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.authprovider]
+auth_manager = "ocmexchangedtoken"
+
+[grpc.services.authprovider.auth_managers.ocmexchangedtoken]
+token_manager = "jwt"
+
+[grpc.services.authprovider.auth_managers.ocmexchangedtoken.token_managers.jwt]
+expire = {{placeholder:jwt-expire:86400}}

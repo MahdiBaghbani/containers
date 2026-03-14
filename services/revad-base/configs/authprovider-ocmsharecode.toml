@@ -1,0 +1,16 @@
+## OCM Share Code auth provider configuration for multi-container CERNBox deployment
+## This config runs OCM Share Code auth provider only (validates exchange codes for /ocm/token)
+
+[log]
+level = "{{placeholder:log-level:debug}}"
+output = "{{placeholder:log-output:/var/log/revad.log}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.authprovider]
+auth_manager = "ocmsharecode"

@@ -75,6 +75,8 @@ basic = "{{placeholder:authprovider.oidc.address}}"
 bearer = "{{placeholder:authprovider.oidc.address}}"
 machine = "{{placeholder:authprovider.machine.address}}"
 ocmshares = "{{placeholder:authprovider.ocmshares.address}}"
+ocmsharecode = "{{placeholder:authprovider.ocmsharecode.address}}"
+ocmexchangedtoken = "{{placeholder:authprovider.ocmexchangedtoken.address}}"
 publicshares = "{{placeholder:authprovider.publicshares.address}}"
 
 ### STORAGE REGISTRY ###
@@ -179,9 +181,14 @@ provider = "Reva for CERNBox"
 endpoint = "{{ vars.external_reva_endpoint }}"
 enable_webapp = true
 enable_datatx = true
+enable_code_flow = {{placeholder:enable-code-flow:false}}
 
 [http.services.ocm]
 prefix = "ocm"
+token_manager = "jwt"
+
+[http.services.ocm.token_managers.jwt]
+expire = {{placeholder:jwt-expire:86400}}
 
 [http.services.ocm.config]
 host = "{{ vars.provider_domain }}"

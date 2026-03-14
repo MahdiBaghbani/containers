@@ -33,7 +33,7 @@ export def init_authprovider [authprovider_type: string] {
   print $"Initializing authprovider configuration for type: ($authprovider_type)"
   
   # Validate that authprovider type is one of the supported types
-  let valid_types = ["oidc", "machine", "ocmshares", "publicshares"]
+  let valid_types = ["oidc", "machine", "ocmshares", "ocmsharecode", "ocmexchangedtoken", "publicshares"]
   if not ($authprovider_type in $valid_types) {
     let valid_types_str = ($valid_types | str join ", ")
     error make { msg: $"Invalid authprovider type: ($authprovider_type). Valid types: ($valid_types_str)" }
@@ -97,6 +97,10 @@ export def init_authprovider [authprovider_type: string] {
     $default_port = "9160"
   } else if $authprovider_type == "ocmshares" {
     $default_port = "9278"
+  } else if $authprovider_type == "ocmsharecode" {
+    $default_port = "9280"
+  } else if $authprovider_type == "ocmexchangedtoken" {
+    $default_port = "9282"
   }
   
   let authprovider_grpc_port = (get_env_or_default $"REVAD_AUTHPROVIDER_($type_upper)_GRPC_PORT" $default_port)
@@ -156,13 +160,24 @@ export def init_authprovider [authprovider_type: string] {
     $placeholder_map = ($placeholder_map | merge {
       "machine-api-key": $machine_api_key
     })
+  } else if $authprovider_type == "ocmexchangedtoken" {
+    let jwt_expire = (get_env_or_default "REVAD_JWT_EXPIRE" "86400")
+    $placeholder_map = ($placeholder_map | merge {
+      "jwt-expire": $jwt_expire
+    })
   }
-  # OCM Shares and Public Shares types need no additional placeholders
+  # OCM Shares, OCM Share Code, and Public Shares types need no additional placeholders
   
   # Process all placeholders in the config file using the placeholder map
   # Always process placeholders to ensure they're replaced even if file exists
   process_placeholders $config_path $placeholder_map
   
+  # Convert jwt expire string to TOML integer for ocmexchangedtoken
+  if $authprovider_type == "ocmexchangedtoken" {
+    let jwt_expire = (get_env_or_default "REVAD_JWT_EXPIRE" "86400")
+    replace_in_file $config_path $"expire = \"($jwt_expire)\"" $"expire = ($jwt_expire)"
+  }
+
   # Disable TLS certificate configuration in HTTP mode
   # Comment out certfile and keyfile lines when TLS is disabled
   let revad_tls_enabled = (get_env_or_default "REVAD_TLS_ENABLED" "false")

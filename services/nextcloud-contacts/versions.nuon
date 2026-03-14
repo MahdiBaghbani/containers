@@ -45,6 +45,41 @@
           }
         }
       }
+    },
+    // Contacts layer built on top of Enrique's Nextcloud code-flow branch
+    {
+      "name": "v8.1.0-ocm-nc-v33-codeflow",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "url": "https://github.com/MahdiBaghbani/nextcloud-contacts",
+            "ref": "mahdi/fix/ui-optional-email"
+          }
+        },
+        "dependencies": {
+          "nextcloud": {
+            "version": "v33-codeflow-debian"
+          }
+        }
+      }
+    },
+    // Local build for OCM code-flow development (contacts from .repos/nextcloud-contacts)
+    {
+      "name": "local-ocm-code-flow",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "path": ".repos/nextcloud-contacts"
+          }
+        },
+        "dependencies": {
+          "nextcloud": {
+            "version": "local-ocm-code-flow-debian"
+          }
+        }
+      }
     }
   ]
 }

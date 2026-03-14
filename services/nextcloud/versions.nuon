@@ -37,6 +37,33 @@
           }
         }
       }
+    },
+    // Enrique's Nextcloud server with OCM code-flow support
+    // Local clone: .repos/enrique-nc-server (origin: https://github.com/enriquepablo/server.git)
+    // TODO: pin to a stable tag/commit once Enrique cuts a release
+    {
+      "name": "v33-codeflow",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "url": "https://github.com/enriquepablo/server.git",
+            "ref": "master"
+          }
+        }
+      }
+    },
+    // Local build for OCM code-flow development (Enrique's NC from .repos/enrique-nc-server)
+    {
+      "name": "local-ocm-code-flow",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "path": ".repos/enrique-nc-server"
+          }
+        }
+      }
     }
   ]
 }

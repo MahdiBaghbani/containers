@@ -23,7 +23,7 @@ use ./lib/shared.nu [init_shared, start_reva_daemon]
 use ./lib/utils.nu [get_env_or_default]
 
 # Valid container modes supported by this entrypoint
-const VALID_MODES = ["gateway", "dataprovider-localhome", "dataprovider-ocm", "dataprovider-sciencemesh", "authprovider-oidc", "authprovider-machine", "authprovider-ocmshares", "authprovider-publicshares", "shareproviders", "groupuserproviders"]
+const VALID_MODES = ["gateway", "dataprovider-localhome", "dataprovider-ocm", "dataprovider-sciencemesh", "authprovider-oidc", "authprovider-machine", "authprovider-ocmshares", "authprovider-ocmsharecode", "authprovider-ocmexchangedtoken", "authprovider-publicshares", "shareproviders", "groupuserproviders"]
 
 # Validate that the provided container mode is in the list of valid modes
 # Raises an error if the mode is invalid
@@ -69,7 +69,7 @@ def main [] {
   
   if ($container_mode | str length) == 0 {
     error make { 
-      msg: "REVAD_CONTAINER_MODE environment variable is required. Valid modes: gateway, dataprovider-localhome, dataprovider-ocm, dataprovider-sciencemesh, authprovider-oidc, authprovider-machine, authprovider-ocmshares, authprovider-publicshares, shareproviders, groupuserproviders" 
+      msg: "REVAD_CONTAINER_MODE environment variable is required. Valid modes: gateway, dataprovider-localhome, dataprovider-ocm, dataprovider-sciencemesh, authprovider-oidc, authprovider-machine, authprovider-ocmshares, authprovider-ocmsharecode, authprovider-ocmexchangedtoken, authprovider-publicshares, shareproviders, groupuserproviders" 
     }
   }
   
