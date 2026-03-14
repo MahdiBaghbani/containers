@@ -1,6 +1,9 @@
 {
   "default": "master",
   "defaults": {
+    "build_args": {
+      "GO_BUILD_GOPROXY": "https://proxy.golang.org|direct"
+    },
     "sources": {
       "ocm_go": {
         "url": "https://github.com/MahdiBaghbani/opencloudmesh-go",

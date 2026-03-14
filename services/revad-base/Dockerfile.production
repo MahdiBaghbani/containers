@@ -50,6 +50,7 @@ ARG REVAD_REF="v3.3.3"
 ARG REVAD_SHA=""
 ARG REVAD_PATH=""
 ARG REVAD_MODE=""
+ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
@@ -68,9 +69,17 @@ RUN --mount=type=cache,id=revad-base-revad-git-${CACHEBUST:-${REVAD_REF}},target
 
 WORKDIR /revad-git
 RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-    go mod download
+    if [ -n "$GO_BUILD_GOPROXY" ]; then \
+    GOPROXY="$GO_BUILD_GOPROXY" go mod download; \
+    else \
+    go mod download; \
+    fi
 RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-    make revad-static
+    if [ -n "$GO_BUILD_GOPROXY" ]; then \
+    GOPROXY="$GO_BUILD_GOPROXY" make revad-static; \
+    else \
+    make revad-static; \
+    fi
 
 RUN ldd /revad-git/cmd/revad/revad 2>&1 | grep -q "not a dynamic executable" || \
     (echo "ERROR: Binary is not statically linked" && exit 1) && \

@@ -2,6 +2,9 @@
   "default": "v3.3.3",
 
   "defaults": {
+    "build_args": {
+      "GO_BUILD_GOPROXY": "https://proxy.golang.org|direct"
+    },
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",

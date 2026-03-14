@@ -57,6 +57,7 @@ ARG OCM_GO_REF="master"
 ARG OCM_GO_SHA=""
 ARG OCM_GO_PATH=""
 ARG OCM_GO_MODE=""
+ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
@@ -75,9 +76,17 @@ RUN --mount=type=cache,id=opencloudmesh-go-git-${CACHEBUST:-${OCM_GO_REF}},targe
 
 WORKDIR /ocm-go-git
 RUN --mount=type=cache,id=opencloudmesh-go-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-    go mod download
+    if [ -n "$GO_BUILD_GOPROXY" ]; then \
+    GOPROXY="$GO_BUILD_GOPROXY" go mod download; \
+    else \
+    go mod download; \
+    fi
 RUN --mount=type=cache,id=opencloudmesh-go-go-mod-cache,target=/go/pkg/mod,sharing=locked \
-    make build
+    if [ -n "$GO_BUILD_GOPROXY" ]; then \
+    GOPROXY="$GO_BUILD_GOPROXY" make build; \
+    else \
+    make build; \
+    fi
 
 ####################################
 ###  Compress binaries with UPX  ###
