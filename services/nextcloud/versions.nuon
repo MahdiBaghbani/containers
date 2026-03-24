@@ -51,12 +51,13 @@
       }
     },
     {
-      "name": "local-ocm-code-flow",
+      "name": "sta-ocm-m6",
       "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "path": ".repos/enrique-nc-server"
+            "url": "https://github.com/MahdiBaghbani/server.git",
+            "ref": "sta-milestone-6/ocm-code-flow"
           }
         }
       }

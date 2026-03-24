@@ -75,12 +75,13 @@
       }
     },
     {
-      "name": "local-ocm-code-flow",
+      "name": "sta-ocm-m6",
       "latest": false,
       "overrides": {
         "sources": {
           "revad": {
-            "path": ".repos/reva"
+            "url": "https://github.com/MahdiBaghbani/reva-opencloud.git",
+            "ref": "sta-milestone-6/ocm-code-flow"
           }
         }
       }
