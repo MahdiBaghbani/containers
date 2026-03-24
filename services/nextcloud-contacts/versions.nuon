@@ -47,7 +47,7 @@
       }
     },
     {
-      "name": "v8.1.0-ocm-nc-v33-codeflow",
+      "name": "sta-ocm-m6",
       "latest": false,
       "overrides": {
         "sources": {
@@ -58,23 +58,7 @@
         },
         "dependencies": {
           "nextcloud": {
-            "version": "v33-codeflow-debian"
-          }
-        }
-      }
-    },
-    {
-      "name": "local-ocm-code-flow",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "contacts": {
-            "path": ".repos/nextcloud-contacts"
-          }
-        },
-        "dependencies": {
-          "nextcloud": {
-            "version": "local-ocm-code-flow-debian"
+            "version": "sta-ocm-m6-debian"
           }
         }
       }
