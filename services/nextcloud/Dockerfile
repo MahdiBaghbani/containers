@@ -52,7 +52,9 @@ RUN --mount=type=cache,id=nextcloud-server-git-${CACHEBUST:-${NEXTCLOUD_REF}},ta
     --mount=type=bind,source=${NEXTCLOUD_PATH:-.},target=/src/local-nextcloud,ro \
     if [ "$NEXTCLOUD_MODE" = "local" ]; then \
     mkdir -p /nextcloud-source && \
-    cp -a /src/local-nextcloud/. /nextcloud-source; \
+    cp -a /src/local-nextcloud/. /nextcloud-source && \
+    rm -f /nextcloud-source/config/config.php && \
+    rm -rf /nextcloud-source/data /nextcloud-source/data-autotest; \
     else \
     mkdir -p /src/nextcloud-git-cache && \
     if [ ! -d /src/nextcloud-git-cache/.git ]; then \
