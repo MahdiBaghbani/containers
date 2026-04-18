@@ -46,10 +46,11 @@ def parse_optional_bool_env [var_name: string] {
   $value_str in ["true", "1", "yes"]
 }
 
-# Get current app config value
-def get_app_config [user: string, key: string] {
+# Read an OCM invites bool toggle via the unified contacts command.
+# Returns "1" or "0" on success, empty string on failure.
+def get_ocm_invites_option [user: string, option: string] {
   try {
-    let result = (run_as $user $"php /var/www/html/occ config:app:get contacts ($key)" | complete)
+    let result = (run_as $user $"php /var/www/html/occ contacts:ocm-invites-config ($option)" | complete)
     if $result.exit_code == 0 {
       $result.stdout | str trim
     } else {
@@ -60,25 +61,28 @@ def get_app_config [user: string, key: string] {
   }
 }
 
-# Set app config if value differs from current (idempotent)
-def set_app_config_if_changed [user: string, key: string, value: string] {
-  let current = (get_app_config $user $key)
+# Persist an OCM invites bool toggle if it differs from the current value.
+# Uses occ contacts:ocm-invites-config so admins and the hook share one entry point.
+def set_ocm_invites_option_if_changed [user: string, option: string, enabled: bool] {
+  let desired_str = if $enabled { "1" } else { "0" }
+  let current = (get_ocm_invites_option $user $option)
   
-  if $current == $value {
+  if $current == $desired_str {
     return false
   }
   
+  let value_arg = if $enabled { "on" } else { "off" }
   try {
-    let result = (run_as $user $"php /var/www/html/occ config:app:set contacts ($key) --value=($value)" | complete)
+    let result = (run_as $user $"php /var/www/html/occ contacts:ocm-invites-config ($option) ($value_arg)" | complete)
     if $result.exit_code == 0 {
-      print $"Set ($key) = ($value)"
+      print $"Set ($option) = ($value_arg)"
       true
     } else {
-      print $"Warning: Failed to set ($key): exit code ($result.exit_code)"
+      print $"Warning: Failed to set ($option): exit code ($result.exit_code)"
       false
     }
   } catch {
-    print $"Warning: Failed to set ($key): ($in)"
+    print $"Warning: Failed to set ($option): ($in)"
     false
   }
 }
@@ -242,15 +246,15 @@ def configure_ocm_invites_flags [user: string] {
     print $"Override: encoded_copy = ($encoded_copy)"
   }
   
-  # Convert booleans to string values for occ
-  let optional_mail_str = if $optional_mail { "1" } else { "0" }
-  let cc_sender_str = if $cc_sender { "1" } else { "0" }
-  let encoded_copy_str = if $encoded_copy { "1" } else { "0" }
+  # Apply configuration via the unified contacts command
+  if not (command_exists $user "contacts:ocm-invites-config") {
+    print "Warning: contacts:ocm-invites-config command not available, skipping OCM Invites flag configuration"
+    return
+  }
   
-  # Apply configuration
-  set_app_config_if_changed $user "ocm_invites_optional_mail" $optional_mail_str
-  set_app_config_if_changed $user "ocm_invites_cc_sender" $cc_sender_str
-  set_app_config_if_changed $user "ocm_invites_encoded_copy_button" $encoded_copy_str
+  set_ocm_invites_option_if_changed $user "ocm_invites_optional_mail" $optional_mail
+  set_ocm_invites_option_if_changed $user "ocm_invites_cc_sender" $cc_sender
+  set_ocm_invites_option_if_changed $user "ocm_invites_encoded_copy_button" $encoded_copy
 }
 
 def main [] {
