@@ -1,6 +1,14 @@
 # Dockerfile Development Rules
 
-Local folder sources, multi-stage builds, and the buildx workflow impose a few hard requirements on every service Dockerfile. Treat these rules the same way we treat the Nushell guidelines: breaking them has immediate build impacts.
+Local folder sources, multi-stage builds, and the buildx workflow impose a few
+hard requirements on every service Dockerfile. Treat these rules the same way
+we treat the Nushell guidelines: breaking them has immediate build impacts.
+
+Operator reality:
+
+- this repo is bandwidth-limited
+- Dockerfiles must use aggressive caching (BuildKit cache mounts, shared cache
+  ids) to avoid repeated downloads
 
 ## Critical Requirements
 
@@ -49,12 +57,13 @@ Local folder sources, multi-stage builds, and the buildx workflow impose a few h
 
 5. **Clean package manager state.**
 
-   - `apt-get clean && rm -rf /var/lib/apt/lists/*` after Debian/Ubuntu installs.
+   - Run `apt-get clean && rm -rf /var/lib/apt/lists/*` in a separate `RUN`
+     without package-manager cache mounts after Debian/Ubuntu installs.
    - Ensures smaller layers and aligns with security guidance.
 
 6. **Use multi-stage builds with explicit COPY scopes.**
 
-   - Builder → compression → runtime is the expected pattern.
+   - Builder -> compression -> runtime is the expected pattern.
    - Never leak build secrets into runtime layers; copy only the final artifacts.
 
 7. **Quote shell variables when calling nushell scripts.**
@@ -87,15 +96,116 @@ Local folder sources, multi-stage builds, and the buildx workflow impose a few h
 
    - **Pattern**: Always use `"'$SHELL_VAR'"` when passing shell variables to nushell scripts that expect string parameters.
 
+## ARG and ENV Ordering (scoping and cache)
+
+Dockerfile ordering is not just style. It affects:
+
+- Docker scoping (what values are visible in which stage)
+- Cache reuse (what changes invalidate expensive layers)
+
+### ARG scoping rules (Docker semantics)
+
+- **ARG in FROM**: Any `ARG` referenced by a `FROM ${...}` must be declared
+  before the first `FROM`.
+- **ARG in stage instructions**: If a stage uses an arg in `RUN`, `ENV`, `COPY`,
+  cache mount ids, and so on, re-declare it after that stage's `FROM` so it is
+  in scope.
+- **Defaults**: Declare defaults once in the global `ARG` block. In stages,
+  prefer `ARG NAME` (no default) to avoid drift.
+
+### Recommended block order (file and stage)
+
+```dockerfile
+# syntax=docker/dockerfile:1.7
+
+# SPDX header...
+
+# Global args (used by FROM)
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
+
+# Global pins (versions, refs)
+ARG FOO_VERSION="1.2.3"
+
+# Global feature args (TLS when applicable)
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools
+
+FROM ${BASE_RUNTIME_IMAGE}
+
+# Stage args (re-declare for this stage's scope)
+ARG FOO_VERSION
+ARG TLS_ENABLED
+ARG TLS_MODE
+ARG TLS_CERT_NAME
+ARG TLS_CA_NAME
+
+USER root
+
+# Build-affecting env (only if a following RUN needs it)
+# ENV NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+
+# RUN/COPY/WORKDIR...
+
+# Runtime defaults (late in the final runtime stage)
+# ENV OCM_DEFAULT_WEB_BROWSER="firefox"
+```
+
+### ENV placement rules (cache and correctness)
+
+- **Build-only env**: If a value is only needed for one build step, prefer
+  setting it inside that `RUN` (for example: `export CYPRESS_CACHE_FOLDER=...`)
+  instead of baking it into `ENV`.
+- **Runtime defaults**: Prefer placing runtime-only `ENV` late in the final
+  runtime stage so tweaks do not invalidate earlier heavy install layers.
+- **ARG before ENV**: If an `ENV` value uses a build arg (for example
+  `ENV TZ=$TZ`), declare `ARG TZ` earlier in the same stage.
+
+### Common footguns
+
+- `ENV X=${SOME_ARG}` is a snapshot of `SOME_ARG` at that point in the file. It
+  will not update if `SOME_ARG` is re-declared later.
+- Avoid using the same name for both `ARG` and `ENV` unless you intentionally
+  want `ENV` to shadow later substitutions.
+
+## Desktop app autostart and window maximize
+
+Desktop-app images (Kasm-derived) often launch a GUI application via a Nushell
+autostart script (for example `firefox-autostart.nu` or `cypress-autostart.nu`).
+
+### Standard pattern
+
+- Keep runtime behavior configurable via env vars (default-on for UX tweaks).
+- Call `/dockerstartup/ocm-desktop-env.nu` after `desktop_ready` to apply session
+  defaults (for example `OCM_DEFAULT_WEB_BROWSER`).
+- If the app should open maximized by default, use the shared helper:
+  `/dockerstartup/ocm-window-actions.nu --maximize`.
+  - It is a best-effort fallback using `wmctrl` against the active window.
+  - It is safe to call repeatedly; it is a no-op if the helper is missing.
+
+### Recommended env knobs
+
+- Firefox:
+  - `OCM_FIREFOX_MAXIMIZE` (default true)
+- Cypress:
+  - `OCM_CYPRESS_MAXIMIZE` (default true, keeps `--start-maximized` and also
+    calls the shared maximize helper)
+
 ## Common Mistakes to Avoid
 
 - **Copying from `${FOO_PATH}` without a mount**: breaks every local-source build. Always mount then copy from the mounted path.
-- **Implicit ARG usage**: referencing `FOO_REF` without `ARG FOO_REF` declares it globally and makes the Dockerfile unusable in isolation.
+- **Implicit ARG usage**: referencing `FOO_REF` without declaring `ARG FOO_REF`
+  means the value is empty or unset at build time, which makes cache ids,
+  clones, and conditionals brittle.
 - **Installing git inside runtime stages**: keep tooling in the build stage; runtime images should contain only the shipped binaries.
 - **Not using `set -euo pipefail` equivalents**: when writing long `RUN` scripts, prefer `bash -eu -o pipefail -c '...'` to surface failures early.
 - **Leaving cache mounts on unrelated layers**: only the Git clone step should mount the Git cache; other commands should stay deterministic.
 - **Mixing `cp` semantics**: use `cp -a /src/. /dest` to preserve permissions; `cp -r ${PATH}*` drops dotfiles.
-- **Passing shell variables to nushell without proper quoting**: nushell is strongly typed. When calling nushell scripts from shell, use `"'$VAR'"` pattern to ensure string parameters receive strings, not booleans or numbers. See "Calling Nushell Scripts" below.
+- **Passing shell variables to nushell without proper quoting**: nushell is strongly typed. When calling nushell scripts from shell, use `"'$VAR'"` pattern to ensure string parameters receive strings, not booleans or numbers. See "Critical Requirements" below.
 
 ## Volume Mount Protection Patterns
 
@@ -271,16 +381,19 @@ Add dependency in `platforms.nuon`:
 
 ## Shared Package Cache IDs
 
-When installing packages via apt, apk, or dnf, use the standard cache IDs defined by `common-tools`. This ensures cache sharing across services for faster multi-service builds.
+When installing packages via apt, apk, or dnf, use shared cache IDs so multiple
+services can reuse the same package-manager cache across builds.
 
 ### Standard Cache IDs
 
-| Platform      | Cache ID                        | Target               |
-| ------------- | ------------------------------- | -------------------- |
-| Debian/Ubuntu | `common-tools-debian-apt-cache` | `/var/cache/apt`     |
-| Debian/Ubuntu | `common-tools-debian-apt-lists` | `/var/lib/apt/lists` |
-| Alpine        | `common-tools-alpine-apk-cache` | `/var/cache/apk`     |
-| RHEL/UBI      | `common-tools-rhel-dnf-cache`   | `/var/cache/dnf`     |
+| Platform                            | Cache ID                        | Target               |
+| ----------------------------------- | ------------------------------- | -------------------- |
+| Debian/Ubuntu                       | `common-tools-debian-apt-cache` | `/var/cache/apt`     |
+| Debian/Ubuntu                       | `common-tools-debian-apt-lists` | `/var/lib/apt/lists` |
+| Alpine                              | `common-tools-alpine-apk-cache` | `/var/cache/apk`     |
+| RHEL/UBI                            | `common-tools-rhel-dnf-cache`   | `/var/cache/dnf`     |
+| Ubuntu Noble (Kasm upstream images) | `kasm-base-apt-cache`           | `/var/cache/apt`     |
+| Ubuntu Noble (Kasm upstream images) | `kasm-base-apt-lists`           | `/var/lib/apt/lists` |
 
 ### Cache Mount Pattern
 
@@ -289,15 +402,75 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \
-    apt-get install --no-install-recommends --assume-yes <packages>;
+    apt-get install --no-install-recommends --assume-yes <packages>
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 ```
 
 ### Cache ID Rule
 
-**Never create service-specific cache IDs for package managers.** Always use `common-tools-{platform}-{package-manager}-cache`.
+**Do not create per-leaf package-manager cache IDs.** Use one shared pool per
+base family:
 
-- Wrong: `id=myservice-apt-cache`
-- Correct: `id=common-tools-debian-apt-cache`
+- Debian-family stages: `common-tools-debian-apt-*`
+- Ubuntu Noble Kasm family stages: `kasm-base-apt-*` (only when the runtime base
+  is Ubuntu Noble; do not use for Debian-based `kasm-base`)
+
+If you introduce a second Debian/Ubuntu family that needs isolation (for example
+an Ubuntu Noble base distinct from the default Debian pool), add a dedicated
+shared pool here. Do not invent per-leaf cache IDs.
+
+## Direct Download Cache Mounts (curl/wget)
+
+Any pinned artifact fetched by curl/wget during the build (Node tarballs,
+Firefox tarballs, KasmVNC packages, and similar) must be cached explicitly.
+
+Rules:
+
+- Download into a cache-mounted directory and reuse the cached file when present.
+- Cache identity must not mix versions or architectures. Include a pin and arch
+  in the cache mount id, or encode them in the cached filename or subdirectory.
+- Default to `sharing=locked` unless the cache is proven safe for concurrent
+  writers.
+- Do not download into `/tmp` unless `/tmp` is the cache mount target for that
+  `RUN`. Many images delete `/tmp` in later cleanup steps.
+- If the artifact must be baked into the image at a final runtime path, do not
+  mount the cache at that final path. Mount a download cache directory and copy
+  the cached artifact into the final path so it is stored in the image layer.
+- Prefer explicit pins (version args) over `CACHEBUST` for artifact caches.
+  `CACHEBUST` is computed from git sources by default and does not necessarily
+  change when an unrelated pinned tarball changes.
+
+Pattern (curl to a cached file, install from it):
+
+```dockerfile
+ARG FOO_VERSION="1.2.3"
+ARG TARGETARCH
+
+RUN --mount=type=cache,id=service-foo-dl-${FOO_VERSION}-${TARGETARCH},target=/var/cache/service-foo,sharing=locked \
+    set -eu; \
+    file="/var/cache/service-foo/foo-${FOO_VERSION}-${TARGETARCH}.tar.gz"; \
+    if [ ! -s "$file" ]; then \
+      curl -fsSL --retry 3 --retry-delay 2 -o "$file" "https://example.com/foo-${FOO_VERSION}-${TARGETARCH}.tar.gz"; \
+    fi; \
+    tar -xzf "$file" -C /usr/local
+```
+
+## Language and Tool Caches
+
+Use BuildKit cache mounts for language package managers and toolchains that do
+network work during builds. Keep ids deterministic and service-scoped unless a
+shared pool is explicitly documented (like apt/apk/dnf above).
+
+| Ecosystem | Typical cache id pattern | Target | Sharing |
+| --- | --- | --- | --- |
+| Go modules | `<service>-go-mod-cache` | `/go/pkg/mod` | `locked` |
+| Go build cache | `<service>-go-build-cache` | `/root/.cache/go-build` | `locked` |
+| npm | `<service>-npm-cache` | `/root/.npm` | `locked` |
+| pnpm store | `<service>-pnpm-store` | `/root/.local/share/pnpm/store` | `locked` |
+| pnpm cache | `<service>-pnpm-cache` | `/root/.cache/pnpm` | `locked` |
+| Composer | `<service>-composer-cache` | `/root/.composer/cache` | `locked` |
+| PECL downloads | `<service>-pecl-downloads` | `/tmp/pear/download` | `locked` |
 
 ## Verification Checklist
 
@@ -308,10 +481,13 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
 - [ ] Multi-stage boundaries enforced (no stray build tools in runtime image).
 - [ ] `COPY` instructions reference files produced in previous stages, not host paths.
 - [ ] Optional TLS helper scripts (`./scripts/tls/copy-tls.nu`) only copied when TLS is enabled.
+- [ ] If `tls.enabled=true`, the service declares a direct `common-tools`
+      dependency for the platform being built (transitive deps do not satisfy TLS
+      validation).
 
 ## References
 
-- `docs/source-build-args.md` – generated build args and naming conventions
-- `docs/guides/service-setup.md` – step-by-step Dockerfile scaffolding
-- `docs/concepts/build-system.md` – cache busting, arg priority, and CI restrictions
-- `docs/guides/nushell-development.md` – accompanying rules for Nushell scripts used by the build system
+- `docs/source-build-args.md` - generated build args and naming conventions
+- `docs/guides/service-setup.md` - step-by-step Dockerfile scaffolding
+- `docs/concepts/build-system.md` - cache busting, arg priority, and CI restrictions
+- `docs/guides/nushell-development.md` - accompanying rules for Nushell scripts used by the build system

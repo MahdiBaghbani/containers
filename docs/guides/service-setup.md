@@ -249,7 +249,7 @@ WORKDIR /revad-git
 2. **Check MODE** - Use `REVAD_MODE="local"` to detect local source mode
 3. **Conditional logic** - Use shell `if` statement to choose between `cp` (local) or `git clone` (Git)
 
-**Why the bind mount matters:** local source directories are prepared inside the service context (for example `.build-sources/revad`). Docker build stages cannot see the host filesystem directly, so you must re-mount the prepared path inside the `RUN` step. Skipping the bind mount causes `cp` to fail with “No such file or directory,” which was the root cause of recent local-source build failures.
+**Why the bind mount matters:** local source directories are prepared inside the service context (for example `.build-sources/revad`). Docker build stages cannot see the host filesystem directly, so you must re-mount the prepared path inside the `RUN` step. Skipping the bind mount causes `cp` to fail with "No such file or directory," which was the root cause of recent local-source build failures.
 
 ### Example with Cache Mount
 
