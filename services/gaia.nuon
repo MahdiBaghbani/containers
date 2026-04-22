@@ -2,6 +2,21 @@
   "name": "gaia",
   "context": "services/gaia",
   "dockerfile": "services/gaia/Dockerfile",
+  "external_images": {
+    "build": {
+      "name": "golang",
+      "build_arg": "BASE_BUILD_IMAGE"
+    },
+    "runtime": {
+      "name": "debian",
+      "build_arg": "BASE_RUNTIME_IMAGE"
+    }
+  },
+  "dependencies": {
+    "common-tools": {
+      "build_arg": "COMMON_TOOLS_IMAGE"
+    }
+  },
   "labels": {
     "org.opencontainers.image.title": "Gaia Build Tool",
     "org.opencontainers.image.description": "Build tool for creating custom Reva binaries with plugins",

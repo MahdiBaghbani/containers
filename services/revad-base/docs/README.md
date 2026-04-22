@@ -10,7 +10,7 @@ This directory contains generic Reva service documentation that applies to all p
 - **[Partial Config Schema](partial-config-schema.md)** - Partial configuration file schema and reference
 - **[Container Modes](container-modes.md)** - Container mode system (`REVAD_CONTAINER_MODE`)
 - **[Initialization](initialization.md)** - Initialization scripts and runtime configuration processing
-- **[Development Workflow](development-workflow.md)** - Development → production workflow and volume strategy
+- **[Development Workflow](development-workflow.md)** - Development -> production workflow and volume strategy
 
 ## Platform-Specific Documentation
 

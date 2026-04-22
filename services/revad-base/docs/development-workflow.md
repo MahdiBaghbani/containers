@@ -1,4 +1,4 @@
-# Development → Production Workflow
+# Development -> Production Workflow
 
 This document describes the workflow for using development images to generate configurations and production images to run services.
 
@@ -6,7 +6,7 @@ This document describes the workflow for using development images to generate co
 
 The `revad-base` service uses a two-stage workflow:
 
-1. **Development Images**: Process configuration templates → write to volumes
+1. **Development Images**: Process configuration templates -> write to volumes
 2. **Production Images**: Read pre-processed configs from volumes (no processing)
 
 ## Development Images
@@ -24,9 +24,9 @@ Development images contain:
 
 When a development container starts:
 
-1. **Entrypoint**: `entrypoint.sh` → `entrypoint-init.nu`
+1. **Entrypoint**: `entrypoint.sh` -> `entrypoint-init.nu`
 2. **Initialization**: Scripts process configs:
-   - Copy templates from `/configs/revad` (image) → `/etc/revad` (volume)
+   - Copy templates from `/configs/revad` (image) -> `/etc/revad` (volume)
    - Process placeholders using environment variables
    - Write processed configs to `/etc/revad` (volume)
 3. **Service Start**: Start Reva daemon with processed config
@@ -44,8 +44,8 @@ volumes:
 **First Run:**
 
 - Volume is empty
-- Scripts copy templates from image → volume
-- Scripts process placeholders → write processed configs to volume
+- Scripts copy templates from image -> volume
+- Scripts process placeholders -> write processed configs to volume
 
 **Subsequent Runs:**
 
@@ -168,9 +168,9 @@ Production containers:
 
 Volumes persist between container runs:
 
-- **Development → Development**: Configs persist, scripts update placeholders
-- **Development → Production**: Configs persist, production reads them
-- **Production → Production**: Configs persist, production reads them
+- **Development -> Development**: Configs persist, scripts update placeholders
+- **Development -> Production**: Configs persist, production reads them
+- **Production -> Production**: Configs persist, production reads them
 
 ## First-Run Requirement
 
@@ -206,7 +206,7 @@ To update configuration:
    docker-compose restart gateway
    ```
 
-3. **Scripts process placeholders** → update configs in volume
+3. **Scripts process placeholders** -> update configs in volume
 4. **Switch to production** (if using production images)
 
 ### Manual Configuration Edits
