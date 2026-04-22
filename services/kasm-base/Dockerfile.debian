@@ -108,14 +108,17 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
       bash \
       ca-certificates \
       curl \
+      dnsutils \
       dumb-init \
       fonts-dejavu \
       fonts-noto-color-emoji \
       fonts-noto-core \
       iproute2 \
+      iputils-ping \
       openssl \
       procps \
       sudo \
+      traceroute \
       xdg-utils
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
