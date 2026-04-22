@@ -306,5 +306,5 @@ For complete documentation on partial configs:
 ## Related Documentation
 
 - [Initialization](initialization.md) - Initialization process and config processing
-- [Development Workflow](development-workflow.md) - Development → production workflow
+- [Development Workflow](development-workflow.md) - Development -> production workflow
 - [Container Modes](container-modes.md) - Container mode system

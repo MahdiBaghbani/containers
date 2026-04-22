@@ -43,6 +43,8 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     libsqlite3-dev \
     binutils;
 
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /
 
 ARG REVAD_URL="https://github.com/cs3org/reva"
@@ -75,6 +77,7 @@ RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=loc
     go mod download; \
     fi
 RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=revad-base-go-build-cache,target=/root/.cache/go-build,sharing=locked \
     if [ -n "$GO_BUILD_GOPROXY" ]; then \
     GOPROXY="$GO_BUILD_GOPROXY" make revad-static; \
     else \

@@ -104,9 +104,6 @@ RUN nu --version || (echo "Nushell verification failed" && exit 1) \
     && make --version || (echo "make verification failed" && exit 1) \
     && bash --version || (echo "bash verification failed" && exit 1)
 
-ARG TLS_ENABLED="false"
-ARG TLS_CA_NAME=""
-
 COPY ./tls/certificate-authority/ /tmp/tls-ca-source/
 RUN if [ "$TLS_ENABLED" = "true" ]; then \
     if [ -z "$TLS_CA_NAME" ]; then \

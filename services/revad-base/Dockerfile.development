@@ -82,6 +82,7 @@ RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=loc
     go mod download; \
     fi
 RUN --mount=type=cache,id=revad-base-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=revad-base-go-build-cache,target=/root/.cache/go-build,sharing=locked \
     if [ -n "$GO_BUILD_GOPROXY" ]; then \
     GOPROXY="$GO_BUILD_GOPROXY" make revad-static; \
     else \

@@ -88,7 +88,7 @@ The initialization scripts use a copy-on-write pattern:
 
 **Why this pattern:**
 
-1. **Volume Mounting**: `/etc/revad` is mounted from host → container
+1. **Volume Mounting**: `/etc/revad` is mounted from host -> container
 2. **Source Preservation**: `/configs/revad` (image) stays untouched
 3. **User Edits**: Users can edit files in volume, scripts won't overwrite them
 4. **Placeholder Updates**: Scripts always process placeholders (updates env var changes)
@@ -111,10 +111,10 @@ process_placeholders $config_path $placeholder_map
 
 ### Development Images
 
-- **Process configs**: Scripts copy templates → process placeholders → write to volume
-- **First run**: Volume empty → scripts populate it
-- **Subsequent runs**: Volume has configs → scripts use them, process placeholders
-- **User edits**: Users can edit volume configs → scripts preserve edits, update placeholders
+- **Process configs**: Scripts copy templates -> process placeholders -> write to volume
+- **First run**: Volume empty -> scripts populate it
+- **Subsequent runs**: Volume has configs -> scripts use them, process placeholders
+- **User edits**: Users can edit volume configs -> scripts preserve edits, update placeholders
 
 ### Production Images
 
@@ -157,4 +157,4 @@ Most variables have defaults defined in initialization scripts. See [Configurati
 
 - [Container Modes](container-modes.md) - Container mode system
 - [Configuration](configuration.md) - Configuration and placeholder system
-- [Development Workflow](development-workflow.md) - Development → production workflow
+- [Development Workflow](development-workflow.md) - Development -> production workflow

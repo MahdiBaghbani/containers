@@ -23,7 +23,7 @@ For generic Reva service documentation (service descriptions, placeholder system
 - **[Reva Configuration](../../revad-base/docs/configuration.md)** - Configuration system and placeholder processing
 - **[Reva Initialization](../../revad-base/docs/initialization.md)** - Initialization scripts and process
 - **[Reva Container Modes](../../revad-base/docs/container-modes.md)** - Container mode system
-- **[Reva Development Workflow](../../revad-base/docs/development-workflow.md)** - Development → production workflow
+- **[Reva Development Workflow](../../revad-base/docs/development-workflow.md)** - Development -> production workflow
 
 ## Quick Reference
 

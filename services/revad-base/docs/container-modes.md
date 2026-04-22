@@ -31,11 +31,11 @@ The entrypoint script validates the mode and routes to the appropriate initializ
 
 Each mode uses a specific configuration file:
 
-- `gateway` → `gateway.toml`
-- `dataprovider-{type}` → `dataprovider-{type}.toml`
-- `authprovider-{type}` → `authprovider-{type}.toml`
-- `shareproviders` → `shareproviders.toml`
-- `groupuserproviders` → `groupuserproviders.toml`
+- `gateway` -> `gateway.toml`
+- `dataprovider-{type}` -> `dataprovider-{type}.toml`
+- `authprovider-{type}` -> `authprovider-{type}.toml`
+- `shareproviders` -> `shareproviders.toml`
+- `groupuserproviders` -> `groupuserproviders.toml`
 
 Configuration files are located in `/configs/revad` (image) and processed to `/etc/revad` (runtime) during initialization.
 

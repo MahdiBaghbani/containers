@@ -14,26 +14,18 @@
     },
     "external_images": {
       "build": {
-        "name": "node",
-        "tag": "20-trixie-slim",
-        "build_arg": "BASE_BUILD_IMAGE"
+        "tag": "20-trixie-slim"
       },
       "runtime": {
-        "name": "nginx",
-        "tag": "1.29-alpine3.22-slim",
-        "build_arg": "BASE_RUNTIME_IMAGE"
+        "tag": "1.29-alpine3.22-slim"
       }
     },
     "dependencies": {
       "common-tools-builder": {
-        "service": "common-tools",
-        "version": "v1.0.0-debian",
-        "build_arg": "COMMON_TOOLS_BUILDER_IMAGE"
+        "version": "v1.0.0-debian"
       },
       "common-tools-runtime": {
-        "service": "common-tools",
-        "version": "v1.0.0-alpine",
-        "build_arg": "COMMON_TOOLS_RUNTIME_IMAGE"
+        "version": "v1.0.0-alpine"
       }
     },
     "build_args": {

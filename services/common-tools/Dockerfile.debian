@@ -83,6 +83,8 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     bash \
     binutils;
 
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Copy UPX and verify
 COPY --from=upx-build /src/upx/build/upx /usr/local/bin/upx
 RUN upx --version || (echo "UPX verification failed" && exit 1)
@@ -111,9 +113,6 @@ RUN nu --version || (echo "Nushell verification failed" && exit 1) \
     && git --version || (echo "git verification failed" && exit 1) \
     && make --version || (echo "make verification failed" && exit 1) \
     && bash --version || (echo "bash verification failed" && exit 1)
-
-ARG TLS_ENABLED="false"
-ARG TLS_CA_NAME=""
 
 COPY ./tls/certificate-authority/ /tmp/tls-ca-source/
 RUN if [ "$TLS_ENABLED" = "true" ]; then \

@@ -2,6 +2,17 @@
   "name": "idp",
   "context": "services/idp",
   "dockerfile": "services/idp/Dockerfile",
+  "external_images": {
+    "runtime": {
+      "name": "quay.io/keycloak/keycloak",
+      "build_arg": "KEYCLOAK_BASE_IMAGE"
+    }
+  },
+  "dependencies": {
+    "common-tools": {
+      "build_arg": "COMMON_TOOLS_IMAGE"
+    }
+  },
   "labels": {
     "org.opencloudmesh.service": "idp",
     "org.opencontainers.image.title": "Open Cloud Mesh Keycloak IdP Image",

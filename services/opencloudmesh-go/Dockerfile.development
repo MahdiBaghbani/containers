@@ -82,6 +82,7 @@ RUN --mount=type=cache,id=opencloudmesh-go-go-mod-cache,target=/go/pkg/mod,shari
     go mod download; \
     fi
 RUN --mount=type=cache,id=opencloudmesh-go-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=opencloudmesh-go-go-build-cache,target=/root/.cache/go-build,sharing=locked \
     if [ -n "$GO_BUILD_GOPROXY" ]; then \
     GOPROXY="$GO_BUILD_GOPROXY" make build; \
     else \

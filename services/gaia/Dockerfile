@@ -71,6 +71,7 @@ RUN --mount=type=cache,id=gaia-go-mod-cache,target=/go/pkg/mod,sharing=locked \
   go mod download; \
   fi
 RUN --mount=type=cache,id=gaia-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+  --mount=type=cache,id=gaia-go-build-cache,target=/root/.cache/go-build,sharing=locked \
   if [ -n "$GO_BUILD_GOPROXY" ]; then \
   GOPROXY="$GO_BUILD_GOPROXY" go build -o /gaia .; \
   else \

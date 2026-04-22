@@ -149,11 +149,11 @@ The gateway container runs multiple services:
 
 Services communicate via gRPC:
 
-- Gateway → Share Providers
-- Gateway → User/Group Providers
-- Gateway → Auth Providers
-- Gateway → Dataproviders
-- Auth Providers → External IdP (for OIDC)
+- Gateway -> Share Providers
+- Gateway -> User/Group Providers
+- Gateway -> Auth Providers
+- Gateway -> Dataproviders
+- Auth Providers -> External IdP (for OIDC)
 
 ## Related Documentation
 

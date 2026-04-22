@@ -67,6 +67,9 @@ ARG WEB_REF=cernbox
 ARG WEB_PATH=""
 ARG WEB_MODE=""
 ARG CACHEBUST="default"
+ARG WEB_EXTENSIONS_URL=https://github.com/cernbox/web-extensions
+ARG WEB_EXTENSIONS_REF=main
+ARG PNPM_RETRY_COUNT="10"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=cernbox-web-web-git-${CACHEBUST:-${WEB_REF}},target=/src/web-git-cache,sharing=shared \
@@ -105,15 +108,20 @@ ENV DOCUMENTATION_URL="https://cernbox.docs.cern.ch/web/#desktop-requirements"
 
 # Install dependencies with BuildKit cache mount.
 # This is needed for persistence across builds.
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm \
+RUN --mount=type=cache,id=cernbox-web-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=cernbox-web-pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
     pnpm install
+
+# Got this from the cernbox/web-release repository.
+# https://github.com/cernbox/web-release/blob/af019b67c31424c096a1a4398ae0d9874b6c304f/.github/workflows/build.yml#L28-L36
+ENV TITLE=CERNBox
+ENV SOURCE_MAP=true
+ENV REQUIRE_TIMEOUT=20
+ENV DOCUMENTATION_URL="https://cernbox.docs.cern.ch/web/#desktop-requirements"
+
 RUN make dist
 
 WORKDIR /build
-
-ARG WEB_EXTENSIONS_URL=https://github.com/cernbox/web-extensions
-ARG WEB_EXTENSIONS_REF=main
 
 RUN --mount=type=cache,id=cernbox-web-web-extensions-git-${CACHEBUST:-${WEB_EXTENSIONS_REF}},target=/src/web-extensions-git-cache,sharing=shared \
     mkdir -p /src/web-extensions-git-cache && \
@@ -128,9 +136,8 @@ WORKDIR /build/web-extensions
 COPY --chmod=755 ./scripts/build-extensions.nu /usr/local/bin/build-extensions.nu
 
 # Build all packages with retry logic and BuildKit cache mount
-ARG PNPM_RETRY_COUNT="10"
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm \
+RUN --mount=type=cache,id=cernbox-web-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=cernbox-web-pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
     nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_RETRY_COUNT
 
 ###############################
