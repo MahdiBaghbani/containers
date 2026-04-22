@@ -169,6 +169,14 @@ volumes/
 # This directory is ignored by git but must be visible to Docker build contexts
 .build-sources/
 
+# Service-local CA mirrors
+# The shared CA SSOT lives at: tls/certificate-authority/
+services/*/tls/certificate-authority/
+
+# Intermediate OpenSSL artifacts (generated during certificate creation)
+services/*/tls/certificates/*.csr
+services/*/tls/certificates/*.cnf
+
 # Environment files with secrets (keep .env.template if needed)
 examples/**/.envbug.md
 bug.md
