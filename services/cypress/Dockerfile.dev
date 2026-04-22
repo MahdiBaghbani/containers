@@ -1,0 +1,133 @@
+# syntax=docker/dockerfile:1.7
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG KASM_BASE_IMAGE="kasm-base:v1.0.0-debian"
+
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools
+
+FROM ${KASM_BASE_IMAGE}
+
+ARG NODE_VERSION="24.15.0"
+ARG CHROME_VERSION="147.0.7727.101-1"
+ARG CYPRESS_VERSION="15.14.1"
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+
+USER root
+
+# Make Node-based helpers (plugins, tasks) trust the DockyPody CA.
+ENV NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+
+# Copy internal CA bundle from common-tools (always copy, conditionally use).
+RUN mkdir -p /etc/ssl/certs /tmp
+COPY --from=common-tools /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
+RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
+      mkdir -p /etc/ssl/certs && \
+      cp /tmp/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt && \
+      echo "CA bundle copied from common-tools"; \
+    else \
+      echo "Internal CA bundle disabled (TLS disabled or cert-only mode)"; \
+    fi && \
+    rm -f /tmp/ca-bundle.crt
+
+# Install pinned Node + Chrome + Cypress in the Kasm workspace.
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    ca-certificates \
+    curl \
+    xz-utils \
+    libnss3 \
+    libgbm1 \
+    libgtk-3-0 \
+    libxss1 \
+    libasound2
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN --mount=type=cache,id=cypress-dl-node-v1-${NODE_VERSION}-linux-x64,target=/var/cache/dockypody/node,sharing=locked \
+    if command -v node >/dev/null 2>&1; then rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx || true; fi && \
+    node_tar="/var/cache/dockypody/node/node-v${NODE_VERSION}-linux-x64.tar.xz" && \
+    if [ ! -s "$node_tar" ]; then \
+      curl -fsSL --retry 3 --retry-delay 2 -o "$node_tar" \
+        "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"; \
+    fi && \
+    tar -xJf "$node_tar" -C /usr/local --strip-components=1 && \
+    node --version | grep -F "v${NODE_VERSION}" >/dev/null 2>&1 || (echo "Node install failed" && exit 1) && \
+    npm --version >/dev/null
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    --mount=type=cache,id=cypress-dl-chrome-v1-${CHROME_VERSION}-amd64,target=/var/cache/dockypody/chrome,sharing=locked \
+    set -eux; \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    chrome_deb="/var/cache/dockypody/chrome/google-chrome-stable_${CHROME_VERSION}_amd64.deb"; \
+    if [ ! -s "$chrome_deb" ]; then \
+      tmp="${chrome_deb}.tmp"; \
+      curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" \
+        "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${CHROME_VERSION}_amd64.deb"; \
+      mv "$tmp" "$chrome_deb"; \
+    fi; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends --assume-yes "$chrome_deb"; \
+    google-chrome --version | grep -F "${CHROME_VERSION%-*}" >/dev/null
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN --mount=type=cache,id=cypress-npm-cache,target=/root/.npm,sharing=locked \
+    --mount=type=cache,id=cypress-dl-cypress-v1-${CYPRESS_VERSION}-linux-x64,target=/var/cache/dockypody/cypress,sharing=locked \
+    set -eux; \
+    export CYPRESS_CACHE_FOLDER="/var/cache/dockypody/cypress"; \
+    npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}"; \
+    cypress --version | grep -F "${CYPRESS_VERSION}" >/dev/null 2>&1 || \
+      (echo "Cypress version mismatch after install (expected ${CYPRESS_VERSION})" && exit 1); \
+    mkdir -p /home/ocm-user/.cache/Cypress; \
+    cp -a /var/cache/dockypody/cypress/. /home/ocm-user/.cache/Cypress/; \
+    chown -R 1000:0 /home/ocm-user/.cache/Cypress; \
+    chmod -R g=u /home/ocm-user/.cache/Cypress
+
+COPY --chmod=755 ./scripts/custom_startup.sh /dockerstartup/custom_startup.sh
+COPY --chmod=755 ./scripts/cypress-autostart.nu /dockerstartup/cypress-autostart.nu
+COPY ./assets/cypress.desktop /tmp/cypress.desktop
+
+RUN install -D -m 0644 /tmp/cypress.desktop /usr/share/applications/cypress.desktop && \
+    install -D -m 0755 -o 1000 -g 0 /tmp/cypress.desktop /home/kasm-default-profile/Desktop/cypress.desktop && \
+    rm -f /tmp/cypress.desktop
+
+RUN mkdir -p /home/ocm-user/.cache /home/ocm-user/.config /home/ocm-user/.local /home/ocm-user/.npm && \
+    chown 1000:0 /home/ocm-user/.cache && \
+    chmod g=u /home/ocm-user/.cache && \
+    chown -R 1000:0 /home/ocm-user/.config /home/ocm-user/.local /home/ocm-user/.npm && \
+    chmod -R g=u /home/ocm-user/.config /home/ocm-user/.local /home/ocm-user/.npm
+
+ENV CYPRESS_CACHE_FOLDER="/home/ocm-user/.cache/Cypress"
+ENV XDG_CACHE_HOME="/home/ocm-user/.cache"
+ENV OCM_DEFAULT_WEB_BROWSER="chrome"
+ENV OCM_CYPRESS_MAXIMIZE="true"
+
+USER 1000

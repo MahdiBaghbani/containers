@@ -1,0 +1,12 @@
+{
+  "name": "cypress",
+  "context": "services/cypress",
+  "labels": {
+    "org.opencontainers.image.title": "Browser Family Cypress Image",
+    "org.opencontainers.image.description": "Cypress browser image for CI and local browser-family workflows"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-only"
+  }
+}

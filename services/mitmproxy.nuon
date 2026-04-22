@@ -1,0 +1,22 @@
+{
+  "name": "mitmproxy",
+  "context": "services/mitmproxy",
+  "dockerfile": "services/mitmproxy/Dockerfile",
+  "dependencies": {
+    "common-tools": {
+      "build_arg": "COMMON_TOOLS_IMAGE"
+    }
+  },
+  "labels": {
+    "org.opencontainers.image.title": "Browser Family Mitmproxy Image",
+    "org.opencontainers.image.description": "Internal MITM proxy image for browser-family traffic capture"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "mitmproxy",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": ["DNS:mitmproxy.docker"]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "default": "ci",
+  "platforms": [
+    {
+      "name": "ci",
+      "dockerfile": "services/cypress/Dockerfile.ci",
+      "external_images": {
+        "runtime": {
+          "name": "cypress/factory",
+          "build_arg": "CYPRESS_FACTORY_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    },
+    {
+      "name": "dev",
+      "dockerfile": "services/cypress/Dockerfile.dev",
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        },
+        "kasm-base": {
+          "service": "kasm-base",
+          "build_arg": "KASM_BASE_IMAGE"
+        }
+      }
+    }
+  ]
+}

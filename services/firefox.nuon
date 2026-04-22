@@ -1,0 +1,17 @@
+{
+  "name": "firefox",
+  "context": "services/firefox",
+  "dockerfile": "services/firefox/Dockerfile",
+  "dependencies": {
+    "kasm-base": {
+      "build_arg": "KASM_BASE_IMAGE"
+    }
+  },
+  "labels": {
+    "org.opencontainers.image.title": "Browser Family Firefox Image",
+    "org.opencontainers.image.description": "Firefox browser image for browser-family workflows"
+  },
+  "tls": {
+    "enabled": false
+  }
+}

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=Cypress
+Comment=Open Cypress test runner
+Exec=/usr/local/bin/nu /dockerstartup/cypress-autostart.nu
+Terminal=false
+Type=Application
+Icon=google-chrome
+Categories=Development;Testing;
+StartupNotify=true

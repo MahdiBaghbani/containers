@@ -113,6 +113,7 @@ logs/
 # Temporary files
 tmp/
 temp/
+.test/
 .repos/
 debug/
 .debug/
@@ -128,6 +129,7 @@ venv/
 ENV/
 build/
 !scripts/lib/build/
+!services/kasm-base/scripts/build/
 develop-eggs/
 dist/
 downloads/
