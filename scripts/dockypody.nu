@@ -36,7 +36,7 @@ def show-help [] {
   print "  build              Build container images"
   print "  test               Run test suites"
   print "  validate           Validate configurations"
-  print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean, sync)"
+  print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean)"
   print "  ci <subcommand>    CI helper operations (list-deps, load-deps, images, etc.)"
   print "  docs <subcommand>  Documentation tools (lint)"
   print ""
@@ -87,7 +87,7 @@ def main [
   --manifests-only,
   # TLS/CI flags
   --filter: string = "",
-  --force-copy-ca,
+  --service-ca-only,
   --skip-shared-ca,
   --keep-empty-dirs,
   --force,
@@ -161,7 +161,7 @@ def main [
       let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
       let filter_list = if ($filter | str length) > 0 { $filter | split row "," } else { [] }
       let service_list = if ($service | str length) > 0 { $service | split row "," } else { [] }
-      run-tls-command $subcmd $service_list $filter_list $force_copy_ca $skip_shared_ca $keep_empty_dirs $force $dry_run $verbose
+      run-tls-command $subcmd $service_list $filter_list $service_ca_only $skip_shared_ca $keep_empty_dirs $force $dry_run $verbose
     }
     "ci" => {
       # Normalize help flags to "help" subcommand - ci-cli handles it internally
@@ -208,7 +208,7 @@ def run-tls-command [
   subcommand: string,
   service_list: list<string>,
   filter_list: list<string>,
-  force_copy_ca: bool,
+  service_ca_only: bool,
   skip_shared_ca: bool,
   keep_empty_dirs: bool,
   force: bool,
@@ -219,7 +219,7 @@ def run-tls-command [
   tls-cli $subcommand {
     service_list: $service_list,
     filter_list: $filter_list,
-    force_copy_ca: $force_copy_ca,
+    service_ca_only: $service_ca_only,
     skip_shared_ca: $skip_shared_ca,
     keep_empty_dirs: $keep_empty_dirs,
     force: $force,

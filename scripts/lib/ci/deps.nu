@@ -20,15 +20,67 @@
 
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest]
 
-# Extract service names from a dependencies record
-# Returns list of service names (uses dep.service if present, otherwise the key)
-def extract-dep-services [deps: record] {
+# Merge dep entries from a dependencies record into a dep_id -> service_name mapping.
+# Errors if the same dep_id maps to two different service names across callers.
+def collect-deps-into-mapping [mapping: record, deps: record, service: string] {
+    if ($deps | is-empty) {
+        return $mapping
+    }
+    mut m = $mapping
+    for dep_id in ($deps | columns) {
+        let dep = ($deps | get $dep_id)
+        let resolved = (try { $dep.service } catch { $dep_id })
+        let existing = ($m | get --optional $dep_id)
+        if $existing != null and $existing != $resolved {
+            error make {
+                msg: $"($service): dep_id '($dep_id)' maps to '($existing)' and '($resolved)' in different manifests"
+            }
+        }
+        $m = ($m | upsert $dep_id $resolved)
+    }
+    $m
+}
+
+# Build a dep_id -> service_name mapping from infrastructure manifests.
+# Uses platforms.nuon (defaults + each platform entry) when it exists,
+# otherwise falls back to the base service .nuon dependencies record.
+def build-dep-id-mapping [service: string] {
+    let platforms_path = $"services/($service)/platforms.nuon"
+    mut mapping = {}
+    if ($platforms_path | path exists) {
+        let pm = (open $platforms_path)
+        let defaults_deps = (try { $pm.defaults.dependencies } catch { {} })
+        $mapping = (collect-deps-into-mapping $mapping $defaults_deps $service)
+        let platforms = (try { $pm.platforms } catch { [] })
+        for platform in $platforms {
+            let pdeps = (try { $platform.dependencies } catch { {} })
+            $mapping = (collect-deps-into-mapping $mapping $pdeps $service)
+        }
+    } else {
+        let service_path = $"services/($service).nuon"
+        if ($service_path | path exists) {
+            let svc = (open $service_path)
+            let deps = (try { $svc.dependencies } catch { {} })
+            $mapping = (collect-deps-into-mapping $mapping $deps $service)
+        }
+    }
+    $mapping
+}
+
+# Map dep_id keys from a dependencies record to resolved service names.
+# Errors if a dep_id has no entry in the mapping (undefined in infra manifests).
+def map-dep-ids-to-services [deps: record, mapping: record, service: string] {
     if ($deps | is-empty) {
         return []
     }
-    $deps | columns | each {|dep_key|
-        let dep = ($deps | get $dep_key)
-        try { $dep.service } catch { $dep_key }
+    $deps | columns | each {|dep_id|
+        let resolved = ($mapping | get --optional $dep_id)
+        if $resolved == null {
+            error make {
+                msg: $"($service): dep_id '($dep_id)' in versions.nuon is not defined in infra manifests"
+            }
+        }
+        $resolved
     }
 }
 
@@ -43,11 +95,12 @@ def merge-services [acc: list, services: list] {
     }
 }
 
-# Get direct dependency service names for a service (non-recursive)
-# Directly parses versions.nuon to extract dependency service names from:
-# - defaults.dependencies
-# - version overrides.dependencies
-# - version overrides.platforms.{platform}.dependencies
+# Get direct dependency service names for a service (non-recursive).
+# Resolves dep_ids from versions.nuon to actual service names via infra manifests:
+# - single-platform: services/<service>.nuon dependencies
+# - multi-platform:  services/<service>/platforms.nuon defaults + per-platform deps
+# Scans versions.nuon at defaults.dependencies, each version overrides.dependencies,
+# and each version overrides.platforms.{platform}.dependencies.
 # Returns deduplicated list preserving discovery order.
 export def get-direct-dependency-services [service: string] {
     if not (check-versions-manifest-exists $service) {
@@ -55,11 +108,12 @@ export def get-direct-dependency-services [service: string] {
     }
 
     let manifest = (load-versions-manifest $service)
+    let mapping = (build-dep-id-mapping $service)
     mut all_deps = []
 
     # 1. Extract from defaults.dependencies
     let default_deps = (try { $manifest.defaults.dependencies } catch { {} })
-    let default_services = (extract-dep-services $default_deps)
+    let default_services = (map-dep-ids-to-services $default_deps $mapping $service)
     $all_deps = (merge-services $all_deps $default_services)
 
     # 2. Extract from each version's overrides
@@ -67,7 +121,7 @@ export def get-direct-dependency-services [service: string] {
     for version in $versions {
         # Version-level overrides.dependencies
         let version_deps = (try { $version.overrides.dependencies } catch { {} })
-        let version_services = (extract-dep-services $version_deps)
+        let version_services = (map-dep-ids-to-services $version_deps $mapping $service)
         $all_deps = (merge-services $all_deps $version_services)
 
         # Platform-specific overrides.platforms.{platform}.dependencies
@@ -76,7 +130,7 @@ export def get-direct-dependency-services [service: string] {
             for platform_name in ($platforms | columns) {
                 let platform_cfg = ($platforms | get $platform_name)
                 let platform_deps = (try { $platform_cfg.dependencies } catch { {} })
-                let platform_services = (extract-dep-services $platform_deps)
+                let platform_services = (map-dep-ids-to-services $platform_deps $mapping $service)
                 $all_deps = (merge-services $all_deps $platform_services)
             }
         }

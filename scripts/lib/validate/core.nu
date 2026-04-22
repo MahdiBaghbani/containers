@@ -1077,6 +1077,50 @@ export def validate-manifest-file [
   validate-version-manifest $manifest $platforms
 }
 
+# Validate that all Dockerfile paths referenced in a service config/platforms exist on disk
+export def validate-dockerfile-paths [
+  service: string
+] {
+  use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest]
+  use ../core/repo.nu [get-repo-root]
+
+  mut errors = []
+  let repo_root = (get-repo-root)
+  let has_platforms = (check-platforms-manifest-exists $service)
+
+  if $has_platforms {
+    let platforms_result = (try {
+      load-platforms-manifest $service
+    } catch { |err|
+      return {valid: false, errors: [$"Could not load platforms manifest for '($service)': ($err.msg)"]}
+    })
+    for platform in $platforms_result.platforms {
+      let df = (try { $platform.dockerfile } catch { "" })
+      if ($df | str length) > 0 {
+        if not (($repo_root | path join $df) | path exists) {
+          $errors = ($errors | append $"Service '($service)' platform '($platform.name)': Dockerfile not found: ($df)")
+        }
+      }
+    }
+  } else {
+    let cfg_path = $"services/($service).nuon"
+    let config = (try { open $cfg_path } catch { null })
+    if $config != null {
+      let df = (try { $config.dockerfile } catch { "" })
+      if ($df | str length) > 0 {
+        if not (($repo_root | path join $df) | path exists) {
+          $errors = ($errors | append $"Service '($service)': Dockerfile not found: ($df)")
+        }
+      }
+    }
+  }
+
+  {
+    valid: ($errors | is-empty),
+    errors: $errors
+  }
+}
+
 # Validate that a service has both config AND manifest (complete validation)
 export def validate-service-complete [
   service: string
@@ -1111,6 +1155,12 @@ export def validate-service-complete [
     if not $platforms_result.valid {
       $all_errors = ($all_errors | append $platforms_result.errors)
     }
+  }
+
+  # Validate Dockerfile paths exist on disk
+  let dockerfile_result = (validate-dockerfile-paths $service)
+  if not $dockerfile_result.valid {
+    $all_errors = ($all_errors | append $dockerfile_result.errors)
   }
   
   # Validate manifest (REQUIRED)
