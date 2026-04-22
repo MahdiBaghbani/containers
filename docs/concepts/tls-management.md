@@ -32,18 +32,20 @@ The system supports three TLS modes:
 
 ```text
 tls/
-├── certificate-authority/        # Shared CA (repo root)
-│   ├── ca.json                   # CA metadata
-│   ├── {ca-name}.crt             # CA certificate
-│   └── {ca-name}.key             # CA private key
-└── services/
-    └── {service}/tls/
-        ├── certificate-authority/  # Service-local CA copy
-        │   ├── {ca-name}.crt
-        │   └── {ca-name}.key
-        └── certificates/           # Service certificates
-            ├── {cert-name}.crt
-            └── {cert-name}.key
+└── certificate-authority/        # Shared CA (repo root, SSOT)
+    ├── ca.json                   # CA metadata
+    ├── {ca-name}.crt             # CA certificate
+    └── {ca-name}.key             # CA private key
+
+services/
+└── {service}/
+    └── tls/
+        ├── certificates/         # Service certificates
+        │   ├── {cert-name}.crt
+        │   └── {cert-name}.key
+        └── certificate-authority/  # Build-staged CA material (normally absent/ignored)
+            ├── {ca-name}.crt
+            └── {ca-name}.key       # Only staged when the Dockerfile needs it (for example MITM)
 ```
 
 ## Service Configuration
@@ -98,6 +100,12 @@ Services declare TLS requirements in their `.nuon` config. The `mode` field is *
 - **TLS config in version overrides (`versions.nuon`) is FORBIDDEN** - validation error if present
 - **TLS must be configured in base service config only**
 - **Services with TLS enabled MUST have `common-tools` dependency** (validation error if missing, except for `common-tools` itself)
+  - The dependency must be declared directly for the service being built.
+    Transitive dependencies (for example via `kasm-base`) do not satisfy TLS
+    validation.
+  - For multi-platform services, declare `common-tools` under each platform
+    entry in `platforms.nuon` and provide the matching version under
+    `versions.nuon`.
 
 #### Common-Tools Pattern
 
@@ -107,11 +115,9 @@ The `common-tools` service typically uses `mode: "ca-only"` because it provides 
 
 During build, the system:
 
-1. **CA Sync & Validation** (automatic)
-   - Compares service CA with shared CA (hash comparison)
-   - Validates certificate issuer against CA subject (OpenSSL)
-   - Auto-syncs shared CA to service directory if mismatched
-   - For `common-tools`: CA automatically synced and processed into platform-specific trust store bundle
+1. **CA Validation** (read-only)
+   - Validates the shared CA exists under `tls/certificate-authority/` (OpenSSL)
+   - For `ca-and-cert`: validates the service certificate issuer matches the shared CA subject
    - Prints certificate expiration info (non-blocking warnings)
 
 2. **Build Arg Injection**
@@ -122,7 +128,14 @@ During build, the system:
 
 **Note:** `TLS_MODE` is system-managed from config. Environment variable `TLS_MODE` is ignored with a warning if set.
 
-1. **Selective Copying**
+3. **Build Context Staging and Selective Copying**
+   - Service-local CA mirrors under `services/<svc>/tls/certificate-authority/` are build-staged only.
+     They are not a source of truth and should not persist after the build.
+   - If a Dockerfile needs CA material from `./tls/certificate-authority/`, the build system stages the
+     minimum required files into the service build context just-in-time, and removes them after the
+     build (including failure paths).
+   - To remove leftover service-local CA mirrors from a previous workflow, run:
+     `nu scripts/dockypody.nu tls clean --service-ca-only`
    - Helper script `copy-tls.nu` copied to service context (if TLS enabled and mode is not `ca-only`)
    - During Docker build:
      - Services copy CA bundle from `common-tools` dependency using `COPY --from` (conditionally used based on mode)
@@ -210,13 +223,13 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
 
 ## Helper Scripts
 
-**`scripts/tls/copy-tls.nu`** - Nushell (primary implementation)
+**`scripts/lib/tls/copy.nu`** - Nushell (primary implementation)
 
 - Used by services with `ca-and-cert` or `cert-only` modes
 - **NOT called** for `ca-only` mode (CA bundle handled by Dockerfile COPY only)
 - Requires nushell to be available in the image (provided via `common-tools` dependency)
 - Copies only service-specific certificates (CA bundle handled separately via `common-tools`)
-- Automatically copied to service context by build system (canonical version from `scripts/tls/copy-tls.nu`)
+- Automatically copied into the build context as `./scripts/tls/copy-tls.nu` by the build system
 - **Normalizes quoted values**: All string parameters are normalized at function entry to handle Docker/shell quoting. Surrounding quotes are stripped (`'true'` -> `true`), boolean values are case-insensitive (`TRUE` -> `true`), and mode values are validated.
 - Parameters:
   - `--enabled`: "true" or "false" (case-insensitive, quoted values accepted)
@@ -230,41 +243,34 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
 
 ```bash
 # Generate shared CA
-nu scripts/tls/generate-ca.nu
+nu scripts/dockypody.nu tls ca
 
 # Generate all service certificates
-nu scripts/tls/generate-all-certs.nu
+nu scripts/dockypody.nu tls certs
 
-# Generate specific service certificate
-nu scripts/tls/generate-cert.nu --service revad-base
+# Generate certificates for a subset of TLS-enabled services
+nu scripts/dockypody.nu tls certs --filter revad-base,idp,cernbox-web
 ```
 
 ## CA Mismatch Resolution
 
-When service CA differs from shared CA (for `ca-and-cert` and `ca-only` modes):
+For `ca-and-cert` mode, the build system validates that the service certificate
+was issued by the shared CA. If validation fails, regenerate certificates with
+`nu scripts/dockypody.nu tls certs`.
 
-```text
-WARNING: CA Mismatch for service 'revad-base':
-   - Shared CA: org.opencloudmesh.certificate.authority (hash: 9cd30e0cd...)
-   - Service CA: org.opencloudmesh.certificate.authority (hash: f2c1183b5...)
-   - Validating certificate issuer...
-   OK: Certificate 'reva.crt' issuer matches: shared CA
-   -> Copying shared CA to service directory
-   -> Service certificates belong to shared CA
-```
-
-Build system automatically resolves by copying correct CA based on certificate issuer validation.
-
-**Note:** For `cert-only` mode, CA validation and sync are skipped entirely (service uses public CA).
+**Note:** For `cert-only` mode, CA validation is skipped (service uses public CA).
 
 ## CA Propagation to Common-Tools
 
 The build system automatically handles CA propagation to `common-tools`:
 
 1. **Automatic CA Sync**:
-   - When building `common-tools` with TLS enabled, `sync-and-validate-ca` automatically copies the shared CA from `tls/certificate-authority/` to `services/common-tools/tls/certificate-authority/`
-   - No manual file copying required
-   - Uses `TLS_CA_NAME` build arg to copy specific CA file (multi-CA readiness)
+   - When building `common-tools` with TLS enabled, the build system stages the
+     shared CA from `tls/certificate-authority/` into the `common-tools` build
+     context under `./tls/certificate-authority/` (just-in-time).
+   - The staged CA material is cleaned up after the build (including failure
+     paths), and is ignored by git.
+   - Uses `TLS_CA_NAME` to select which CA file is staged (multi-CA readiness)
 
 2. **Automatic Trust Store Generation**:
    - Dockerfile `COPY ./tls/certificate-authority/` includes the synced CA files
@@ -285,14 +291,14 @@ The build system automatically handles CA propagation to `common-tools`:
 ### Missing or Invalid CA Metadata
 
 - If `tls/certificate-authority/ca.json` is missing or invalid, build aborts with detailed error message
-- Error message: "CA metadata file not found: tls/certificate-authority/ca.json. Please run scripts/tls/generate-ca.nu first"
+- Error message: "CA metadata file not found: tls/certificate-authority/ca.json. Please run nu scripts/dockypody.nu tls ca first"
 - CA generation is a prerequisite - build system does not attempt recovery
 
 ## Benefits
 
 - **Smaller Images** - Only service-specific certificate files included (CA bundle shared via common-tools)
 - **Better Security** - Services only have access to their own certificates
-- **Automatic Sync** - CA automatically synced to services and common-tools during build
+- **Just-in-time CA staging** - CA material is staged into build contexts only when required by the Dockerfile and removed after
 - **Build Validation** - Certificate expiration and issuer checked at build time
 - **Centralized CA Management** - CA bundle generated once in common-tools, shared across all services
 - **Flexible Modes** - Support for CA-only, CA-and-cert, and cert-only scenarios

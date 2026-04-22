@@ -44,6 +44,7 @@ nu scripts/dockypody.nu test --suite all --verbose
 nu scripts/dockypody.nu tls ca
 nu scripts/dockypody.nu tls certs
 nu scripts/dockypody.nu tls clean
+nu scripts/dockypody.nu tls clean --service-ca-only
 
 # CI commands
 nu scripts/dockypody.nu ci list-deps --service nextcloud
@@ -70,7 +71,6 @@ nu scripts/dockypody.nu docs lint --fix
 | `tls ca` | Generate CA certificate | `tls/cli.nu [tls-cli]` |
 | `tls certs` | Generate service certificates | `tls/cli.nu [tls-cli]` |
 | `tls clean` | Remove TLS artifacts | `tls/cli.nu [tls-cli]` |
-| `tls sync` | Sync CA to services | `tls/cli.nu [tls-cli]` |
 | `ci list-deps` | List dependency services | `ci/cli.nu [ci-cli]` |
 | `ci load-deps` | Load dependency tarballs | `ci/cli.nu [ci-cli]` |
 | `ci load-owner` | Load owner tarballs | `ci/cli.nu [ci-cli]` |

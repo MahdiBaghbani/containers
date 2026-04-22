@@ -23,7 +23,17 @@ Quick reference for Docker Buildx features used in this project.
 
 ## Cache Mounts
 
-This project uses Docker Buildx cache mounts to speed up builds by caching git clones, package downloads, and build artifacts.
+This project uses Docker Buildx cache mounts to speed up builds by caching git
+clones, package downloads, and build artifacts.
+
+For package-manager cache mount ids (apt/apk/dnf) and the shared pool rules, see
+[Dockerfile Development Rules](dockerfile-development.md#shared-package-cache-ids).
+
+For direct downloads (curl/wget) and language package managers (go, npm, pnpm,
+composer, pecl), see:
+
+- [Dockerfile Development Rules](dockerfile-development.md#direct-download-cache-mounts-curlwget)
+- [Dockerfile Development Rules](dockerfile-development.md#language-and-tool-caches)
 
 ### Pattern
 
@@ -47,6 +57,14 @@ RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=
 
 - `sharing=shared` - Multiple builds can read/write simultaneously (git clones, downloads)
 - `sharing=locked` - Exclusive access (package manager caches, go mod)
+
+Example: Go modules and build cache:
+
+```dockerfile
+RUN --mount=type=cache,id=service-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=service-go-build-cache,target=/root/.cache/go-build,sharing=locked \
+    go mod download && go build ./...
+```
 
 ## Cache Management
 

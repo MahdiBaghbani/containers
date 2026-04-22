@@ -212,6 +212,14 @@ RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=
 
 When CACHEBUST changes (SHA change, ref change, or manual override), Docker uses a new cache mount, ensuring fresh content after force-pushes. Build system always provides non-empty CACHEBUST value. CACHEBUST is computed as SHA256 hash of all source SHAs/refs (first 16 characters), using hybrid approach: SHA if available from extraction, ref if SHA extraction fails.
 
+Cache mounts are also used for package managers (apt/apk/dnf). For the shared
+cache pool ids and rules, see
+[Dockerfile Development Rules](../guides/dockerfile-development.md#shared-package-cache-ids).
+
+For pinned direct downloads (curl/wget) and language/tool caches (go/npm/pnpm,
+composer/pecl), see:
+[Dockerfile Development Rules](../guides/dockerfile-development.md#direct-download-cache-mounts-curlwget)
+
 ## Local Source Restrictions
 
 Local folder sources (using `path` field) are restricted to development builds only.
@@ -345,7 +353,7 @@ nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 ```
 
 | Mode | Behavior | Use Case |
-|------|----------|----------|
+| ---- | -------- | -------- |
 | `off` | Always build deps, no hash skip | Local development, forced rebuilds |
 | `soft` | Hash-based skip + auto-build on missing/stale | Default for CI workflows |
 | `strict` | Hash validation, fail on missing/stale | Explicit dependency control |
@@ -422,7 +430,7 @@ Both development and CI builds use the same Buildx builder model: docker driver 
 The only differences between dev and CI are:
 
 | Aspect | Dev | CI |
-|--------|-----|-----|
+| ------ | --- | --- |
 | Tag prefixes | Local (`service:version`) | Registry path (`ghcr.io/owner/repo/service:version`) |
 | Registry push | Manual (`--push`) | Workflow-controlled |
 | Remote fallback | Never (local-only) | When local image not found |
@@ -459,10 +467,10 @@ This approach:
 
 The `--pull` flag accepts comma-separated values:
 
-| Mode       | Behavior                                       | On Failure     |
-| ---------- | ---------------------------------------------- | -------------- |
-| `deps`     | Pre-pull internal dependency images            | Warning (non-fatal) |
-| `externals`| Pre-pull external images declared in manifests | Error (fatal)  |
+| Mode        | Behavior                                        | On Failure          |
+| ----------- | ----------------------------------------------- | ------------------- |
+| `deps`      | Pre-pull internal dependency images             | Warning (non-fatal) |
+| `externals` | Pre-pull external images declared in manifests  | Error (fatal)       |
 
 **Usage examples:**
 
@@ -906,7 +914,7 @@ Final Config
 ### Merge Rules
 
 1. **Dockerfile**: Replaced entirely (platform config wins)
-2. **Sources**: Per-key replacement (not deep-merge) - see [Source Replacement](#source-replacement) below
+2. **Sources**: Per-key replacement (not deep-merge) - see [Source merging](#source-merging) below
 3. **Records**: Deep-merged recursively (nested records merged, keys combined)
 4. **Lists, strings, numbers**: Replaced entirely (platform config wins, same as dockerfile)
 
@@ -924,7 +932,7 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 - Sources from defaults that are **not** in overrides are **preserved**
 - This applies to both global and platform-specific source overrides
 
-**Example: Partial Git Override**
+#### Example: Partial Git override
 
 ```nuon
 // Defaults
@@ -944,7 +952,7 @@ overrides: {
 // Result: sources.reva has {url: "https://github.com/cs3org/reva", ref: "master"}
 ```
 
-**Example: Type Switch (Git to Local)**
+#### Example: Type switch (Git to local)
 
 ```nuon
 // Defaults
@@ -1056,12 +1064,12 @@ org.opencloudmesh.system.service-def-hash=<64-character SHA-256 hex>
 
 Labels with the `org.opencloudmesh.system.` prefix are system-owned and cannot be overridden by user configuration. If a user attempts to set a label with this prefix, a warning is logged and the system value is used.
 
-### Local vs CI Behavior
+### Local vs CI: service definition hash
 
 The service definition hash enables different behaviors for local and CI builds:
 
 | Aspect | Local Builds | CI Builds |
-|--------|--------------|-----------|
+| ------ | ------------ | --------- |
 | Dependency building | Always auto-build, rely on Docker layer cache | Hash-based skip: skip if local image has matching hash |
 | Missing dependencies | Auto-build (default) | Auto-build with warning (soft) or error (strict) |
 | Stale dependencies | Docker rebuilds as needed | Auto-build with warning (soft) or error (strict) |
@@ -1108,10 +1116,10 @@ nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monito
 
 ### Monitoring Modes
 
-| Mode | Behavior |
-|------|----------|
-| `off` | No monitoring (default) |
-| `basic` | Emit disk usage snapshots at build phases |
+| Mode    | Behavior                                       |
+| ------- | ---------------------------------------------- |
+| `off`   | No monitoring (default)                        |
+| `basic` | Emit disk usage snapshots at build phases      |
 
 ### Build Phases
 
@@ -1144,7 +1152,7 @@ If the root filesystem has less than 1GB free, a warning is displayed:
 WARNING: Low disk space: 0.8GB free
 ```
 
-### CI Integration
+### Disk monitoring in CI
 
 In CI workflows, disk monitoring is enabled for all services by default via the `disk_monitor_mode` input:
 
@@ -1166,7 +1174,7 @@ Disk monitoring is automatically skipped for metadata-only operations:
 - `--show-build-order` - No snapshots emitted
 - `--matrix-json` - No snapshots emitted
 
-### Error Handling
+### Disk monitoring error handling
 
 Disk monitoring failures are non-fatal. If any monitoring operation fails, a warning is logged and the build continues:
 
@@ -1207,16 +1215,16 @@ Cache pruning runs **after each version build** in multi-version builds:
 
 The pruning function supports two modes:
 
-| Mode | Command | What Gets Pruned |
-|------|---------|------------------|
-| `build-cache` (default) | `docker builder prune -f` | All BuildKit cache (intermediate layers, exec mounts, source cache) |
-| `exec-cache` | `docker builder prune --filter type=exec.cachemount -f` | Only exec cache mounts (`RUN --mount=type=cache`) |
+| Mode                    | Command                                                 | What Gets Pruned                                                    |
+| ----------------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
+| `build-cache` (default) | `docker builder prune -f`                               | All BuildKit cache (intermediate layers, exec mounts, source cache) |
+| `exec-cache`            | `docker builder prune --filter type=exec.cachemount -f` | Only exec cache mounts (`RUN --mount=type=cache`)                   |
 
 **Default mode:** `build-cache` (aggressive) - recommended for CI where disk space is constrained.
 
 **Note:** Image cache is preserved in both modes. Only build-time cache is pruned.
 
-### CI Integration
+### Cache pruning in CI
 
 In CI workflows, cache pruning is enabled for all services by default:
 
@@ -1230,7 +1238,7 @@ with:
 
 The `prune_build_cache` input defaults to `true`, so all CI builds prune cache mounts between versions unless explicitly disabled.
 
-### Log Output
+### Cache pruning log output
 
 When pruning is enabled, logs show:
 
@@ -1252,7 +1260,7 @@ Build Cache     0         0         0B        0B
 
 The post-prune disk usage confirms the pruning effect, making it easy to verify cache was cleared.
 
-### Error Handling
+### Cache pruning error handling
 
 Cache pruning failures are non-fatal. If pruning fails, a warning is logged and the build continues:
 
@@ -1262,12 +1270,12 @@ WARNING: Build cache prune failed: docker builder prune not available
 
 This ensures pruning issues never break actual builds.
 
-### Local vs CI Behavior
+### Local vs CI: cache pruning
 
-| Environment | Default Behavior |
-|-------------|------------------|
-| Local | Pruning disabled (rely on persistent Docker cache) |
-| CI | Pruning enabled for all services (manage constrained disk) |
+| Environment | Default Behavior                                           |
+| ----------- | ---------------------------------------------------------- |
+| Local       | Pruning disabled (rely on persistent Docker cache)         |
+| CI          | Pruning enabled for all services (manage constrained disk) |
 
 Local developers can enable pruning manually with `--prune-cache-mounts` when investigating disk issues or simulating CI behavior.
 
