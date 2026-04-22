@@ -47,8 +47,13 @@ def main [--verbose] {
   
   # Test 3: Service existence check
   let test3 = (run-test "Service existence check" {
-    if not (service-exists "revad-base") {
-      error make {msg: "revad-base service should exist"}
+    let all_services = (list-service-names)
+    if ($all_services | is-empty) {
+      error make {msg: "No services found to check existence"}
+    }
+    let first_svc = ($all_services | first)
+    if not (service-exists $first_svc) {
+      error make {msg: $"($first_svc) should exist in the service list"}
     }
     if (service-exists "nonexistent-service") {
       error make {msg: "nonexistent-service should not exist"}
@@ -59,9 +64,14 @@ def main [--verbose] {
   
   # Test 4: Get service config
   let test4 = (run-test "Get service config" {
-    let config = (get-service "revad-base")
+    let all_services = (list-service-names)
+    if ($all_services | is-empty) {
+      error make {msg: "No services found to get config"}
+    }
+    let first_svc = ($all_services | first)
+    let config = (get-service $first_svc)
     if not ("name" in ($config | columns)) {
-      error make {msg: "Service config missing 'name' field"}
+      error make {msg: $"Service config for ($first_svc) missing 'name' field"}
     }
     if $verbose_flag { print $"    Config name: ($config.name)" }
     true
@@ -98,9 +108,65 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test5)
-  
+
+  # Test 6: Platform manifest integrity for all multi-platform services
+  let test6 = (run-test "Platform manifest integrity (all multi-platform services)" {
+    use ../lib/platforms/core.nu [
+      check-platforms-manifest-exists load-platforms-manifest
+      get-platform-names get-default-platform
+    ]
+    let all_services = (list-service-names)
+    for svc in $all_services {
+      if not (check-platforms-manifest-exists $svc) { continue }
+      let platforms = (load-platforms-manifest $svc)
+      let names = (get-platform-names $platforms)
+
+      if ($names | is-empty) {
+        error make {msg: $"($svc): platform list is empty"}
+      }
+
+      let unique_names = ($names | uniq)
+      if ($unique_names | length) != ($names | length) {
+        error make {msg: $"($svc): platform names are not unique: ($names | str join ', ')"}
+      }
+
+      let default_platform = (get-default-platform $platforms)
+      if not ($default_platform in $names) {
+        error make {
+          msg: $"($svc): default platform '($default_platform)' not in platform names: ($names | str join ', ')"
+        }
+      }
+    }
+    if $verbose_flag {
+      let multi = ($all_services | where {|svc|
+        check-platforms-manifest-exists $svc
+      })
+      print $"    Checked ($multi | length) multi-platform services"
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test6)
+
+  # Test 7: TLS-only filtering is consistent with per-service config
+  let test7 = (run-test "TLS-only filtering consistency" {
+    let all_services = (list-service-names)
+    let expected_tls = ($all_services | where {|svc|
+      let config = (get-service $svc)
+      (try { $config.tls.enabled } catch { false }) == true
+    } | sort)
+    let actual_tls = ((list-services --tls-only) | get name | sort)
+    if $expected_tls != $actual_tls {
+      error make {
+        msg: $"TLS filtering mismatch. expected=($expected_tls | str join ',') actual=($actual_tls | str join ',')"
+      }
+    }
+    if $verbose_flag { print $"    TLS-enabled services: ($actual_tls | str join ', ')" }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test7)
+
   print-test-summary $results
-  
+
   if ($results | any {|r| not $r}) {
     exit 1
   }

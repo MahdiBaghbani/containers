@@ -22,7 +22,7 @@
 use ../lib/manifest/core.nu [check-versions-manifest-exists load-versions-manifest filter-versions]
 use ../lib/platforms/core.nu [merge-version-overrides]
 use ../lib/build/matrix.nu [generate-service-matrix]
-use ../lib/validate/core.nu [validate-service-file validate-manifest-file validate-version-manifest print-validation-results]
+use ../lib/validate/core.nu [validate-service-file validate-manifest-file validate-version-manifest validate-dockerfile-paths print-validation-results]
 use ../lib/services/core.nu [list-service-names]
 use ./lib.nu [run-test print-test-summary]
 
@@ -499,9 +499,27 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test21)
-  
+
+  # Test 22: All services pass complete validation
+  let test22 = (run-test "All services pass complete validation" {
+    use ../lib/validate/core.nu [validate-service-complete]
+    let all_services = (list-service-names)
+    for svc in $all_services {
+      let result = (validate-service-complete $svc)
+      if not $result.valid {
+        let joined = ($result.errors | str join " | ")
+        error make {msg: $"($svc): ($joined)"}
+      }
+    }
+    if $verbose_flag {
+      print $"    All ($all_services | length) services passed complete validation"
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test22)
+
   print-test-summary $results
-  
+
   # Exit with error if any tests failed
   if ($results | any {|r| not $r}) {
     exit 1
