@@ -1,0 +1,205 @@
+# syntax=docker/dockerfile:1.7
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools
+
+FROM ${BASE_RUNTIME_IMAGE}
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+ARG BASE_RUNTIME_IMAGE
+ARG COMMON_TOOLS_IMAGE
+
+ARG LANG="en_US.UTF-8"
+ARG LANGUAGE="en_US:en"
+ARG LC_ALL="en_US.UTF-8"
+ARG TZ="Etc/UTC"
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:1 \
+    DISTRO=debian \
+    GOMP_SPINCOUNT=0 \
+    HOME=/home/kasm-default-profile \
+    INST_SCRIPTS=/dockerstartup/install \
+    KASM_SVC_AUDIO=0 \
+    KASM_SVC_AUDIO_INPUT=0 \
+    KASM_SVC_GAMEPAD=0 \
+    KASM_SVC_PRINTER=0 \
+    KASM_SVC_RECORDER=0 \
+    KASM_SVC_SMARTCARD=0 \
+    KASM_SVC_UPLOADS=0 \
+    KASM_SVC_WEBCAM=0 \
+    KASMVNC_AUTO_RECOVER=true \
+    KASM_USER=ocm-user \
+    KASM_VNC_PATH=/usr/share/kasmvnc \
+    LANG=$LANG \
+    LANGUAGE=$LANGUAGE \
+    LC_ALL=$LC_ALL \
+    LD_LIBRARY_PATH=/opt/libjpeg-turbo/lib64/:/usr/local/lib/:/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}} \
+    MAX_FRAME_RATE=60 \
+    NO_VNC_PORT=6901 \
+    OMP_WAIT_POLICY=PASSIVE \
+    OCM_KASM_AUTH_MODE=none \
+    OCM_KASM_CLIPBOARD_MODE=default \
+    OCM_KASM_HTTP_MODE=http \
+    OCM_KASM_EXTRA_VIEWER=0 \
+    OCM_KASM_PRIMARY_ACCESS=write \
+    OCM_KASM_QUALITY_PROFILE=lossless \
+    OCM_KASM_USER=ocm-user \
+    OCM_KASM_VIDEO_CODEC=av1 \
+    OCM_KASM_VNC_LOG_LEVEL=30 \
+    OCM_KASM_VNC_LOG_DEST=logfile \
+    OCM_KASM_VNC_LOG_WRITER_NAME=all \
+    OCM_KASM_VIDEO_ENCODING_LOG_LEVEL=off \
+    OCM_KASM_TAIL_VNC_LOG=0 \
+    SHELL=/bin/bash \
+    START_PULSEAUDIO=0 \
+    STARTUPDIR=/dockerstartup \
+    START_XFCE4=1 \
+    TERM=xterm \
+    VNC_COL_DEPTH=24 \
+    VNCOPTIONS="" \
+    VNC_PORT=5901 \
+    VNC_PW=ocm-vnc-password \
+    VNC_RESOLUTION=1280x720 \
+    VNC_VIEW_ONLY_PW=ocm-vnc-view-only-password \
+    TZ=$TZ
+
+WORKDIR $HOME
+RUN mkdir -p $HOME/Desktop
+
+COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    apt-get install \
+      --no-install-recommends \
+      --assume-yes \
+      bash \
+      ca-certificates \
+      curl \
+      dumb-init \
+      fonts-dejavu \
+      fonts-noto-color-emoji \
+      fonts-noto-core \
+      iproute2 \
+      openssl \
+      procps \
+      sudo \
+      xdg-utils
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/install/package_rules $INST_SCRIPTS/package_rules/
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    bash $INST_SCRIPTS/package_rules/package_rules.sh && \
+    rm -rf $INST_SCRIPTS/package_rules/
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/install/tools $INST_SCRIPTS/tools/
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    bash $INST_SCRIPTS/tools/install_tools.sh && \
+    sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+    locale-gen en_US.UTF-8 && \
+    rm -rf $INST_SCRIPTS/tools/
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY scripts/install/xfce $INST_SCRIPTS/xfce/
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    bash $INST_SCRIPTS/xfce/install_xfce_ui.sh && \
+    rm -rf $INST_SCRIPTS/xfce/
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY config/xfce/.config/ $HOME/.config/
+RUN mkdir -p /usr/share/backgrounds /usr/share/extra/icons
+COPY resources/images/bg_debian.svg /usr/share/backgrounds/bg_default.svg
+COPY resources/images/egress_info.svg /usr/share/extra/icons/egress_info.svg
+COPY resources/images/egress_error.svg /usr/share/extra/icons/egress_error.svg
+COPY resources/images/egress_offline.svg /usr/share/extra/icons/egress_offline.svg
+RUN sed -i \
+      's|/usr/share/backgrounds/bg_default.png|/usr/share/backgrounds/bg_default.svg|g' \
+      $HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml
+
+COPY scripts/install/kasm_vnc $INST_SCRIPTS/kasm_vnc/
+RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    --mount=type=cache,id=kasm-base-dl-kasmvnc-v1,target=/var/cache/dockypody/kasmvnc,sharing=locked \
+    bash $INST_SCRIPTS/kasm_vnc/install_kasm_vnc.sh && \
+    rm -rf $INST_SCRIPTS/kasm_vnc/
+
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN sed -i \
+      's/auto|h264|h264_vaapi|avc|avc_vaapi|h265|h265_vaapi|hevc|hevc_vaapi/auto|h264|h264_vaapi|avc|avc_vaapi|h265|h265_vaapi|hevc|hevc_vaapi|av1|av1_vaapi/g' \
+      /usr/bin/vncserver
+
+COPY scripts/startup $STARTUPDIR/
+COPY scripts/templates $STARTUPDIR/templates/
+COPY scripts/build/set-user-permissions.nu /usr/local/bin/kasm-set-user-permissions.nu
+RUN groupadd -g 1000 ocm-user; \
+    useradd -M -u 1000 -g 1000 -s /bin/bash ocm-user; \
+    mkdir -p /home/ocm-user /workspace /downloads; \
+    chown -R 1000:0 /home/ocm-user /workspace /downloads; \
+    nu /usr/local/bin/kasm-set-user-permissions.nu $STARTUPDIR $HOME; \
+    echo 'source $STARTUPDIR/generate_container_user' >> $HOME/.bashrc; \
+    touch $STARTUPDIR/vnc_startup.log; \
+    chown 1000:0 $STARTUPDIR/vnc_startup.log; \
+    chown -R 1000:0 /home/kasm-default-profile
+
+RUN mkdir -p /etc/ssl/certs /tmp
+COPY --from=common-tools /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
+RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
+      mkdir -p /etc/ssl/certs && \
+      cp /tmp/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt && \
+      echo "CA bundle copied from common-tools"; \
+    else \
+      echo "Internal CA bundle disabled (TLS disabled or cert-only mode)"; \
+    fi && \
+    rm -f /tmp/ca-bundle.crt
+
+COPY scripts/install/cleanup $INST_SCRIPTS/cleanup/
+RUN bash $INST_SCRIPTS/cleanup/cleanup.sh && \
+    rm -rf $INST_SCRIPTS/cleanup/
+
+EXPOSE 5901 6901
+
+ENV HOME=/home/ocm-user
+WORKDIR $HOME
+USER 1000
+
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/dockerstartup/kasm_default_profile.sh", "/dockerstartup/vnc_startup.sh"]
+CMD ["--wait"]

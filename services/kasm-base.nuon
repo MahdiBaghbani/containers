@@ -1,0 +1,12 @@
+{
+  "name": "kasm-base",
+  "context": "services/kasm-base",
+  "labels": {
+    "org.opencontainers.image.title": "Browser Family Kasm Base Image",
+    "org.opencontainers.image.description": "Debian Kasm base shared by browser-family services"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-only"
+  }
+}

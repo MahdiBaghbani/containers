@@ -1,0 +1,21 @@
+{
+  "default": "debian",
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/kasm-base/Dockerfile.debian",
+      "external_images": {
+        "runtime": {
+          "name": "debian",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    }
+  ]
+}

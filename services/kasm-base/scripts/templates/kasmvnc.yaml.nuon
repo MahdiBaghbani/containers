@@ -1,0 +1,21 @@
+# Base KasmVNC config template.
+# render-kasmvnc-config.nu loads this, resolves $HOME, applies env overrides,
+# and writes the final YAML to $HOME/.vnc/kasmvnc.yaml at container startup.
+#
+# pem_certificate and pem_key are always overwritten by the renderer;
+# the ${HOME} placeholder here is documentation only.
+{
+    network: {
+        ssl: {
+            pem_certificate: "${HOME}/.vnc/self.pem"
+            pem_key: "${HOME}/.vnc/self.pem"
+        }
+        udp: {
+            public_ip: "127.0.0.1"
+        }
+    }
+    runtime_configuration: {
+        allow_override_standard_vnc_server_settings: true
+        allow_override_list: ["pointer.enabled"]
+    }
+}

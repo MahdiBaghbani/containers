@@ -1,0 +1,91 @@
+# syntax=docker/dockerfile:1.7
+
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG CYPRESS_FACTORY_IMAGE="cypress/factory:8.0.2"
+
+ARG NODE_VERSION="24.15.0"
+ARG CHROME_VERSION="147.0.7727.101-1"
+ARG CYPRESS_VERSION="15.14.1"
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools
+
+FROM ${CYPRESS_FACTORY_IMAGE}
+
+ARG CYPRESS_FACTORY_IMAGE
+ARG NODE_VERSION
+ARG CHROME_VERSION
+ARG CYPRESS_VERSION
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME=""
+ARG TLS_CA_NAME=""
+ARG COMMON_TOOLS_IMAGE
+
+USER root
+
+RUN mkdir -p /etc/ssl/certs /tmp
+COPY --from=common-tools /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
+RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
+      mkdir -p /etc/ssl/certs && \
+      cp /tmp/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt && \
+      echo "CA bundle copied from common-tools"; \
+    else \
+      echo "Internal CA bundle disabled (TLS disabled or cert-only mode)"; \
+    fi && \
+    rm -f /tmp/ca-bundle.crt
+
+# Make Node-based helpers (plugins, tasks) trust the DockyPody CA.
+ENV NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+
+RUN if command -v node >/dev/null 2>&1; then \
+      node --version | grep -F "v${NODE_VERSION}" >/dev/null 2>&1 || (echo "Node version mismatch (expected v${NODE_VERSION})" && exit 1); \
+    else \
+      echo "Error: node not found in base image ${CYPRESS_FACTORY_IMAGE}" && exit 1; \
+    fi
+
+RUN if command -v google-chrome >/dev/null 2>&1; then \
+      expected_chrome="${CHROME_VERSION%-*}"; \
+      google-chrome --version | grep -F "${expected_chrome}" >/dev/null 2>&1 || (echo "Chrome version mismatch (expected ${expected_chrome})" && exit 1); \
+    elif command -v chromium >/dev/null 2>&1; then \
+      echo "WARNING: google-chrome not found; chromium present instead" && chromium --version; \
+    else \
+      echo "Error: no Chrome/Chromium found in base image ${CYPRESS_FACTORY_IMAGE}" && exit 1; \
+    fi
+
+RUN --mount=type=cache,id=cypress-npm-cache,target=/root/.npm,sharing=locked \
+    --mount=type=cache,id=cypress-dl-cypress-v1-${CYPRESS_VERSION}-linux-x64,target=/var/cache/dockypody/cypress,sharing=locked \
+    if command -v npm >/dev/null 2>&1; then \
+      npm --version >/dev/null; \
+    else \
+      echo "Error: npm not found in base image ${CYPRESS_FACTORY_IMAGE}" && exit 1; \
+    fi && \
+    export CYPRESS_CACHE_FOLDER="/var/cache/dockypody/cypress" && \
+    npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}" && \
+    cypress --version | grep -F "${CYPRESS_VERSION}" >/dev/null 2>&1 || \
+    (echo "Cypress version mismatch after install (expected ${CYPRESS_VERSION})" && exit 1) && \
+    mkdir -p /root/.cache/Cypress && \
+    cp -a /var/cache/dockypody/cypress/. /root/.cache/Cypress/
+

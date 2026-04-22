@@ -1,0 +1,25 @@
+{
+  "default": "v1.0.0",
+  "defaults": {
+    "platforms": {
+      "debian": {
+        "external_images": {
+          "runtime": {
+            "tag": "trixie-slim"
+          }
+        },
+        "dependencies": {
+          "common-tools": {
+            "version": "v1.0.0-debian"
+          }
+        }
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "latest": true
+    }
+  ]
+}
