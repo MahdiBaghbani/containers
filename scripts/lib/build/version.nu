@@ -25,12 +25,12 @@ use ./dependencies.nu [resolve-dependencies]
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest get-version-or-null resolve-version-name apply-version-defaults]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names expand-version-to-platforms strip-platform-suffix]
 use ./config.nu [detect-all-source-types load-service-config]
-use ../tls/validation.nu [sync-and-validate-ca]
+use ../tls/validation.nu [validate-ca]
 use ../validate/core.nu [validate-tls-config-merged]
 use ../core/repo.nu [get-repo-root]
 use ../tls/lib.nu [read-ca-name]
 use ./tags.nu [generate-tags]
-use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context]
+use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context]
 use ./sources.nu [prepare-local-sources-context extract-source-shas]
 use ./labels.nu [generate-labels]
 use ./args.nu [generate-build-args]
@@ -187,7 +187,7 @@ export def build-single-version [
   
   let tls_meta = (extract-tls-metadata $cfg $ca_name)
   if $tls_meta.enabled {
-    sync-and-validate-ca $service $cfg $ca_name
+    validate-ca $service $cfg $ca_name
   }
   
   let is_local = $meta.is_local
@@ -425,23 +425,44 @@ export def build-single-version [
   }
   
   let tls_context = (prepare-tls-context $service $context $tls_meta.enabled $tls_meta.mode)
-  
+
   let repo_root = (get-repo-root)
   let local_source_paths = (if not ($cfg_sources | is-empty) {
     prepare-local-sources-context $service $context $cfg_sources $source_types $repo_root
   } else {
     {}
   })
-  
+
   let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths)
-  
+
+  # Detect which CA files the Dockerfile actually needs, then stage them just-in-time.
+  let ca_reqs = (if $tls_meta.enabled {
+    let dockerfile_text = (try { open $dockerfile } catch { "" })
+    detect-ca-requirements $dockerfile_text $tls_meta.ca_name $tls_meta.mode
+  } else {
+    {needs_ca_crt: false, needs_ca_key: false}
+  })
+  let ca_context = (prepare-ca-context $context $tls_meta $ca_reqs)
+
   print ""
   print $"=== Building ($service):($version_tag) ==="
   print ""
-  
-  build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $push_val $provenance_val $is_local
-  
+
+  # Run docker build; ensure CA material and TLS helper are cleaned up on both
+  # success and failure paths.
+  let build_error = (try {
+    build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $push_val $provenance_val $is_local
+    null
+  } catch {|err|
+    $err.msg
+  })
+
   cleanup-tls-context $context $tls_context
+  cleanup-ca-context $context $ca_context
+
+  if $build_error != null {
+    error make {msg: $build_error}
+  }
   
   {sha_cache: $current_cache}
 }
