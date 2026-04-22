@@ -20,7 +20,6 @@
 use ./ca.nu [generate-ca]
 use ./cert.nu [generate-cert]
 use ./certs.nu [generate-all-certs]
-use ./sync.nu [sync-ca]
 use ./clean.nu [clean-certs]
 use ./copy.nu [copy-tls]
 
@@ -28,7 +27,6 @@ use ./copy.nu [copy-tls]
 export use ./ca.nu [generate-ca]
 export use ./cert.nu [generate-cert]
 export use ./certs.nu [generate-all-certs]
-export use ./sync.nu [sync-ca]
 export use ./clean.nu [clean-certs]
 export use ./copy.nu [copy-tls]
 
@@ -40,29 +38,29 @@ export def tls-help [] {
   print "  ca      Generate CA certificate"
   print "  certs   Generate service certificates"
   print "  clean   Remove TLS artifacts"
-  print "  sync    Sync CA to services"
   print ""
   print "Options:"
-  print "  --service <name>    Target specific service(s)"
-  print "  --dry-run           Show what would be done"
-  print "  --force             Force regeneration"
-  print "  --verbose           Show detailed output"
+  print "  --service <name>       Target specific service(s)"
+  print "  --dry-run              Show what would be done"
+  print "  --force                Force regeneration"
+  print "  --verbose              Show detailed output"
+  print "  --service-ca-only      (clean) Remove only service-local CA mirrors"
 }
 
 # TLS CLI entrypoint - called from dockypody.nu
 export def tls-cli [
-  subcommand: string,  # Subcommand: ca, certs, clean, sync, help
-  flags: record        # Flags: { service_list, filter_list, force_copy_ca, skip_shared_ca, keep_empty_dirs, force, dry_run, verbose }
+  subcommand: string,  # Subcommand: ca, certs, clean, help
+  flags: record        # Flags: { service_list, filter_list, skip_shared_ca, keep_empty_dirs, service_ca_only, force, dry_run, verbose }
 ] {
   let service_list = (try { $flags.service_list } catch { [] })
   let filter_list = (try { $flags.filter_list } catch { [] })
-  let force_copy_ca = (try { $flags.force_copy_ca } catch { false })
   let skip_shared_ca = (try { $flags.skip_shared_ca } catch { false })
   let keep_empty_dirs = (try { $flags.keep_empty_dirs } catch { false })
+  let service_ca_only = (try { $flags.service_ca_only } catch { false })
   let force = (try { $flags.force } catch { false })
   let dry_run = (try { $flags.dry_run } catch { false })
   let verbose = (try { $flags.verbose } catch { false })
-  
+
   match $subcommand {
     "help" | "--help" | "-h" => {
       tls-help
@@ -76,16 +74,13 @@ export def tls-cli [
     }
     "certs" => {
       if $verbose {
-        generate-all-certs --filter $filter_list --force-copy-ca=$force_copy_ca --verbose
+        generate-all-certs --filter $filter_list --verbose
       } else {
-        generate-all-certs --filter $filter_list --force-copy-ca=$force_copy_ca
+        generate-all-certs --filter $filter_list
       }
     }
     "clean" => {
-      clean-certs --service $service_list --dry-run=$dry_run --skip-shared-ca=$skip_shared_ca --keep-empty-dirs=$keep_empty_dirs
-    }
-    "sync" => {
-      sync-ca --service $service_list --dry-run=$dry_run --force=$force --verbose=$verbose
+      clean-certs --service $service_list --dry-run=$dry_run --skip-shared-ca=$skip_shared_ca --keep-empty-dirs=$keep_empty_dirs --service-ca-only=$service_ca_only
     }
     _ => {
       print $"Unknown tls subcommand: ($subcommand)"

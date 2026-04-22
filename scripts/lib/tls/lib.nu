@@ -57,7 +57,7 @@ export def read-shared-ca-name [] {
     if not ($ca_metadata_file | path exists) {
         return null
     }
-    
+
     try {
         let parsed = (open $ca_metadata_file)
         $parsed.name
@@ -69,42 +69,50 @@ export def read-shared-ca-name [] {
 export def ensure-service-tls-dirs [service_name: string] {
     let service_dir = ((get-services-dir) | path join $service_name)
     let cert_dir = ($service_dir | path join "tls" "certificates")
-    let service_ca_dir = ($service_dir | path join "tls" "certificate-authority")
-    
+
     mkdir $cert_dir
-    mkdir $service_ca_dir
 }
 
 export def copy-shared-ca-to-service [
     service_name: string,
-    --force
+    --force,
+    --include-key  # Explicitly opt in to copying the CA private key
 ] {
     let ca_name = (read-shared-ca-name)
     if $ca_name == null {
-        error make {msg: "CA metadata file not found. Please run scripts/tls/generate-ca.nu first"}
+        error make {msg: "CA metadata file not found. Run 'nu scripts/dockypody.nu tls ca' first"}
     }
-    
+
     let services_dir = (get-services-dir)
     let shared_ca_dir = (get-shared-ca-dir)
     let service_dir = ($services_dir | path join $service_name)
     let service_ca_dir = ($service_dir | path join "tls" "certificate-authority")
-    
+
     let shared_crt = ($shared_ca_dir | path join $"($ca_name).crt")
-    let shared_key = ($shared_ca_dir | path join $"($ca_name).key")
-    
-    if not (($shared_crt | path exists) and ($shared_key | path exists)) {
-        error make {msg: $"CA files not found. Expected: ($shared_crt), ($shared_key). Please run scripts/tls/generate-ca.nu first"}
+
+    if not ($shared_crt | path exists) {
+        error make {msg: $"CA cert not found: ($shared_crt). Run 'nu scripts/dockypody.nu tls ca' first"}
     }
-    
+
     mkdir $service_ca_dir
-    
+
     let service_ca_crt = ($service_ca_dir | path join $"($ca_name).crt")
     let file_exists = ($service_ca_crt | path exists)
-    
+
     let force_flag = (try { $force } catch { false })
     if $force_flag or (not $file_exists) {
         cp -f $shared_crt $service_ca_crt
-        cp -f $shared_key ($service_ca_dir | path join $"($ca_name).key")
+    }
+
+    let include_key_flag = (try { $include_key } catch { false })
+    if $include_key_flag {
+        let shared_key = ($shared_ca_dir | path join $"($ca_name).key")
+        if not ($shared_key | path exists) {
+            error make {msg: $"CA key not found: ($shared_key). Run 'nu scripts/dockypody.nu tls ca' first"}
+        }
+        if $force_flag or (not ($service_ca_dir | path join $"($ca_name).key" | path exists)) {
+            cp -f $shared_key ($service_ca_dir | path join $"($ca_name).key")
+        }
     }
 }
 

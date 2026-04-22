@@ -99,7 +99,43 @@ export def clean-certs [
     --dry-run,
     --skip-shared-ca,
     --keep-empty-dirs,
+    --service-ca-only,  # Remove only service-local CA mirrors (services/*/tls/certificate-authority)
 ] {
+    # Migration helper: remove only leftover service-local CA mirrors.
+    # Does not touch services/*/tls/certificates or the shared CA.
+    if $service_ca_only {
+        print "Removing service-local CA mirrors (services/*/tls/certificate-authority)..."
+
+        let SERVICES_DIR = (get-services-dir)
+        let all_services = (list-services --tls-only)
+        let selected_services = (if ($service | is-empty) {
+            $all_services
+        } else {
+            $all_services | where {|svc| $service | any {|filter| $filter == $svc.name }}
+        })
+
+        for svc in $selected_services {
+            let service_name = $svc.name
+            let service_ca_dir = ($SERVICES_DIR | path join $service_name "tls" "certificate-authority")
+
+            if ($service_ca_dir | path exists) {
+                if $dry_run {
+                    print $"[dry-run] Would remove ($service_ca_dir)"
+                } else {
+                    rm -rf $service_ca_dir | ignore
+                    print $"Removed ($service_ca_dir)"
+                }
+            }
+        }
+
+        if $dry_run {
+            print "Service CA cleanup dry-run complete."
+        } else {
+            print "Service CA cleanup complete."
+        }
+        return
+    }
+
     print "Cleaning up generated certificates..."
 
     let SERVICES_DIR = (get-services-dir)
