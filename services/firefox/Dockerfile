@@ -39,8 +39,7 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     bzip2 \
     ca-certificates \
     curl \
-    xz-utils \
-    p11-kit-modules
+    xz-utils
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 

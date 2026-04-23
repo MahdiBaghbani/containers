@@ -8,5 +8,10 @@
   "tls": {
     "enabled": true,
     "mode": "ca-only"
+  },
+  "ssh": {
+    "enabled": true,
+    "mode": "client",
+    "default_user": "root"
   }
 }

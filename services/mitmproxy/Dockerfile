@@ -25,6 +25,12 @@ ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
 
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 
 FROM ${MITMPROXY_UPSTREAM_IMAGE}
@@ -33,10 +39,23 @@ ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
+
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 ARG COMMON_TOOLS_IMAGE
 
 ENV DOCKYPODY_CA_DIR_MOUNT="/certificate-authority" \
     DOCKYPODY_CA_DIR_DEFAULT="/opt/dockypody/certificate-authority-default"
+
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
 
 USER root
 
@@ -45,7 +64,9 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends --assume-yes \
-      nginx ca-certificates; \
+      ca-certificates \
+      nginx \
+      openssh-server; \
     rm -f /etc/nginx/sites-enabled/default
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -62,6 +83,7 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
     rm -f /tmp/ca-bundle.crt
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
 
 RUN mkdir -p /etc/nginx/templates-available
 COPY ./nginx/mitmweb.conf.template /etc/nginx/templates-available/mitmweb.conf.template
@@ -103,6 +125,23 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
       rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     fi
 
-COPY --chmod=755 ./scripts/mitm-entrypoint.nu /usr/local/bin/mitm-entrypoint.nu
+COPY ./ssh /tmp/ssh-build-context/
+RUN if [ "$SSH_ENABLED" = "true" ]; then \
+      mkdir -p /opt/dockypody/ssh && \
+      if [ -f /tmp/ssh-build-context/dockypody-dev-ed25519.pub ]; then \
+        cp /tmp/ssh-build-context/dockypody-dev-ed25519.pub /opt/dockypody/ssh/dockypody-dev-ed25519.pub; \
+      else \
+        echo "Warning: dockypody-dev-ed25519.pub not found in build context; sshd authorized_keys will not be installed" >&2; \
+      fi; \
+    fi && \
+    rm -rf /tmp/ssh-build-context || true
 
-ENTRYPOINT ["/usr/local/bin/nu", "/usr/local/bin/mitm-entrypoint.nu"]
+RUN mkdir -p /usr/bin/lib
+COPY --chmod=755 ./scripts/lib/sshd.nu /usr/bin/lib/sshd.nu
+
+COPY --chmod=755 ./scripts/mitm-entrypoint.nu /usr/local/bin/mitm-entrypoint.nu
+COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
+COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
+
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
+CMD ["/usr/local/bin/nu", "/usr/local/bin/mitm-entrypoint.nu"]

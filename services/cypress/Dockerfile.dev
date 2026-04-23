@@ -31,7 +31,7 @@ ARG CYPRESS_VERSION="15.14.1"
 ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
-ARG TLS_CA_NAME=""
+ARG TLS_CA_NAME="dockypody"
 
 USER root
 
@@ -50,6 +50,22 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
     fi && \
     rm -f /tmp/ca-bundle.crt
 
+# Bake the DockyPody CA keypair into the image so cypress-autostart.nu can seed
+# Cypress' internal proxy CA without runtime mounts.
+COPY ./tls /tmp/tls-source/
+RUN set -eux; \
+    if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
+      if [ -z "${TLS_CA_NAME:-}" ]; then TLS_CA_NAME="dockypody"; fi; \
+      default_dir="/opt/dockypody/certificate-authority-default"; \
+      mkdir -p "$default_dir"; \
+      install -m 0644 -o 1000 -g 1000 "/tmp/tls-source/certificate-authority/${TLS_CA_NAME}.crt" "$default_dir/${TLS_CA_NAME}.crt"; \
+      install -m 0600 -o 1000 -g 1000 "/tmp/tls-source/certificate-authority/${TLS_CA_NAME}.key" "$default_dir/${TLS_CA_NAME}.key"; \
+      echo "Default DockyPody CA keypair installed for Cypress proxy seeding"; \
+    else \
+      echo "TLS disabled or cert-only mode: skipping default CA keypair install"; \
+    fi && \
+    rm -rf /tmp/tls-source || true
+
 # Install pinned Node + Chrome + Cypress in the Kasm workspace.
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
@@ -61,12 +77,13 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --assume-yes \
     ca-certificates \
     curl \
-    xz-utils \
-    libnss3 \
+    libasound2 \
     libgbm1 \
     libgtk-3-0 \
+    libnss3 \
+    libnss3-tools \
     libxss1 \
-    libasound2
+    xz-utils
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
