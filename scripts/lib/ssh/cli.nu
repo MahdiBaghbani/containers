@@ -1,4 +1,3 @@
-#!/bin/bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # DockyPody: container build scripts and images
 # Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
@@ -16,19 +15,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Run initialization via Nushell script
-# Don't use set -e here - we want to continue even if initialization has warnings
-if [ -f /usr/bin/entrypoint-init.nu ]; then
-  if command -v nu >/dev/null 2>&1; then
-    nu /usr/bin/entrypoint-init.nu "$@" || {
-      echo "Warning: Initialization script exited with error, but continuing to run CMD..." >&2
-    }
-  else
-    echo "Warning: nu not found; skipping /usr/bin/entrypoint-init.nu" >&2
-  fi
-else
-  echo "Warning: /usr/bin/entrypoint-init.nu not found; skipping init" >&2
-fi
+# SSH CLI entry point
 
-# Exec the CMD arguments directly
-exec "$@"
+use ./key.nu
+
+export def main [
+    --generate-keypair (-g)  # Generate default SSH keypair
+] {
+    if $generate_keypair {
+        key
+    } else {
+        print "DockyPody SSH management"
+        print "Usage: nu scripts/lib/ssh/cli.nu --generate-keypair"
+    }
+}

@@ -27,8 +27,16 @@ use ./lib/nextcloud-init.nu [version_greater get_installed_version get_image_ver
 use ./lib/hooks.nu [run_path]
 use ./lib/post-install.nu [run_custom_post_install, setup_log_files]
 use ./lib/ca-bundle-sync.nu [sync-ca-bundle]
+# sshd module is staged flat into the image at /usr/bin/lib/sshd.nu during Docker build.
+use ./lib/sshd.nu [start-sshd-if-enabled]
 
 def main [...cmd_args: string] {
+  try {
+    start-sshd-if-enabled
+  } catch {|err|
+    print $"WARNING: [entrypoint-init] sshd start failed, continuing: ($err.msg)"
+  }
+
   print "Nextcloud entrypoint initialization started"
   
   if ($cmd_args | length) > 0 {
