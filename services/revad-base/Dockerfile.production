@@ -36,12 +36,12 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    git \
     bash \
-    make \
+    binutils \
     build-essential \
+    git \
     libsqlite3-dev \
-    binutils;
+    make;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 

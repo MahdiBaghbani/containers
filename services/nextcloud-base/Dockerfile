@@ -25,6 +25,12 @@ ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
 
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 
 FROM ${BASE_RUNTIME_IMAGE}
@@ -33,6 +39,13 @@ ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
+
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 ARG COMMON_TOOLS_IMAGE
 
 ENV PHP_MEMORY_LIMIT=512M
@@ -48,16 +61,17 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    vim \
-    curl \
     bzip2 \
-    rsync \
-    iproute2 \
     busybox-static \
-    libldap-common \
     ca-certificates \
+    curl \
+    iproute2 \
     libapache2-mod-security2 \
-    libmagickcore-7.q16-10-extra;
+    libldap-common \
+    libmagickcore-7.q16-10-extra \
+    openssh-server \
+    rsync \
+    vim;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -205,6 +219,7 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
     rm -f /tmp/ca-bundle.crt
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
 
 COPY ./tls /tmp/tls-source/
 COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
@@ -273,6 +288,22 @@ COPY ./config/*.php /usr/src/nextcloud/config/
 # Copy Apache site configs
 COPY ./config/apache/*.conf /etc/apache2/sites-available/
 
-ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+# SSH server setup (conditional)
+COPY ./ssh /tmp/ssh-build-context/
+RUN if [ "$SSH_ENABLED" = "true" ]; then \
+      mkdir -p /opt/dockypody/ssh && \
+      if [ -f /tmp/ssh-build-context/dockypody-dev-ed25519.pub ]; then \
+        cp /tmp/ssh-build-context/dockypody-dev-ed25519.pub /opt/dockypody/ssh/ && \
+        echo "SSH public key installed"; \
+      fi; \
+    fi
+
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
+
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 
 CMD ["apache2-foreground"]

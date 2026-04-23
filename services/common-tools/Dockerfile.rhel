@@ -22,6 +22,8 @@ ARG NUSHELL_REF="0.108.0"
 ARG NUSHELL_URL="https://github.com/nushell/nushell"
 ARG UPX_REF="v5.0.2"
 ARG UPX_URL="https://github.com/upx/upx"
+ARG TINI_REF="v0.19.0"
+ARG TINI_URL="https://github.com/krallin/tini"
 ARG TLS_ENABLED="false"
 ARG TLS_CA_NAME=""
 
@@ -34,12 +36,12 @@ ARG CACHEBUST="default"
 RUN --mount=type=cache,id=common-tools-rhel-dnf-cache,target=/var/cache/dnf,sharing=locked \
     microdnf install \
     --assumeyes \
+    ca-certificates \
+    cmake \
     gcc \
     gcc-c++ \
-    cmake \
-    make \
     git \
-    ca-certificates \
+    make \
     zlib-devel;
 
 WORKDIR /src/upx
@@ -59,6 +61,8 @@ FROM ${BASE_RUNTIME_IMAGE} AS tools
 
 ARG NUSHELL_REF
 ARG NUSHELL_URL
+ARG TINI_REF
+ARG TINI_URL
 ARG TLS_ENABLED
 ARG TLS_CA_NAME
 ARG CACHEBUST="default"
@@ -67,13 +71,19 @@ ARG CACHEBUST="default"
 RUN --mount=type=cache,id=common-tools-rhel-dnf-cache,target=/var/cache/dnf,sharing=locked \
     microdnf install \
     --assumeyes \
-    ca-certificates \
-    git \
-    make \
     bash \
     binutils \
+    ca-certificates \
     curl-minimal \
+    git \
+    make \
     tar;
+
+# Download tini-static with versioned cache (same pattern as Nushell/UPX)
+RUN --mount=type=cache,id=tini-${CACHEBUST:-${TINI_REF}},target=/tmp/tini-cache,sharing=shared \
+    curl -fsSL --retry 3 --retry-delay 2 -o /usr/bin/tini-static \
+    ${TINI_URL}/releases/download/${TINI_REF}/tini-static \
+    && chmod +x /usr/bin/tini-static
 
 # Copy UPX and verify
 COPY --from=upx-build /src/upx/build/upx /usr/local/bin/upx
@@ -99,6 +109,7 @@ RUN --mount=type=cache,id=nushell-${CACHEBUST:-${NUSHELL_REF}},target=/tmp/cache
 # Verify all tools
 RUN nu --version || (echo "Nushell verification failed" && exit 1) \
     && upx --version || (echo "UPX verification failed" && exit 1) \
+    && tini-static --version || (echo "tini verification failed" && exit 1) \
     && curl --version || (echo "curl verification failed" && exit 1) \
     && git --version || (echo "git verification failed" && exit 1) \
     && make --version || (echo "make verification failed" && exit 1) \

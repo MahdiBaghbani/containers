@@ -20,11 +20,20 @@ The Nextcloud initialization system handles:
 Container initialization is triggered by `entrypoint.sh`:
 
 ```bash
-#!/bin/sh
-# Run initialization via Nushell
-nu /usr/bin/entrypoint-init.nu || {
-  echo "Warning: Initialization failed, continuing..."
-}
+#!/bin/bash
+# Run initialization via Nushell script
+# Don't use set -e here - we want to continue even if initialization has warnings
+if [ -f /usr/bin/entrypoint-init.nu ]; then
+  if command -v nu >/dev/null 2>&1; then
+    nu /usr/bin/entrypoint-init.nu "$@" || {
+      echo "Warning: Initialization failed, continuing..." >&2
+    }
+  else
+    echo "Warning: nu not found; skipping /usr/bin/entrypoint-init.nu" >&2
+  fi
+else
+  echo "Warning: /usr/bin/entrypoint-init.nu not found; skipping init" >&2
+fi
 
 # Exec the CMD (e.g., apache2-foreground)
 exec "$@"
@@ -176,7 +185,7 @@ export def merge_apps [user: string, group: string]
 Apps can be overridden at multiple levels:
 
 | Priority | Location | Description |
-|----------|----------|-------------|
+| --- | --- | --- |
 | 1 (highest) | `/var/www/html/apps/{app}` | Direct runtime mount |
 | 2 | `/usr/src/nextcloud/apps/{app}` | User's Nextcloud source includes app |
 | 3 | `/usr/src/apps/{app}` | User-mounted app override |
@@ -219,7 +228,7 @@ Apps can be overridden at multiple levels:
 Apps should use hooks with numbers in the `51-99` range:
 
 | Range | Purpose |
-|-------|---------|
+| --- | --- |
 | `00-50` | Reserved for system/nextcloud-base hooks |
 | `51-99` | Available for app-specific hooks |
 

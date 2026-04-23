@@ -74,7 +74,7 @@ def apply-gtk-theme [theme: string]: nothing -> nothing {
     try {
         ^xfconf-query -c xsettings -p /Net/ThemeName -s $theme
     } catch {|err|
-        print $"[ocm-desktop-env] xfconf-query (GTK theme) failed: ($err.msg)"
+        print $"[ocm-desktop-env] xfconf-query GTK theme failed: ($err.msg)"
     }
 }
 
@@ -84,7 +84,19 @@ def apply-icon-theme [theme: string]: nothing -> nothing {
     try {
         ^xfconf-query -c xsettings -p /Net/IconThemeName -s $theme
     } catch {|err|
-        print $"[ocm-desktop-env] xfconf-query (icon theme) failed: ($err.msg)"
+        print $"[ocm-desktop-env] xfconf-query icon theme failed: ($err.msg)"
+    }
+}
+
+def setup-ssh-client-env [] {
+    let ssh_enabled = ($env.OCM_SSH_ENABLED? | default "false" | str downcase | str trim)
+    if $ssh_enabled == "true" {
+        print "[ocm-desktop-env] SSH client enabled, running ocm-ssh-client-env.nu..."
+        try {
+            nu /dockerstartup/ocm-ssh-client-env.nu
+        } catch {|err|
+            print $"[ocm-desktop-env] SSH client setup failed: ($err.msg)"
+        }
     }
 }
 
@@ -103,4 +115,6 @@ def main [] {
     if not ($icon_theme | is-empty) {
         apply-icon-theme $icon_theme
     }
+
+    setup-ssh-client-env
 }

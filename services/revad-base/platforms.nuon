@@ -23,6 +23,10 @@
           "name": "gcr.io/distroless/static-debian12",
           "build_arg": "BASE_RUNTIME_IMAGE"
         }
+      },
+      "ssh": {
+        "enabled": false,
+        "mode": "disabled"
       }
     },
     {
@@ -37,6 +41,13 @@
           "name": "debian",
           "build_arg": "BASE_RUNTIME_IMAGE"
         }
+      },
+      "ssh": {
+        "enabled": true,
+        "mode": "server",
+        "default_user": "root",
+        "port": 22,
+        "listen": "0.0.0.0"
       }
     }
   ]

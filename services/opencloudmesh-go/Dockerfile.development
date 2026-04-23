@@ -41,12 +41,12 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    git \
     bash \
-    make \
+    binutils \
     build-essential \
+    git \
     libsqlite3-dev \
-    binutils;
+    make;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -186,10 +186,10 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --no-install-recommends \
     --assume-yes \
     bash \
+    ca-certificates \
     curl \
-    tzdata \
     iproute2 \
-    ca-certificates;
+    tzdata;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -200,6 +200,7 @@ COPY --chmod=755 --from=directory /data /data
 COPY --chmod=700 --from=directory /tls /tls
 COPY --chmod=755 --from=directory /etc/ssl /etc/ssl
 COPY --chmod=755 --from=directory /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=compress /usr/bin/tini-static /usr/bin/tini
 
 RUN mkdir -p /var/log
 
@@ -210,6 +211,6 @@ RUN if [ -d /tls ]; then \
 
 ENV PATH="/app/bin:${PATH}"
 
-ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 
 CMD ["tail", "-F", "/var/log/opencloudmesh-go.log"]

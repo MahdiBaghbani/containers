@@ -72,6 +72,7 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
     rm -f /tmp/ca-bundle.pem
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
 
 COPY ./tls /tmp/tls-source/
 COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
@@ -95,9 +96,12 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
         rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     fi
 
+COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
+COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
+
 # Switch back to Keycloak user (UID 1000) for security
 USER 1000
 
 # Default command: already contains realm, optimized startup
-ENTRYPOINT ["/opt/keycloak/bin/kc.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 CMD ["start", "--optimized", "--verbose"]
