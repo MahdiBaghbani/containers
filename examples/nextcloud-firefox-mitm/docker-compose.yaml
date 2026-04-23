@@ -1,0 +1,218 @@
+name: nextcloud-firefox-mitm
+
+networks:
+  nextcloud-firefox-mitm-net:
+    name: nextcloud-firefox-mitm-net
+
+services:
+  mitmproxy:
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    container_name: mitmproxy.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - mitmproxy.docker
+    environment:
+      MITM_UI: "true"
+      MITM_UI_SERVER_NAME: "mitmproxy.docker"
+      MITM_UI_TLS_TERMINATION: "true"
+      MITM_UI_TLS_CRT: "/tls/mitmproxy.crt"
+      MITM_UI_TLS_KEY: "/tls/mitmproxy.key"
+      MITM_CA_NAME: "${MITM_CA_NAME:-dockypody}"
+
+  firefox:
+    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    container_name: firefox.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - firefox.docker
+    ports:
+      - "${FIREFOX_UI_PORT:-5800}:6901"
+    environment:
+      OCM_FIREFOX_START_URL: "${FIREFOX_START_URL:-https://mitmproxy.docker/}"
+      OCM_FIREFOX_PROXY_ENABLE: "${FIREFOX_PROXY_ENABLE:-true}"
+      OCM_FIREFOX_PROXY_HOST: "${FIREFOX_PROXY_HOST:-mitmproxy.docker}"
+      OCM_FIREFOX_PROXY_PORT: "${FIREFOX_PROXY_PORT:-8080}"
+      OCM_FIREFOX_PROXY_NO: "${FIREFOX_PROXY_NO:-mitmproxy.docker,localhost,127.0.0.1}"
+    depends_on:
+      mitmproxy:
+        condition: service_started
+      nextcloud1:
+        condition: service_started
+      nextcloud2:
+        condition: service_started
+
+  marianextcloud1:
+    image: "mariadb:${IMAGE_MARIADB:-11.8}"
+    container_name: marianextcloud1.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - marianextcloud1.docker
+    environment:
+      MYSQL_ROOT_PASSWORD: "${NEXTCLOUD1_MYSQL_ROOT_PASSWORD:-rootpassword}"
+      MYSQL_DATABASE: "${NEXTCLOUD1_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD1_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD1_MYSQL_PASSWORD:-nextcloudpassword}"
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
+
+  valkeynextcloud1:
+    image: "valkey/valkey:${IMAGE_VALKEY:-9.0-alpine}"
+    container_name: valkeynextcloud1.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - valkeynextcloud1.docker
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  nextcloud1:
+    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS:-local-debian}"
+    container_name: nextcloud1.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - nextcloud1.docker
+    environment:
+      APACHE_SERVER_NAME: "${NEXTCLOUD1_APACHE_SERVER_NAME:-nextcloud1.docker}"
+      NEXTCLOUD_HTTPS_MODE: "${NEXTCLOUD_HTTPS_MODE:-https-only}"
+      NEXTCLOUD_APACHE_LOGLEVEL: "${NEXTCLOUD_APACHE_LOGLEVEL:-warn}"
+      NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD1_NEXTCLOUD_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD1_NEXTCLOUD_ADMIN_PASSWORD:-admin}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "${NEXTCLOUD1_NEXTCLOUD_TRUSTED_DOMAINS:-nextcloud1.docker}"
+      NEXTCLOUD_DATA_DIR: "${NEXTCLOUD1_NEXTCLOUD_DATA_DIR:-/var/www/html/data}"
+      CONTACTS_ENABLE_OCM_INVITES: "${CONTACTS_ENABLE_OCM_INVITES:-true}"
+      CONTACTS_OCM_INVITES_MODE: "${CONTACTS_OCM_INVITES_MODE:-advanced}"
+      MYSQL_HOST: "${NEXTCLOUD1_MYSQL_HOST:-marianextcloud1}"
+      MYSQL_DATABASE: "${NEXTCLOUD1_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD1_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD1_MYSQL_PASSWORD:-nextcloudpassword}"
+      REDIS_HOST: "${NEXTCLOUD1_REDIS_HOST:-valkeynextcloud1}"
+      REDIS_HOST_PORT: "${NEXTCLOUD1_REDIS_HOST_PORT:-6379}"
+      REDIS_HOST_PASSWORD: "${NEXTCLOUD1_REDIS_HOST_PASSWORD:-}"
+      HTTP_PROXY: "${NEXTCLOUD_HTTP_PROXY:-http://mitmproxy.docker:8080}"
+      HTTPS_PROXY: "${NEXTCLOUD_HTTPS_PROXY:-http://mitmproxy.docker:8080}"
+      NO_PROXY: "${NEXTCLOUD1_NO_PROXY:-localhost,127.0.0.1,mitmproxy.docker,marianextcloud1,valkeynextcloud1}"
+    depends_on:
+      marianextcloud1:
+        condition: service_started
+      valkeynextcloud1:
+        condition: service_started
+
+  marianextcloud2:
+    image: "mariadb:${IMAGE_MARIADB:-11.8}"
+    container_name: marianextcloud2.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - marianextcloud2.docker
+    environment:
+      MYSQL_ROOT_PASSWORD: "${NEXTCLOUD2_MYSQL_ROOT_PASSWORD:-rootpassword}"
+      MYSQL_DATABASE: "${NEXTCLOUD2_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD2_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD2_MYSQL_PASSWORD:-nextcloudpassword}"
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
+
+  valkeynextcloud2:
+    image: "valkey/valkey:${IMAGE_VALKEY:-9.0-alpine}"
+    container_name: valkeynextcloud2.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - valkeynextcloud2.docker
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  nextcloud2:
+    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS:-local-debian}"
+    container_name: nextcloud2.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-firefox-mitm-net:
+        aliases:
+          - nextcloud2.docker
+    environment:
+      APACHE_SERVER_NAME: "${NEXTCLOUD2_APACHE_SERVER_NAME:-nextcloud2.docker}"
+      NEXTCLOUD_HTTPS_MODE: "${NEXTCLOUD_HTTPS_MODE:-https-only}"
+      NEXTCLOUD_APACHE_LOGLEVEL: "${NEXTCLOUD_APACHE_LOGLEVEL:-warn}"
+      NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD2_NEXTCLOUD_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD2_NEXTCLOUD_ADMIN_PASSWORD:-admin}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "${NEXTCLOUD2_NEXTCLOUD_TRUSTED_DOMAINS:-nextcloud2.docker}"
+      NEXTCLOUD_DATA_DIR: "${NEXTCLOUD2_NEXTCLOUD_DATA_DIR:-/var/www/html/data}"
+      CONTACTS_ENABLE_OCM_INVITES: "${CONTACTS_ENABLE_OCM_INVITES:-true}"
+      CONTACTS_OCM_INVITES_MODE: "${CONTACTS_OCM_INVITES_MODE:-advanced}"
+      MYSQL_HOST: "${NEXTCLOUD2_MYSQL_HOST:-marianextcloud2}"
+      MYSQL_DATABASE: "${NEXTCLOUD2_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD2_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD2_MYSQL_PASSWORD:-nextcloudpassword}"
+      REDIS_HOST: "${NEXTCLOUD2_REDIS_HOST:-valkeynextcloud2}"
+      REDIS_HOST_PORT: "${NEXTCLOUD2_REDIS_HOST_PORT:-6379}"
+      REDIS_HOST_PASSWORD: "${NEXTCLOUD2_REDIS_HOST_PASSWORD:-}"
+      HTTP_PROXY: "${NEXTCLOUD_HTTP_PROXY:-http://mitmproxy.docker:8080}"
+      HTTPS_PROXY: "${NEXTCLOUD_HTTPS_PROXY:-http://mitmproxy.docker:8080}"
+      NO_PROXY: "${NEXTCLOUD2_NO_PROXY:-localhost,127.0.0.1,mitmproxy.docker,marianextcloud2,valkeynextcloud2}"
+    depends_on:
+      marianextcloud2:
+        condition: service_started
+      valkeynextcloud2:
+        condition: service_started
+
