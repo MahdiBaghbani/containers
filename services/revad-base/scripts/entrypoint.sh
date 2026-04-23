@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/bin/bash
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # DockyPody: container build scripts and images
 # Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
@@ -19,13 +19,19 @@
 # Run initialization via Nushell script
 # This performs all container setup tasks before starting the main process
 # Don't use set -e here - we want to continue even if initialization has warnings
-# The CMD (tail) should keep running regardless of revad status
-nu /usr/bin/entrypoint-init.nu || {
-  echo "Warning: Initialization script exited with error, but continuing to run CMD..."
-}
+if [ -f /usr/bin/entrypoint-init.nu ]; then
+  if command -v nu >/dev/null 2>&1; then
+    nu /usr/bin/entrypoint-init.nu "$@" || {
+      echo "Warning: Initialization script exited with error, but continuing to run CMD..." >&2
+    }
+  else
+    echo "Warning: nu not found; skipping /usr/bin/entrypoint-init.nu" >&2
+  fi
+else
+  echo "Warning: /usr/bin/entrypoint-init.nu not found; skipping init" >&2
+fi
 
 # Exec the CMD arguments directly
 # Nushell has limited ability to parse complex command-line arguments,
 # so we use exec to pass them through to the actual command unchanged
-# This keeps the container running even if revad crashes
 exec "$@"

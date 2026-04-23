@@ -21,6 +21,8 @@
 
 use ./lib/shared.nu [init_shared, start_reva_daemon]
 use ./lib/utils.nu [get_env_or_default]
+# sshd module is staged flat into the image at /usr/bin/lib/sshd.nu during Docker build.
+use ./lib/sshd.nu [start-sshd-if-enabled]
 
 # Valid container modes supported by this entrypoint
 const VALID_MODES = ["gateway", "dataprovider-localhome", "dataprovider-ocm", "dataprovider-sciencemesh", "authprovider-oidc", "authprovider-machine", "authprovider-ocmshares", "authprovider-ocmsharecode", "authprovider-ocmexchangedtoken", "authprovider-publicshares", "shareproviders", "groupuserproviders"]
@@ -63,7 +65,13 @@ def extract_authprovider_type [mode: string] {
 # Main entrypoint function
 # Orchestrates container initialization by validating mode, running shared setup,
 # routing to mode-specific initialization, and starting the Reva daemon
-def main [] {
+def main [...args] {
+  try {
+    start-sshd-if-enabled
+  } catch {|err|
+    print $"WARNING: [entrypoint-init] sshd start failed, continuing: ($err.msg)"
+  }
+
   # Get and validate container mode from environment variable
   let container_mode = (get_env_or_default "REVAD_CONTAINER_MODE" "")
   
