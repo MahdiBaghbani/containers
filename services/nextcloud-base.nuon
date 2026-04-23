@@ -22,5 +22,11 @@
       "DNS:nextcloud3.docker",
       "DNS:nextcloud4.docker"
     ]
+  },
+  "ssh": {
+    "enabled": true,
+    "mode": "server",
+    "default_user": "root",
+    "port": 22
   }
 }

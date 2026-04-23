@@ -26,6 +26,12 @@ ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
 
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 ################################
 ###  Build Reva from source  ###
 ################################
@@ -41,12 +47,12 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    git \
     bash \
-    make \
+    binutils \
     build-essential \
+    git \
     libsqlite3-dev \
-    binutils;
+    make;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -204,6 +210,12 @@ FROM ${BASE_RUNTIME_IMAGE}
 
 ENV TZ=Etc/UTC
 
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
@@ -213,12 +225,30 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --no-install-recommends \
     --assume-yes \
     bash \
+    ca-certificates \
     curl \
-    tzdata \
     iproute2 \
-    ca-certificates;
+    openssh-server \
+    tzdata;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
+
+COPY ./ssh /tmp/ssh-build-context/
+RUN if [ "$SSH_ENABLED" = "true" ]; then \
+    mkdir -p /opt/dockypody/ssh && \
+    if [ -f /tmp/ssh-build-context/dockypody-dev-ed25519.pub ]; then \
+      cp /tmp/ssh-build-context/dockypody-dev-ed25519.pub /opt/dockypody/ssh/dockypody-dev-ed25519.pub; \
+    else \
+      echo "Warning: dockypody-dev-ed25519.pub not found in build context; sshd authorized_keys will not be installed" >&2; \
+    fi; \
+  fi && \
+  rm -rf /tmp/ssh-build-context || true
 
 COPY --chmod=755 --from=directory /etc/revad /etc/revad
 COPY --chmod=755 --from=directory /revad /revad
@@ -230,6 +260,7 @@ COPY --chmod=755 --from=directory /usr/bin /usr/bin
 COPY --chmod=700 --from=directory /tls /tls
 COPY --chmod=755 --from=directory /etc/ssl /etc/ssl
 COPY --chmod=755 --from=directory /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=compress /usr/bin/tini-static /usr/bin/tini
 
 RUN if [ -d /tls ]; then \
     find /tls -type f -name "*.key" -exec chmod 600 {} \; && \
@@ -238,6 +269,6 @@ RUN if [ -d /tls ]; then \
 
 ENV PATH="/revad/cmd:${PATH}"
 
-ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 
 CMD ["tail", "-F", "/var/log/revad.log"]

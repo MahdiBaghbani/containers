@@ -61,6 +61,18 @@
           }
         }
       }
+    },
+    {
+      "name": "sta-m6-nc-code-flow-arch-redesign",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "url": "https://github.com/MahdiBaghbani/server.git",
+            "ref": "sta-milestone-6/ocm-architecture-redesign"
+          }
+        }
+      }
     }
   ]
 }

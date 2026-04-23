@@ -5,7 +5,7 @@ def run! [bin: string, ...args: string] {
     let result = (run-external $bin ...$args | complete)
     if $result.exit_code != 0 {
         let cmd_str = $"($bin) ($args | str join ' ')"
-        error make {msg: $"'($cmd_str)' failed (exit ($result.exit_code)): ($result.stderr | str trim)"}
+        error make {msg: $"'($cmd_str)' failed exit=($result.exit_code): ($result.stderr | str trim)"}
     }
 }
 

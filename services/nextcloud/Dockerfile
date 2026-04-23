@@ -33,8 +33,8 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    git \
-    ca-certificates;
+    ca-certificates \
+    git;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 

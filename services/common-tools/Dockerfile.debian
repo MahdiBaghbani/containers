@@ -40,9 +40,9 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     --no-install-recommends \
     --assume-yes \
     build-essential \
+    ca-certificates \
     cmake \
     git \
-    ca-certificates \
     zlib1g-dev;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -76,12 +76,13 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    curl \
+    bash \
+    binutils \
     ca-certificates \
+    curl \
     git \
     make \
-    bash \
-    binutils;
+    tini;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -109,6 +110,7 @@ RUN --mount=type=cache,id=nushell-${CACHEBUST:-${NUSHELL_REF}},target=/tmp/cache
 # Verify all tools
 RUN nu --version || (echo "Nushell verification failed" && exit 1) \
     && upx --version || (echo "UPX verification failed" && exit 1) \
+    && tini --version || (echo "tini verification failed" && exit 1) \
     && curl --version || (echo "curl verification failed" && exit 1) \
     && git --version || (echo "git verification failed" && exit 1) \
     && make --version || (echo "make verification failed" && exit 1) \

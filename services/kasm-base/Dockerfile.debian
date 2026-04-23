@@ -25,6 +25,12 @@ ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
 
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 
 FROM ${BASE_RUNTIME_IMAGE}
@@ -35,6 +41,13 @@ ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
+
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
 ARG BASE_RUNTIME_IMAGE
 ARG COMMON_TOOLS_IMAGE
 
@@ -97,6 +110,7 @@ WORKDIR $HOME
 RUN mkdir -p $HOME/Desktop
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
@@ -109,13 +123,14 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
       ca-certificates \
       curl \
       dnsutils \
-      dumb-init \
       fonts-dejavu \
       fonts-noto-color-emoji \
       fonts-noto-core \
       iproute2 \
       iputils-ping \
+      openssh-client \
       openssl \
+      p11-kit-modules \
       procps \
       sudo \
       traceroute \
@@ -194,15 +209,46 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
     fi && \
     rm -f /tmp/ca-bundle.crt
 
+RUN set -eux; \
+    p11="$(ls -1 /usr/lib/*/pkcs11/p11-kit-trust.so 2>/dev/null | head -n 1)"; \
+    nssckbi="$(ls -1 /usr/lib/*/libnssckbi.so 2>/dev/null | head -n 1)"; \
+    if [ -z "$p11" ]; then echo "p11-kit-trust.so not found" >&2; exit 1; fi; \
+    if [ -z "$nssckbi" ]; then echo "libnssckbi.so not found" >&2; exit 1; fi; \
+    ln -sf "$p11" "$nssckbi"; \
+    test "$(readlink -f "$nssckbi")" = "$p11"
+
 COPY scripts/install/cleanup $INST_SCRIPTS/cleanup/
 RUN bash $INST_SCRIPTS/cleanup/cleanup.sh && \
     rm -rf $INST_SCRIPTS/cleanup/
 
+# SSH client setup
+COPY ./ssh /tmp/ssh-build-context/
+COPY --chmod=755 ./scripts/startup/ocm-ssh-client-env.nu /dockerstartup/ocm-ssh-client-env.nu
+RUN mkdir -p /opt/dockypody/ssh && \
+    chown root:1000 /opt/dockypody/ssh && \
+    chmod 0750 /opt/dockypody/ssh && \
+    if [ "$SSH_ENABLED" = "true" ]; then \
+      if [ -f /tmp/ssh-build-context/dockypody-dev-ed25519 ]; then \
+        install -m 0640 -o root -g 1000 /tmp/ssh-build-context/dockypody-dev-ed25519 /opt/dockypody/ssh/dockypody-dev-ed25519 && \
+        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/dockypody-dev-ed25519.pub /opt/dockypody/ssh/dockypody-dev-ed25519.pub && \
+        echo "SSH keypair installed"; \
+      fi; \
+      if [ -f /tmp/ssh-build-context/known_hosts ]; then \
+        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/known_hosts /opt/dockypody/ssh/known_hosts && \
+        echo "SSH known_hosts installed"; \
+      fi; \
+    fi
+
 EXPOSE 5901 6901
 
-ENV HOME=/home/ocm-user
+ENV HOME=/home/ocm-user \
+    OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
 WORKDIR $HOME
 USER 1000
 
-ENTRYPOINT ["/usr/bin/dumb-init", "--", "/dockerstartup/kasm_default_profile.sh", "/dockerstartup/vnc_startup.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/dockerstartup/kasm_default_profile.sh", "/dockerstartup/vnc_startup.sh"]
 CMD ["--wait"]

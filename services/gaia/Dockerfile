@@ -34,8 +34,8 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
   apt-get install \
   --no-install-recommends \
   --assume-yes \
-  git \
-  ca-certificates;
+  ca-certificates \
+  git;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -99,7 +99,12 @@ RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
 FROM ${BASE_RUNTIME_IMAGE}
 
 COPY --from=compress --chmod=755 /tmp/binaries/gaia /usr/local/bin/gaia
+COPY --chmod=755 --from=compress /usr/bin/tini-static /usr/bin/tini
+
+COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
+COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 
 ENV PATH="/usr/local/bin:${PATH}"
 
-ENTRYPOINT [ "/usr/local/bin/gaia" ]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
+CMD ["/usr/local/bin/gaia"]

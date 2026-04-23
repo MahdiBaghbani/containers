@@ -45,12 +45,12 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     apt-get install \
     --no-install-recommends \
     --assume-yes \
-    git \
-    make \
     ca-certificates \
-    sed \
+    curl \
+    git \
     gzip \
-    curl;
+    make \
+    sed;
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -157,6 +157,10 @@ ARG TLS_MODE
 ARG TLS_CERT_NAME
 ARG TLS_CA_NAME
 
+RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
+    apk add \
+    bash;
+
 RUN mkdir -p /etc/ssl/certs /tmp
 COPY --from=common-tools-runtime /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
 RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
@@ -169,6 +173,7 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
     rm -f /tmp/ca-bundle.crt
 
 COPY --chmod=755 --from=common-tools-runtime /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=common-tools-runtime /usr/bin/tini-static /usr/bin/tini
 
 COPY ./tls /tmp/tls-source/
 COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
@@ -212,3 +217,9 @@ COPY --chown=nginx:nginx ./configs/nginx-https.conf.template /etc/nginx/template
 # Wrapper shell script (for nginx entrypoint compatibility) and nushell implementation
 COPY --chmod=755 --chown=nginx:nginx ./scripts/cernbox.sh /docker-entrypoint.d/cernbox.sh
 COPY --chmod=755 --chown=nginx:nginx ./scripts/cernbox.nu /docker-entrypoint.d/cernbox.nu
+
+COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
+COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
+
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
