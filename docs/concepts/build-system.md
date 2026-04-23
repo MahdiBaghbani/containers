@@ -69,9 +69,13 @@ When injecting build arguments, the build system applies them in this order (lat
    - Dependencies are system-managed and authoritative - they override any previous values, including environment variables
    - This ensures reproducible builds and prevents accidental overrides
 7. **TLS arguments** (TLS_ENABLED, TLS_CERT_NAME, TLS_CA_NAME)
-   - Added last but use unique names that don't conflict with dependency build args
-   - These are system-managed arguments and should not be overridden
-8. **CACHEBUST argument** (cache invalidation)
+    - Added last but use unique names that don't conflict with dependency build args
+    - These are system-managed arguments and should not be overridden
+8. **SSH arguments** (SSH_ENABLED, SSH_MODE, SSH_DEFAULT_USER, SSH_PORT,
+   SSH_LISTEN)
+    - Added after TLS, use separate namespace (SSH_*)
+    - System-managed from config, should not be overridden
+9. **CACHEBUST argument** (cache invalidation)
    - Computed per-service or global override
    - Optional in Dockerfiles (user-controlled)
 
@@ -90,12 +94,14 @@ When injecting build arguments, the build system applies them in this order (lat
 | Config `build_args`          | **YES**                       | `CUSTOM_ARG` can be overridden for testing             |
 | **Dependency args**          | **NO**                        | Dependencies are system-managed and authoritative      |
 | **TLS args**                 | **NO**                        | TLS args use separate namespace (TLS\_\*)              |
+| **SSH args**                 | **NO**                        | SSH args use separate namespace (SSH_*)                |
 
 ### Summary
 
 - Environment variables can override config values (sources, external images, config `build_args`)
 - **Environment variables CANNOT override dependency values** - dependencies are applied after env vars and will override them
 - **Environment variables CANNOT override TLS arguments** - TLS args use a separate namespace
+- **Environment variables CANNOT override SSH arguments** - SSH args use a separate namespace
 - Use environment variable overrides for testing, debugging, or temporary overrides of config values only
 
 ### Build Argument Priority Example
@@ -872,10 +878,17 @@ scripts/
     - info.nu               # Registry path construction
   - services/                 # Service domain
     - core.nu               # Service discovery and paths
+  - ssh/                      # SSH domain
+    - lib.nu                # Shared SSH helpers
+    - copy.nu               # SSH build context copying
+    - key.nu                # Key generation CLI
+    - cli.nu                # SSH CLI entry point
+    - clean.nu              # SSH cleanup
   - tls/                      # TLS domain
     - validation.nu         # CA sync and validation
   - validate/                 # Validation domain
     - core.nu               # Config validation
+    - ssh.nu                # SSH config validation
   - core/                     # Cross-cutting utilities
     - records.nu            # Record manipulation (deep-merge)
     - repo.nu               # Repository root detection
@@ -1050,6 +1063,7 @@ The service definition hash is computed from:
 - **External images**: Base images and other external dependencies
 - **Build args**: User-defined build arguments from config
 - **TLS fields**: TLS configuration (enabled, cert name, CA name)
+- **SSH fields**: SSH configuration (enabled, mode, default_user, port)
 - **Direct dependency hashes**: Hashes of all immediate internal dependencies
 
 The hash is computed recursively in topological order, ensuring that dependency hashes are available before computing the dependent service's hash.
@@ -1293,5 +1307,6 @@ Local developers can enable pruning manually with `--prune-cache-mounts` when in
 - [Service Configuration](service-configuration.md) - How service configs are structured
 - [Dependency Management](dependency-management.md) - How dependencies are resolved
 - [TLS Management](tls-management.md) - How TLS certificates are handled
+- [SSH Access](ssh-access.md) - How SSH dev access is configured
 - [Multi-Platform Builds Guide](../guides/multi-platform-builds.md) - Platform configuration details
 - [CLI Reference](../reference/cli-reference.md) - Complete CLI documentation

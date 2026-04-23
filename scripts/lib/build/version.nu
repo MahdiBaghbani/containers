@@ -27,10 +27,11 @@ use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifes
 use ./config.nu [detect-all-source-types load-service-config]
 use ../tls/validation.nu [validate-ca]
 use ../validate/core.nu [validate-tls-config-merged]
+use ../validate/ssh.nu [validate-ssh-config-merged]
 use ../core/repo.nu [get-repo-root]
 use ../tls/lib.nu [read-ca-name]
 use ./tags.nu [generate-tags]
-use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context]
+use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context extract-ssh-metadata prepare-ssh-context cleanup-ssh-context]
 use ./sources.nu [prepare-local-sources-context extract-source-shas]
 use ./labels.nu [generate-labels]
 use ./args.nu [generate-build-args]
@@ -189,7 +190,9 @@ export def build-single-version [
   if $tls_meta.enabled {
     validate-ca $service $cfg $ca_name
   }
-  
+
+  let ssh_meta = (extract-ssh-metadata $cfg)
+
   let is_local = $meta.is_local
   let version_tag = $version_spec.name
   
@@ -433,7 +436,7 @@ export def build-single-version [
     {}
   })
 
-  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths)
+  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths)
 
   # Detect which CA files the Dockerfile actually needs, then stage them just-in-time.
   let ca_reqs = (if $tls_meta.enabled {
@@ -443,6 +446,8 @@ export def build-single-version [
     {needs_ca_crt: false, needs_ca_key: false}
   })
   let ca_context = (prepare-ca-context $context $tls_meta $ca_reqs)
+
+  let ssh_context = (prepare-ssh-context $service $context $ssh_meta.enabled $ssh_meta.mode)
 
   print ""
   print $"=== Building ($service):($version_tag) ==="
@@ -459,6 +464,7 @@ export def build-single-version [
 
   cleanup-tls-context $context $tls_context
   cleanup-ca-context $context $ca_context
+  cleanup-ssh-context $context $ssh_context
 
   if $build_error != null {
     error make {msg: $build_error}

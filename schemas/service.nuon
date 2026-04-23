@@ -121,6 +121,19 @@
     "org.opencontainers.image.description": "Base image for Revad services"
   },
 
+  // SSH configuration
+  // Configures dev and E2E SSH shell access to running containers.
+  // Does NOT describe Git transport, Git signing, or OCM share protocol behavior.
+  // Unlike TLS, SSH config IS allowed in platforms.nuon for dev/prod splits.
+  // Version-level overrides are allowed but rare; document when used.
+  "ssh": {
+    "enabled": false, // bool (required)
+    "mode": "disabled", // string (required if enabled=true) - "client" | "server" | "client-and-server"
+    "default_user": "root", // string (optional, default "root")
+    "port": 22, // int (optional, default 22)
+    "listen": "0.0.0.0" // string (optional, default "0.0.0.0")
+  },
+
   // TLS configuration
   // CRITICAL RESTRICTIONS:
   // - TLS config in platforms.nuon is FORBIDDEN (validation error)

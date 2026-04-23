@@ -319,7 +319,8 @@ The `common-tools` image is a base utility image that provides Debian (or Alpine
 The `common-tools` image includes:
 
 - Base OS: Debian Trixie Slim (configurable via `BASE_RUNTIME_IMAGE`)
-- Pre-installed tools: `git`, `make`, `curl`, `bash`, `binutils`, `nu` (Nushell), `upx`, `ca-certificates`
+- Pre-installed tools: `git`, `make`, `curl`, `bash`, `binutils`, `nu` (Nushell), `upx`, `tini`, `ca-certificates`
+- Platform variants: `debian`, `alpine`, `rhel`
 
 ### When to Use common-tools
 
@@ -472,6 +473,169 @@ shared pool is explicitly documented (like apt/apk/dnf above).
 | Composer | `<service>-composer-cache` | `/root/.composer/cache` | `locked` |
 | PECL downloads | `<service>-pecl-downloads` | `/tmp/pear/download` | `locked` |
 
+## Process Management and Init Systems
+
+All non-distroless containers MUST use tini as the init system.
+
+### Why tini
+
+PID 1 has special kernel responsibilities:
+
+- Signal handling: no default SIGTERM handler, signals are silently dropped
+- Zombie reaping: must call waitpid() on orphaned children
+
+Most applications are not designed to be PID 1 citizens.
+
+### Standard ENTRYPOINT Pattern
+
+```dockerfile
+# Copy tini from common-tools (installed once, copied to all services)
+COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
+
+# JSON-form ENTRYPOINT (exec form, not shell form)
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
+```
+
+### entrypoint.sh Wrapper
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+if [ -f /usr/bin/entrypoint-init.nu ]; then
+    if command -v nu >/dev/null 2>&1; then
+        nu /usr/bin/entrypoint-init.nu "$@" || {
+            echo "WARNING: entrypoint-init.nu failed, continuing anyway" >&2
+        }
+    else
+        echo "WARNING: nu not found; skipping /usr/bin/entrypoint-init.nu" >&2
+    fi
+else
+    echo "WARNING: /usr/bin/entrypoint-init.nu not found; skipping init" >&2
+fi
+
+exec "$@"
+```
+
+Rules:
+
+- Always use JSON form for ENTRYPOINT
+- Never use shell form (`ENTRYPOINT /usr/bin/tini ...`)
+- The wrapper MUST end with `exec "$@"` to replace the shell process
+- Nushell init scripts should NOT use `exec` (let the shell wrapper do it)
+
+### Exceptions
+
+- Distroless/scratch images: exempt (no shell to run tini)
+- Services that already have a complex entrypoint chain (e.g., nginx): chain to the existing entrypoint from your wrapper
+
+## Package List Alphabetical Ordering
+
+Package lists in `apt-get install`, `apk add`, and `microdnf install` MUST be alphabetically sorted.
+
+```dockerfile
+# Correct
+RUN apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    bash \
+    binutils \
+    ca-certificates \
+    curl \
+    git \
+    make;
+
+# Incorrect
+RUN apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    curl \
+    ca-certificates \
+    git \
+    make \
+    bash \
+    binutils;
+```
+
+Rationale: prevents duplicate packages, makes diffs cleaner, simplifies code reviews.
+
+## SSH Build Arguments and Dockerfile Patterns
+
+When a service enables SSH (`ssh.enabled=true`), the build system injects these arguments:
+
+| Argument | Default | Description |
+| -------- | ------- | ----------- |
+| `SSH_ENABLED` | `"false"` | Whether SSH is enabled |
+| `SSH_MODE` | `"disabled"` | `"client"`, `"server"`, or `"client-and-server"` |
+| `SSH_DEFAULT_USER` | `"root"` | Default SSH user |
+| `SSH_PORT` | `"22"` | SSH daemon port |
+| `SSH_LISTEN` | `"0.0.0.0"` | SSH daemon listen address (server mode) |
+
+### Client Mode Pattern (Kasm workspaces)
+
+```dockerfile
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
+# ... later in Dockerfile ...
+
+RUN apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    openssh-client;
+
+COPY --chmod=755 ./scripts/startup/ocm-ssh-client-env.nu /dockerstartup/ocm-ssh-client-env.nu
+
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
+```
+
+### Server Mode Pattern (target services)
+
+```dockerfile
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
+# ... later in Dockerfile ...
+
+RUN apt-get install \
+    --no-install-recommends \
+    --assume-yes \
+    openssh-server;
+
+# The build system stages the shared sshd module into the build context as:
+#   scripts/lib/sshd.nu
+# so the service can copy it alongside its other entrypoint libs.
+COPY --chmod=755 ./scripts/lib/*.nu /usr/bin/lib/
+
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
+```
+
+### SSH Context Staging
+
+The build system stages SSH material from `ssh/` into the build context
+automatically. Dockerfiles should consume the staged `./ssh/` directory (for
+example by copying it into a temporary path like `/tmp/ssh-build-context/`) and
+then copy only the needed files into their final locations. Do not hardcode
+paths to repo-root SSH material or assume it is always present.
+
+- `ssh/dockypody-dev-ed25519` -> staged to build context
+- `ssh/dockypody-dev-ed25519.pub` -> staged to build context
+- `ssh/known_hosts` -> staged if present
+
 ## Verification Checklist
 
 - [ ] ARGs declared in the Dockerfile match the service config build args.
@@ -484,6 +648,11 @@ shared pool is explicitly documented (like apt/apk/dnf above).
 - [ ] If `tls.enabled=true`, the service declares a direct `common-tools`
       dependency for the platform being built (transitive deps do not satisfy TLS
       validation).
+- [ ] tini is copied from common-tools, not installed per-service.
+- [ ] Package lists are alphabetically sorted.
+- [ ] ENTRYPOINT uses JSON form with tini as PID 1.
+- [ ] SSH args (`SSH_ENABLED`, `SSH_MODE`, etc.) declared when service has `ssh.enabled=true`.
+- [ ] SSH packages (`openssh-client` or `openssh-server`) installed per-service, not in common-tools.
 
 ## References
 

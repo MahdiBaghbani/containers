@@ -25,6 +25,7 @@
 - [Dependency Management](concepts/dependency-management.md) - Dependency resolution, version inheritance, platform inheritance
 - [Build System](concepts/build-system.md) - Build argument injection, build flow, file structure
 - [TLS Management](concepts/tls-management.md) - Certificate management, CA propagation, selective copying
+- [SSH Access](concepts/ssh-access.md) - Dev and E2E SSH shell access to containers
 
 ## Guides (How-To)
 

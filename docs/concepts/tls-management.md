@@ -120,7 +120,7 @@ During build, the system:
    - For `ca-and-cert`: validates the service certificate issuer matches the shared CA subject
    - Prints certificate expiration info (non-blocking warnings)
 
-2. **Build Arg Injection**
+1. **Build Arg Injection**
    - `TLS_ENABLED` - "true" or "false"
    - `TLS_MODE` - TLS mode: "ca-only", "ca-and-cert", or "cert-only" (system-managed, env var override rejected)
    - `TLS_CERT_NAME` - Service certificate name (e.g., "reva")
@@ -128,7 +128,7 @@ During build, the system:
 
 **Note:** `TLS_MODE` is system-managed from config. Environment variable `TLS_MODE` is ignored with a warning if set.
 
-3. **Build Context Staging and Selective Copying**
+1. **Build Context Staging and Selective Copying**
    - Service-local CA mirrors under `services/<svc>/tls/certificate-authority/` are build-staged only.
      They are not a source of truth and should not persist after the build.
    - If a Dockerfile needs CA material from `./tls/certificate-authority/`, the build system stages the

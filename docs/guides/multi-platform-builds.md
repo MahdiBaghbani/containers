@@ -296,7 +296,7 @@ You can override configuration per platform in the version manifest:
 
 When multiple platforms share the same configuration values, you can use the optional `defaults` field in `platforms.nuon` to reduce repetition. Defaults are deep-merged into each platform's config.
 
-**Example: Reducing Repetition**
+#### Example: Reducing Repetition
 
 **Before (repetitive):**
 

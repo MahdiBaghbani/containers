@@ -64,7 +64,7 @@ nu scripts/dockypody.nu docs lint --fix
 ### Available Subcommands
 
 | Subcommand | Description | Domain CLI |
-|------------|-------------|------------|
+| ---------- | ----------- | ---------- |
 | `build` | Build container images | `build/cli.nu [build-cli]` |
 | `test` | Run test suites | `test/cli.nu [test-cli]` |
 | `validate` | Validate service configurations | `validate/cli.nu [validate-cli]` |
@@ -339,7 +339,7 @@ nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 **Modes:**
 
 | Mode | Behavior | Use Case |
-|------|----------|----------|
+| ---- | -------- | -------- |
 | `off` | Always build deps, no hash skip | Local development, forced rebuilds |
 | `soft` | Hash-based skip + auto-build on missing/stale | Default for CI workflows |
 | `strict` | Hash validation, fail on missing/stale | Explicit dependency control |
@@ -542,10 +542,10 @@ nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monito
 
 **Modes:**
 
-| Mode | Behavior |
-|------|----------|
-| `off` | No monitoring (default for local builds) |
-| `basic` | Emit disk usage snapshots at build phases |
+| Mode    | Behavior                                          |
+| ------- | ------------------------------------------------- |
+| `off`   | No monitoring (default for local builds)          |
+| `basic` | Emit disk usage snapshots at build phases         |
 
 **CI Default:** `basic` (enabled for all services in generated workflows)
 

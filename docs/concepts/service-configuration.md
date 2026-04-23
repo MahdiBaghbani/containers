@@ -34,7 +34,8 @@ Service configurations define how services are built, what sources they use, wha
 
 This requirement ensures compatibility with editors that use JSONC syntax highlighting for `.nuon` files. While NUON supports bare keys, JSONC does not, so quoted keys are required for proper syntax highlighting.
 
-Each service has a configuration file in `services/{service-name}.nuon` that defines:
+Each service has a configuration file in `services/{service-name}.nuon` that
+defines:
 
 - Service metadata (name, context, dockerfile, tls)
 - Source repositories to build from (single-platform only)
@@ -43,7 +44,10 @@ Each service has a configuration file in `services/{service-name}.nuon` that def
 - Build arguments
 - Labels
 
-**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY** contain: `name`, `context`, `tls`. All other fields are forbidden and must be moved to `platforms.nuon` (infrastructure) or `versions.nuon` (versions).
+**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY** contain:
+`name`, `context`, `labels`, `tls`, and `ssh` (metadata). All other fields are
+forbidden and must be moved to `platforms.nuon` (infrastructure) or
+`versions.nuon` (versions).
 
 ## Dockerfile Requirement
 
@@ -444,7 +448,7 @@ Source overrides in version manifests use **type-aware merging**:
 - **Local sources (path)**: Always replace entirely (path is a single field).
 - **Type switches**: When switching between Git and local sources, the override completely replaces the default (no merging of incompatible fields).
 
-**Example: Partial Git Source Override**
+#### Example: Partial Git Source Override
 
 ```nuon
 {
@@ -473,7 +477,7 @@ Source overrides in version manifests use **type-aware merging**:
 // Result: reva has {url: "https://github.com/cs3org/reva", ref: "master"}
 ```
 
-**Example: Local Source Override (Type Switch)**
+#### Example: Local Source Override (Type Switch)
 
 ```nuon
 {
@@ -874,6 +878,54 @@ For complete details on SHA extraction and caching, see [Source Build Arguments 
 TLS configuration is **ONLY** allowed in base config. It is **FORBIDDEN** in `platforms.nuon` and `versions.nuon`.
 
 TLS config is considered metadata (not infrastructure or version control), so it stays in base config even when `platforms.nuon` exists.
+
+## SSH Configuration
+
+SSH configuration configures dev and E2E SSH shell access to running containers. It does NOT describe Git transport, Git signing, or OCM share protocol behavior.
+
+Unlike TLS, SSH configuration **IS allowed** in `platforms.nuon` and `versions.nuon` for dev/prod splits.
+
+### Example
+
+```nuon
+{
+  "ssh": {
+    "enabled": true,
+    "mode": "server",
+    "default_user": "root",
+    "port": 22,
+    "listen": "0.0.0.0"
+  }
+}
+```
+
+### Modes
+
+- `client`: Container acts as SSH client (generates `~/.ssh/config`, copies keypair)
+- `server`: Container runs sshd daemon (generates host keys, configures sshd, starts daemon)
+- `client-and-server`: Both capabilities
+- `disabled` (default): No SSH access
+
+### Platform Overrides
+
+SSH is allowed in platform configs:
+
+```nuon
+{
+  "platforms": [
+    {
+      "name": "development",
+      "ssh": { "enabled": true, "mode": "server" }
+    },
+    {
+      "name": "production",
+      "ssh": { "enabled": false, "mode": "disabled" }
+    }
+  ]
+}
+```
+
+Version-level overrides are also allowed but should be rare and documented.
 
 ## See Also
 
