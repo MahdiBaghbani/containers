@@ -1,0 +1,10 @@
+{
+  "name": "cypress-firefox-mitm-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Example project for the cypress-firefox-mitm compose stack.",
+  "scripts": {
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
+  }
+}

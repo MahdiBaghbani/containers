@@ -1,0 +1,78 @@
+name: cypress-firefox-mitm
+
+networks:
+  cypress-firefox-mitm-net:
+    name: cypress-firefox-mitm-net
+
+services:
+  mitmproxy:
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    container_name: mitmproxy.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      cypress-firefox-mitm-net:
+        aliases:
+          - mitmproxy.docker
+    environment:
+      MITM_UI: "true"
+      MITM_UI_SERVER_NAME: "mitmproxy.docker"
+      MITM_UI_TLS_TERMINATION: "true"
+      MITM_UI_TLS_CRT: "/tls/mitmproxy.crt"
+      MITM_UI_TLS_KEY: "/tls/mitmproxy.key"
+      MITM_CA_NAME: "${MITM_CA_NAME:-dockypody}"
+    # Host port publish is optional. The point of this example is that Firefox
+    # and Cypress can reach mitmweb over the compose network via
+    # https://mitmproxy.docker/.
+    # ports:
+    #   - "8443:443"
+
+  firefox:
+    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    container_name: firefox.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      cypress-firefox-mitm-net:
+        aliases:
+          - firefox.docker
+    ports:
+      - "${FIREFOX_UI_PORT:-5800}:6901"
+    environment:
+      OCM_FIREFOX_START_URL: "https://mitmproxy.docker/"
+    depends_on:
+      mitmproxy:
+        condition: service_started
+
+  cypress:
+    image: "${CYPRESS_IMAGE:-cypress:v1.0.0-dev}"
+    container_name: cypress.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      cypress-firefox-mitm-net:
+        aliases:
+          - cypress.docker
+    ports:
+      - "${CYPRESS_UI_PORT:-5900}:6901"
+    environment:
+      OCM_CYPRESS_PROJECT_DIR: "/workspace"
+    volumes:
+      - "./cypress-project:/workspace:rw"
+    depends_on:
+      mitmproxy:
+        condition: service_started
