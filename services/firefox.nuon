@@ -13,5 +13,10 @@
   },
   "tls": {
     "enabled": false
+  },
+  "ssh": {
+    "enabled": true,
+    "mode": "client",
+    "default_user": "root"
   }
 }

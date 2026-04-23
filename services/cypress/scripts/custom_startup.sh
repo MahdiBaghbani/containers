@@ -2,4 +2,5 @@
 set -euo pipefail
 
 export DISPLAY="${DISPLAY:-:1}"
+
 exec /usr/local/bin/nu /dockerstartup/cypress-autostart.nu

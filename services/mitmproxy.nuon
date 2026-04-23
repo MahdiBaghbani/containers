@@ -18,5 +18,12 @@
     "instances": 1,
     "domain_suffix": "docker",
     "sans": ["DNS:mitmproxy.docker"]
+  },
+  "ssh": {
+    "enabled": true,
+    "mode": "server",
+    "default_user": "root",
+    "port": 22,
+    "listen": "0.0.0.0"
   }
 }

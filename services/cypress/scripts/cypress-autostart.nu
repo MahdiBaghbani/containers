@@ -10,6 +10,11 @@
 #   OCM_CYPRESS_MAXIMIZE        - default true; passes --start-maximized
 #                                 via ELECTRON_EXTRA_LAUNCH_ARGS and calls
 #                                 the shared maximize helper (~25 s, 1 s interval)
+#   OCM_CYPRESS_SEED_PROXY_CA   - default true; false values: 0 false no off
+#                                 skip seeding the Cypress proxy CA from DockyPody
+#   OCM_CYPRESS_CA_NAME         - CA keypair name (highest priority)
+#   MITM_CA_NAME                - fallback CA name
+#   TLS_CA_NAME                 - fallback CA name (default "dockypody")
 #
 # Project resolution order:
 #   1. OCM_CYPRESS_PROJECT_DIR if non-empty and valid
@@ -94,6 +99,114 @@ def call-maximize-loop [maximize: bool]: nothing -> nothing {
     ^/usr/local/bin/nu /dockerstartup/ocm-window-actions.nu --maximize
 }
 
+def resolve-ca-name []: nothing -> string {
+    let from_cypress = ($env.OCM_CYPRESS_CA_NAME? | default "")
+    if not ($from_cypress | is-empty) { return $from_cypress }
+    let from_mitm = ($env.MITM_CA_NAME? | default "")
+    if not ($from_mitm | is-empty) { return $from_mitm }
+    let from_tls = ($env.TLS_CA_NAME? | default "")
+    if not ($from_tls | is-empty) { return $from_tls }
+    "dockypody"
+}
+
+def find-ca-source-dir [ca_name: string]: nothing -> string {
+    for dir in ["/certificate-authority" "/opt/dockypody/certificate-authority-default"] {
+        if (($"($dir)/($ca_name).crt" | path exists) and ($"($dir)/($ca_name).key" | path exists)) {
+            return $dir
+        }
+    }
+    ""
+}
+
+def resolve-proxy-dir []: nothing -> string {
+    let home = ($env.HOME? | default "")
+    if ($home | is-empty) { return "" }
+    let production = $"($home)/.config/Cypress/cy/production/proxy"
+    if ($production | path exists) {
+        return $production
+    }
+    let cy_dir = $"($home)/.config/Cypress/cy"
+    let others = if ($cy_dir | path exists) {
+        glob $"($cy_dir)/*/proxy"
+    } else {
+        []
+    }
+    if not ($others | is-empty) {
+        return ($others | first)
+    }
+    $production
+}
+
+def seed-proxy-ca []: nothing -> nothing {
+    let seed_flag = (
+        $env.OCM_CYPRESS_SEED_PROXY_CA?
+        | default "true"
+        | str downcase
+        | str trim
+    )
+    if (is-falsy $seed_flag) { return }
+
+    let ca_name = (resolve-ca-name)
+    let src_dir = (find-ca-source-dir $ca_name)
+    if ($src_dir | is-empty) {
+        print "No DockyPody CA keypair found, skipping proxy CA seeding"
+        return
+    }
+
+    let proxy_dir = (resolve-proxy-dir)
+    if ($proxy_dir | is-empty) {
+        print "WARNING: Cannot resolve Cypress proxy dir, skipping proxy CA seeding"
+        return
+    }
+
+    print $"Seeding Cypress proxy CA from ($src_dir)/($ca_name).{crt,key}"
+
+    let certs_dir = $"($proxy_dir)/certs"
+    let keys_dir = $"($proxy_dir)/keys"
+    mkdir $certs_dir
+    mkdir $keys_dir
+
+    cp $"($src_dir)/($ca_name).crt" $"($certs_dir)/ca.pem"
+    cp $"($src_dir)/($ca_name).key" $"($keys_dir)/ca.private.key"
+
+    let node_code = "const fs=require('fs'),cr=require('crypto');const p=fs.readFileSync(process.env.PRIV_PATH);fs.writeFileSync(process.env.PUB_PATH,cr.createPublicKey(p).export({type:'spki',format:'pem'}));"
+    try {
+        with-env {PRIV_PATH: $"($keys_dir)/ca.private.key", PUB_PATH: $"($keys_dir)/ca.public.key"} {
+            ^node -e $node_code
+        }
+    } catch {|err|
+        print $"WARNING: Failed to generate CA public key: ($err.msg)"
+    }
+
+    "1" | save --force $"($proxy_dir)/ca_version.txt"
+
+    let host_certs = (
+        glob $"($certs_dir)/*.pem"
+        | where {|f| ($f | path basename) != "ca.pem"}
+    )
+    let host_priv_keys = (
+        glob $"($keys_dir)/*.key"
+        | where {|f|
+            let name = ($f | path basename)
+            ((not ($name | str ends-with ".public.key"))
+                and ($name != "ca.private.key"))
+        }
+    )
+    let host_pub_keys = (
+        glob $"($keys_dir)/*.public.key"
+        | where {|f| ($f | path basename) != "ca.public.key"}
+    )
+
+    let n_certs = ($host_certs | length)
+    let n_keys = (($host_priv_keys | length) + ($host_pub_keys | length))
+
+    for f in $host_certs { rm $f }
+    for f in $host_priv_keys { rm $f }
+    for f in $host_pub_keys { rm $f }
+
+    print $"Cleared ($n_certs) cached host certs and ($n_keys) keys"
+}
+
 def main [] {
     let autolaunch = (
         $env.OCM_CYPRESS_AUTOLAUNCH?
@@ -111,6 +224,12 @@ def main [] {
     let display = $env.DISPLAY
 
     apply-desktop-env
+
+    try {
+        seed-proxy-ca
+    } catch {|err|
+        print $"WARNING: Proxy CA seeding failed: ($err.msg)"
+    }
 
     let maximize_raw = (
         $env.OCM_CYPRESS_MAXIMIZE?

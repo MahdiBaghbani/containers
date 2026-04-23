@@ -18,21 +18,18 @@ From this directory:
 docker compose up -d
 ```
 
-To override images, CA name, or host ports using the tracked env file:
-
-```bash
-docker compose --env-file env up -d
-```
+This example uses a tracked `.env` file for image tags, CA name, and host
+ports. Edit `.env` if you need different values.
 
 ### Where to connect (host ports)
 
 This example preserves the former `ocm-test-suite` host port convention:
 
-- Cypress desktop UI: `https://localhost:5700`
+- Cypress desktop UI: `https://localhost:5900`
 - Firefox desktop UI: `https://localhost:5800`
 
 Note: these Kasm-based images serve the desktop UI on port 6901 inside the
-container. The compose file maps that to 5700/5800 on the host for familiarity.
+container. The compose file maps that to 5900/5800 on the host for familiarity.
 
 ### What to validate
 
@@ -40,8 +37,14 @@ container. The compose file maps that to 5700/5800 on the host for familiarity.
 2. It should auto-open `https://mitmproxy.docker/`.
 3. If Firefox trusts the DockyPody CA, the mitmweb UI should load without a TLS
    warning.
-4. Open Cypress at `https://localhost:5700`, then open Chrome inside it and
+4. Open Cypress at `https://localhost:5900`, then open Chrome inside it and
    browse to `https://mitmproxy.docker/` and compare behavior.
+
+Note: Cypress runs its own local proxy to instrument browser traffic. This
+means Chrome launched by Cypress may show a certificate issued by `CypressProxyCA`
+instead of the DockyPody CA. This is expected.
+The key signal is that the page loads without a certificate warning once the
+Cypress proxy CA is trusted by Chrome.
 
 ### Cypress project mount
 
@@ -55,10 +58,4 @@ This makes the example project the workspace root for Cypress.
 
 ```bash
 docker compose down
-```
-
-If you started the stack with `--env-file env`, use the same flag for down:
-
-```bash
-docker compose --env-file env down
 ```

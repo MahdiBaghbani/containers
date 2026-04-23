@@ -404,7 +404,7 @@ def resolve_bearer_token [cmd: string, args: list<string>] {
         }
     })
     if $gen.exit_code != 0 {
-        error make {msg: $"Failed to auto-generate bearer token (openssl rand -hex 16): ($gen.stderr)"}
+        error make {msg: $"Failed to auto-generate bearer token via openssl rand -hex 16: ($gen.stderr)"}
     }
     let generated = ($gen.stdout | str trim)
     validate_bearer_token_safety $generated
@@ -506,7 +506,7 @@ def start_nginx_for_mitmweb [auth_header_block: string] {
     let test_result = (^nginx -t | complete)
     if $test_result.exit_code != 0 {
         error make {
-            msg: $"nginx config test failed (nginx -t):\n($test_result.stderr)"
+            msg: $"nginx config test failed - nginx -t:\n($test_result.stderr)"
         }
     }
 

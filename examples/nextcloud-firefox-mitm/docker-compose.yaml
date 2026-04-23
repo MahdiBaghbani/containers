@@ -97,7 +97,7 @@ services:
       start_period: 10s
 
   nextcloud1:
-    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS:-local-debian}"
+    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS}"
     container_name: nextcloud1.docker
     restart: "unless-stopped"
     security_opt:
@@ -177,7 +177,7 @@ services:
       start_period: 10s
 
   nextcloud2:
-    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS:-local-debian}"
+    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS}"
     container_name: nextcloud2.docker
     restart: "unless-stopped"
     security_opt:

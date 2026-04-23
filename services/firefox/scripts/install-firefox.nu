@@ -105,17 +105,17 @@ def main [
     }
     ^ln -s $"($dest)/firefox/firefox" $bin_link
 
-    # Wire NSS trust via p11-kit
+    # Use system NSS roots module
     let multiarch = (resolve-multiarch)
-    let p11_trust = $"/usr/lib/($multiarch)/pkcs11/p11-kit-trust.so"
-    if not ($p11_trust | path exists) {
-        error make {msg: $"p11-kit trust path not found: ($p11_trust)"}
+    let system_nssckbi = $"/usr/lib/($multiarch)/libnssckbi.so"
+    if not ($system_nssckbi | path exists) {
+        error make {msg: $"system libnssckbi.so not found: ($system_nssckbi)"}
     }
     let nssckbi = $"($dest)/firefox/libnssckbi.so"
     if ($nssckbi | path exists) {
         rm -f $nssckbi
     }
-    ^ln -s $p11_trust $nssckbi
+    ^ln -s $system_nssckbi $nssckbi
 
     # Install desktop entry
     ^cp $desktop_entry_source $desktop_entry_dest
