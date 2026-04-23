@@ -27,6 +27,7 @@ export def generate-build-args [
     meta: record,
     deps_resolved: record,
     tls_meta: record,
+    ssh_meta: record,
     cache_bust_override: string = "",
     no_cache: bool = false,
     source_shas: record = {},
@@ -94,21 +95,45 @@ export def generate-build-args [
     
     # Set TLS args after env var loop to prevent override of system-managed values
     $build_args = ($build_args | upsert TLS_ENABLED ($tls_meta.enabled | into string))
-    
+
     if $tls_meta.enabled {
         if ($tls_meta.mode | str trim | is-empty) or $tls_meta.mode == "disabled" {
             error make {msg: "TLS_MODE is required when TLS_ENABLED=true. Build system should have validated this - this is a build system bug."}
         }
     }
-    
+
     let env_tls_mode = (try { $env.TLS_MODE } catch { "" })
     if ($env_tls_mode | str trim | is-not-empty) {
         print $"WARNING: TLS_MODE environment variable is set to '($env_tls_mode)' but will be ignored. TLS_MODE is system-managed from config."
     }
-    
+
     $build_args = ($build_args | upsert TLS_MODE (try { $tls_meta.mode } catch { "" }))
     $build_args = ($build_args | upsert TLS_CERT_NAME (try { $tls_meta.cert_name } catch { "" }))
     $build_args = ($build_args | upsert TLS_CA_NAME (try { $tls_meta.ca_name } catch { "" }))
+
+    # Set SSH args after env var loop to prevent override of system-managed values
+    $build_args = ($build_args | upsert SSH_ENABLED ($ssh_meta.enabled | into string))
+
+    if $ssh_meta.enabled {
+        if ($ssh_meta.mode | str trim | is-empty) or $ssh_meta.mode == "disabled" {
+            error make {msg: "SSH_MODE is required when SSH_ENABLED=true. Build system should have validated this - this is a build system bug."}
+        }
+    }
+
+    let env_ssh_mode = (try { $env.SSH_MODE } catch { "" })
+    if ($env_ssh_mode | str trim | is-not-empty) {
+        print $"WARNING: SSH_MODE environment variable is set to '($env_ssh_mode)' but will be ignored. SSH_MODE is system-managed from config."
+    }
+
+    $build_args = ($build_args | upsert SSH_MODE (try { $ssh_meta.mode } catch { "" }))
+    $build_args = ($build_args | upsert SSH_DEFAULT_USER (try { $ssh_meta.default_user } catch { "root" }))
+    $build_args = ($build_args | upsert SSH_PORT (try { $ssh_meta.port | into string } catch { "22" }))
+
+    let env_ssh_listen = (try { $env.SSH_LISTEN } catch { "" })
+    if ($env_ssh_listen | str trim | is-not-empty) {
+        print $"WARNING: SSH_LISTEN environment variable is set to '($env_ssh_listen)' but will be ignored. SSH_LISTEN is system-managed from config."
+    }
+    $build_args = ($build_args | upsert SSH_LISTEN (try { $ssh_meta.listen } catch { "0.0.0.0" }))
     
     # Compute CACHEBUST value
     let cache_bust = (if ($cache_bust_override | str length) > 0 {

@@ -128,7 +128,7 @@ Dependencies resolve their version in this priority order:
    - If explicit version lacks platform suffix: Inherit platform from parent (e.g., `"version": "v1.0.0"` + parent platform `debian` -> `v1.0.0-debian`)
    - If no explicit version: Inherit both version and platform from parent
 
-### Examples
+### Platform Inheritance Examples
 
 #### Example 1: Platform inheritance with explicit version (no suffix)
 
@@ -231,7 +231,7 @@ To explicitly mark a dependency as single-platform and suppress the informationa
 2. **With `single_platform: true`**: No informational message is shown (intent is explicit)
 3. **Platform suffix precedence**: If a version has a platform suffix (e.g., `"v1.0.0-debian"`), it takes precedence over `single_platform: true` (with a warning)
 
-### Examples
+### Single-Platform Dependency Examples
 
 #### Example 1: Single-platform dependency without flag
 
@@ -358,7 +358,7 @@ The service definition hash captures all inputs that affect the image: Dockerfil
 The `--dep-cache` flag controls CI dependency reuse behavior:
 
 | Mode | Flag | Missing/Stale Deps | Use Case |
-|------|------|-------------------|----------|
+| ---- | ---- | ------------------ | -------- |
 | Off | `--dep-cache=off` | Always build (no hash skip) | Forced rebuilds |
 | Soft (default for CI) | `--dep-cache=soft` | Auto-build with warning | Standard CI workflows |
 | Strict | `--dep-cache=strict` | Fail with error | Explicit dependency control |

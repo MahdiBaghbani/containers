@@ -335,6 +335,9 @@ For complete details on configuration merging, see [Build System](../concepts/bu
 - `dependencies.{name}.version` - Version control, must be in `versions.nuon` overrides
 - `tls` section - Metadata, must be in base config only
 
+**Note:** Unlike TLS, `ssh` configuration is allowed in `platforms.nuon` and
+`versions.nuon` for dev/prod splits.
+
 **Error examples:**
 
 ```text

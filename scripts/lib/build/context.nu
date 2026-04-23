@@ -242,3 +242,141 @@ export def cleanup-ca-context [
     }
     print "Cleaned up staged CA material from build context"
 }
+
+# SSH metadata extraction
+export def extract-ssh-metadata [
+    cfg: record
+] {
+    let ssh_enabled = (try { $cfg.ssh.enabled | default false } catch { false })
+
+    let ssh_mode = (if $ssh_enabled {
+        let mode_raw = (try { $cfg.ssh.mode } catch { "" })
+        if ($mode_raw | str trim | is-empty) {
+            error make {msg: "ssh.mode is required when ssh.enabled=true (validation should have caught this)"}
+        }
+        $mode_raw
+    } else {
+        "disabled"
+    })
+
+    let ssh_default_user = (try { $cfg.ssh.default_user | default "root" } catch { "root" })
+    let ssh_port = (try { $cfg.ssh.port | default 22 } catch { 22 })
+    let ssh_listen = (try { $cfg.ssh.listen | default "0.0.0.0" } catch { "0.0.0.0" })
+
+    {
+        enabled: $ssh_enabled,
+        mode: $ssh_mode,
+        default_user: $ssh_default_user,
+        port: $ssh_port,
+        listen: $ssh_listen
+    }
+}
+
+# Prepare SSH build context - stage key material into build context.
+# Staging is mode-gated so the private key is never baked into server images:
+#   server            -> public key only (+ known_hosts if present)
+#   client            -> private + public (+ known_hosts if present)
+#   client-and-server -> private + public (+ known_hosts if present)
+# Always creates the ssh directory so Dockerfile COPY ./ssh/ never fails,
+# regardless of whether SSH is enabled.
+# Returns {dir_created: bool, copied: bool, files: list<string>, sshd_module_staged: bool}.
+export def prepare-ssh-context [
+    service: string,
+    context: string,
+    ssh_enabled: bool,
+    ssh_mode: string
+] {
+    let ssh_src = "ssh"
+    let ssh_dest = $"($context)/ssh"
+
+    # Always create the ssh directory so Dockerfile COPY ./ssh/ never fails.
+    mkdir $ssh_dest
+
+    # Always stage the shared sshd runtime module so Dockerfile
+    # COPY ./scripts/lib/sshd.nu never fails.
+    let sshd_module_src = "scripts/lib/ssh/sshd.nu"
+    if not ($sshd_module_src | path exists) {
+        error make {
+            msg: ($"sshd shared module not found: ($sshd_module_src)\n\n" +
+                  "This script is required for Dockerfile COPY ./scripts/lib/sshd.nu.\n" +
+                  "The file should be located at scripts/lib/ssh/sshd.nu.\n\n")
+        }
+    }
+    mkdir $"($context)/scripts/lib"
+    cp $sshd_module_src $"($context)/scripts/lib/sshd.nu"
+    print "Staged sshd shared module into build context: scripts/lib/sshd.nu"
+
+    if not $ssh_enabled {
+        return {dir_created: true, copied: false, files: [], sshd_module_staged: true}
+    }
+
+    if ($ssh_mode | str trim | is-empty) or $ssh_mode == "disabled" {
+        error make {msg: "ssh_mode parameter is required when ssh_enabled=true. This is a build system bug."}
+    }
+
+    mut staged_files = []
+
+    let private_key = $"($ssh_src)/dockypody-dev-ed25519"
+    let public_key = $"($ssh_src)/dockypody-dev-ed25519.pub"
+
+    if $ssh_mode == "server" {
+        # Server mode: stage only the public key. Never stage the private key -
+        # doing so risks baking it into the image layer.
+        if ($public_key | path exists) {
+            cp $public_key $"($ssh_dest)/dockypody-dev-ed25519.pub"
+            $staged_files = ($staged_files | append "dockypody-dev-ed25519.pub")
+            print $"Staged SSH public key for ($service)"
+        } else {
+            print $"WARNING: SSH public key not found at ($public_key). SSH server authorization may fail."
+        }
+    } else {
+        # client / client-and-server: stage the full keypair.
+        if ($private_key | path exists) {
+            cp $private_key $"($ssh_dest)/dockypody-dev-ed25519"
+            cp $public_key $"($ssh_dest)/dockypody-dev-ed25519.pub"
+            $staged_files = ($staged_files | append ["dockypody-dev-ed25519" "dockypody-dev-ed25519.pub"])
+            print $"Staged SSH keypair for ($service)"
+        } else {
+            print $"WARNING: SSH keypair not found at ($private_key). SSH connections may fail."
+        }
+    }
+
+    let known_hosts = $"($ssh_src)/known_hosts"
+    if ($known_hosts | path exists) {
+        cp $known_hosts $"($ssh_dest)/known_hosts"
+        $staged_files = ($staged_files | append "known_hosts")
+    }
+
+    let has_files = (($staged_files | length) > 0)
+    {dir_created: true, copied: $has_files, files: $staged_files, sshd_module_staged: true}
+}
+
+# Cleanup SSH build context.
+# Removes the staged ssh directory and the shared sshd module unconditionally
+# when the context was created, so the build context is always clean afterward.
+export def cleanup-ssh-context [
+    context: string,
+    ssh_context: record
+] {
+    let dir_was_created = ($ssh_context.dir_created? | default $ssh_context.copied)
+    if not $dir_was_created {
+        return
+    }
+
+    let ssh_dir = $"($context)/ssh"
+    try { rm -rf $ssh_dir } catch { }
+
+    # Remove the staged sshd shared module and empty parent dirs.
+    let sshd_module = $"($context)/scripts/lib/sshd.nu"
+    try { rm -f $sshd_module } catch { }
+    let lib_dir = $"($context)/scripts/lib"
+    if ($lib_dir | path exists) and ((ls $lib_dir | length) == 0) {
+        try { rmdir $lib_dir } catch { }
+    }
+    let scripts_dir = $"($context)/scripts"
+    if ($scripts_dir | path exists) and ((ls $scripts_dir | length) == 0) {
+        try { rmdir $scripts_dir } catch { }
+    }
+
+    print "Cleaned up staged SSH material from build context"
+}

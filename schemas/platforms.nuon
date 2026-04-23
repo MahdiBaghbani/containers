@@ -106,6 +106,13 @@
       "labels": {
         "org.opencloudmesh.platform": "debian",
         "org.opencontainers.image.base.name": "debian:trixie-slim"
+      },
+
+      // Platform-specific SSH config - deep-merged with base config ssh
+      // Unlike TLS, SSH IS allowed in platforms.nuon for dev/prod splits
+      "ssh": {
+        "enabled": true,
+        "mode": "server"
       }
     },
     {
@@ -124,6 +131,12 @@
       "labels": {
         "org.opencloudmesh.platform": "alpine",
         "org.opencontainers.image.base.name": "alpine:3.21"
+      },
+
+      // SSH disabled for alpine production example
+      "ssh": {
+        "enabled": false,
+        "mode": "disabled"
       }
     }
   ]

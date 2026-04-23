@@ -132,7 +132,7 @@ nu scripts/dockypody.nu build --service revad-base --all-versions
 | `tags`      | list&lt;string&gt; | No       | Additional image tags (for aliases). Cannot contain the version `name` or `"latest"` (these are auto-generated). Tags must be unique across ALL versions.                                                    |
 | `overrides` | record             | No       | Configuration overrides for this version                                                                                                                                                                     |
 
-**WARNING: Platform Suffixes in Version Names**
+#### WARNING: Platform Suffixes in Version Names
 
 Version names in the manifest MUST NOT include platform suffixes. Platform suffixes (e.g., `-debian`, `-alpine`) are automatically added during version expansion when a `platforms.nuon` manifest exists.
 
@@ -190,7 +190,7 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 - Sources from defaults that are **not** in overrides are **preserved**
 - This applies to both global and platform-specific source overrides
 
-**Example: Partial Git Override (Reducing Duplication)**
+#### Example: Partial Git Override (Reducing Duplication)
 
 ```nuon
 {
@@ -223,7 +223,7 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 }
 ```
 
-**Example: Git Source to Local Source (Type Switch)**
+#### Example: Git Source to Local Source (Type Switch)
 
 ```nuon
 {
@@ -320,7 +320,7 @@ Platform-specific overrides win over global overrides for the same field. All fi
 
 When multiple versions share the same configuration values, you can use the optional `defaults` field to reduce repetition. Defaults are deep-merged into each version's `overrides` field.
 
-**Example: Reducing Repetition**
+#### Example: Reducing Repetition
 
 **Before (repetitive):**
 

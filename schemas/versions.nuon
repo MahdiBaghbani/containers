@@ -61,6 +61,12 @@
       }
     },
     
+    // SSH config - allowed but rare; document when used
+    "ssh": {
+      "enabled": true,
+      "mode": "server"
+    },
+
     // Platform-specific defaults - applied to all versions for specified platforms
     // Platform-specific defaults merge into version overrides.platforms.{platform}
     "platforms": {
@@ -72,8 +78,12 @@
           "revad": {
             "ref": "v1.0.0-debian"
           }
+        },
+        "ssh": {
+          "enabled": true,
+          "mode": "server"
         }
-        // Can include any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+        // Can include any config field (sources, external_images, build_args, dependencies, labels, dockerfile, ssh)
       },
       "alpine": { // Platform name must match a platform in platforms.nuon
         "build_args": {
@@ -83,8 +93,12 @@
           "build": {
             "tag": "1.26-alpine" // Platform-specific tag override
           }
+        },
+        "ssh": {
+          "enabled": false,
+          "mode": "disabled"
         }
-        // Can include any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+        // Can include any config field (sources, external_images, build_args, dependencies, labels, dockerfile, ssh)
       }
     }
   },
@@ -157,6 +171,12 @@
           }
         },
         
+        // SSH config - allowed but rare in version overrides; document when used
+        "ssh": {
+          "enabled": true,
+          "mode": "server"
+        },
+
         // Platform-specific overrides (only used when platforms.nuon exists)
         // Platform-specific overrides win over global overrides for the same field
         "platforms": {
@@ -174,8 +194,12 @@
                 "version": "master",
                 "single_platform": true // Optional: Suppress informational message when using single-platform dependency
               }
+            },
+            "ssh": {
+              "enabled": true,
+              "mode": "server"
             }
-            // Can override any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+            // Can override any config field (sources, external_images, build_args, dependencies, labels, dockerfile, ssh)
             // Fields are deep-merged with base config + platform config + global overrides
           },
           "alpine": { // Platform name must match a platform in platforms.nuon
@@ -186,8 +210,12 @@
               "build": {
                 "tag": "1.26-alpine" // Platform-specific tag override (overrides global tag for this platform)
               }
+            },
+            "ssh": {
+              "enabled": false,
+              "mode": "disabled"
             }
-            // Can override any config field (sources, external_images, build_args, dependencies, labels, dockerfile)
+            // Can override any config field (sources, external_images, build_args, dependencies, labels, dockerfile, ssh)
             // Fields are deep-merged with base config + platform config + global overrides
             // NOTE: For external_images, only 'tag' field is allowed (name and build_arg come from platforms.nuon)
           }

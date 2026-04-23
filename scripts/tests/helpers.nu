@@ -98,6 +98,15 @@ export def setup-test-environment [
     cert_name: "",
     ca_name: ""
   }
+
+  # Create default ssh_meta
+  let ssh_meta = {
+    enabled: false,
+    mode: "disabled",
+    default_user: "root",
+    port: 22,
+    listen: "0.0.0.0"
+  }
   
   # Create default registry_info
   let registry_info = {
@@ -115,6 +124,7 @@ export def setup-test-environment [
     meta: $meta,
     deps_resolved: $deps_resolved,
     tls_meta: $tls_meta,
+    ssh_meta: $ssh_meta,
     registry_info: $registry_info
   }
 }

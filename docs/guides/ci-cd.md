@@ -55,7 +55,7 @@ This strategy provides:
 The workflow determines how the cache was matched and passes this to the build script:
 
 | Match Kind | Meaning | Typical Cause |
-|------------|---------|---------------|
+| ---------- | ------- | ------------- |
 | `exact` | Cache key matched exactly | Same commit rebuilt |
 | `fallback` | Restore key matched | New commit on existing branch |
 | `miss` | No cache found | First build on a new branch |

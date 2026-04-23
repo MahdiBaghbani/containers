@@ -35,7 +35,7 @@ For the authoritative schema file, see [`schemas/versions.nuon`](../../schemas/v
 ## Top-Level Fields
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ----- | ---- | -------- | ----------- |
 | `default` | string | Yes | Default version to build when no `--version` flag is specified. Must match a version `name` in the `versions` array. |
 | `defaults` | record | No | Top-level defaults applied to all versions unless overridden. Structure matches `overrides` field. Deep-merged into each version's overrides. |
 | `versions` | list | Yes | List of version specifications |
@@ -244,7 +244,7 @@ Defaults are validated using the same rules as version overrides:
 ## Version Specification
 
 | Field | Type | Required | Description |
-|-------|------|----------|-------------|
+| ----- | ---- | -------- | ----------- |
 | `name` | string | Yes | Version identifier (automatically added as a tag). Must be unique across all versions. **MUST NOT include platform suffixes** (e.g., `-debian`, `-alpine`) - these are added automatically during expansion. |
 | `latest` | bool | No | Whether this version should be tagged as "latest" (default: false). Only ONE version can have this set to true. When true, "latest" tag is automatically added. |
 | `tags` | list<string> | No | Additional image tags (for aliases). Cannot contain the version `name` or `"latest"` (these are auto-generated). Tags must be unique across ALL versions. |
@@ -419,6 +419,9 @@ Platform-specific overrides win over global overrides for the same field. All fi
 - `external_images.{stage}.build_arg` - Infrastructure, must be in base config (single-platform) or platforms.nuon (multi-platform)
 - `external_images.{stage}.image` - Legacy field, use `tag` instead
 - `tls` section - Metadata, must be in base config only
+
+**Note:** Unlike TLS, `ssh` configuration is allowed in `versions.nuon` overrides,
+but it should be rare and documented.
 
 **Error examples:**
 

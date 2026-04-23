@@ -39,14 +39,14 @@ def main [--verbose] {
       let test_env = (setup-test-environment "test-service" "v1.0.0")
       
       # Generate build args without override
-      let build_args1 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" false)
+      let build_args1 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" false)
       let cache_bust1 = (try { $build_args1.CACHEBUST } catch { "" })
       
       # Verify CACHEBUST is present and has correct format (16 chars for source refs hash)
       let _ = (assert-cache-bust-format $cache_bust1 16 "hash")
       
       # Verify hash is consistent (same sources = same hash)
-      let build_args2 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" false)
+      let build_args2 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" false)
       let cache_bust2 = (try { $build_args2.CACHEBUST } catch { "" })
       
       let _ = (assert-cache-bust-value $cache_bust1 $cache_bust2)
@@ -68,7 +68,7 @@ def main [--verbose] {
       let override_value = "custom-cache-bust-123"
     
       # Generate build args with override
-      let build_args = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $override_value false)
+      let build_args = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta $override_value false)
       let cache_bust = (try { $build_args.CACHEBUST } catch { "" })
     
       assert-cache-bust-value $cache_bust $override_value
@@ -90,7 +90,7 @@ def main [--verbose] {
       let test_env = (setup-test-environment "test-service" "v1.0.0")
     
       # Generate build args with --no-cache
-      let build_args = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" true)
+      let build_args = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" true)
       let cache_bust = (try { $build_args.CACHEBUST } catch { "" })
     
       # Verify it's a UUID format (36 chars with dashes)
@@ -117,7 +117,7 @@ def main [--verbose] {
       $merged_cfg = ($merged_cfg | upsert sources {})
     
       # Generate build args without override
-      let build_args = (generate-build-args "test" $merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" false)
+      let build_args = (generate-build-args "test" $merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" false)
       let cache_bust = (try { $build_args.CACHEBUST } catch { "" })
     
       # Should be Git SHA (variable length) or "local"
@@ -153,7 +153,7 @@ def main [--verbose] {
     
       try {
         # Generate build args without override or --no-cache
-        let build_args = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" false)
+        let build_args = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" false)
         let cache_bust = (try { $build_args.CACHEBUST } catch { "" })
       
         assert-cache-bust-value $cache_bust $env_value
@@ -191,9 +191,9 @@ def main [--verbose] {
       let test_env = (setup-test-environment "test-service" "v1.0.0")
     
       # Generate build args multiple times
-      let build_args1 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" false)
-      let build_args2 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" false)
-      let build_args3 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta "" false)
+      let build_args1 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" false)
+      let build_args2 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" false)
+      let build_args3 = (generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved $test_env.tls_meta $test_env.ssh_meta "" false)
     
       let cache_bust1 = (try { $build_args1.CACHEBUST } catch { "" })
       let cache_bust2 = (try { $build_args2.CACHEBUST } catch { "" })
@@ -952,7 +952,8 @@ def main [--verbose] {
   
   print-test-summary $results
   
-  if ($results | where {|r| not $r} | length) > 0 {
+  let failed = ($results | where {|r| not $r} | length)
+  if $failed > 0 {
     exit 1
   } else {
     exit 0

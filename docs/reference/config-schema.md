@@ -353,7 +353,7 @@ For complete details on dependency resolution, see [Dependency Management](../co
 
 ## Base Config Restrictions
 
-**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY** contain: `name`, `context`, `tls`, `labels` (all metadata).
+**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY** contain: `name`, `context`, `tls`, `ssh`, `labels` (all metadata).
 
 All other fields (`dockerfile`, `external_images`, `sources`, `dependencies`, `build_args`) are **FORBIDDEN** in base config when `platforms.nuon` exists.
 
@@ -409,6 +409,14 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
     "instances": 1,
     "domain_suffix": "docker",
     "sans": ["DNS:service.docker"]
+  },
+
+  "ssh": {
+    "enabled": true,
+    "mode": "server",
+    "default_user": "root",
+    "port": 22,
+    "listen": "0.0.0.0"
   }
 }
 
@@ -443,6 +451,10 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
   "context": "services/service-name",
   "tls": {
     "enabled": false
+  },
+  "ssh": {
+    "enabled": false,
+    "mode": "disabled"
   }
 }
 
