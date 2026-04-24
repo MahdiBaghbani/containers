@@ -4,13 +4,17 @@ set -euo pipefail
 if [ -f /usr/bin/entrypoint-init.nu ]; then
     if command -v nu >/dev/null 2>&1; then
         nu /usr/bin/entrypoint-init.nu "$@" || {
-            echo "WARNING: entrypoint-init.nu failed, continuing anyway" >&2
+            status=$?
+            echo "ERROR: entrypoint-init.nu failed with exit code ${status}; refusing to run CMD" >&2
+            exit "$status"
         }
     else
-        echo "WARNING: nu not found; skipping /usr/bin/entrypoint-init.nu" >&2
+        echo "ERROR: nu not found; cannot run /usr/bin/entrypoint-init.nu" >&2
+        exit 1
     fi
 else
-    echo "WARNING: /usr/bin/entrypoint-init.nu not found; skipping init" >&2
+    echo "ERROR: /usr/bin/entrypoint-init.nu not found; refusing to run CMD" >&2
+    exit 1
 fi
 
 exec /docker-entrypoint.sh "$@"
