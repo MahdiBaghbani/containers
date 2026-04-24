@@ -19,7 +19,7 @@
 
 # Service definition hash stability tests
 # These tests verify that hash computation is deterministic and stable
-# Used to validate Phase 2 migration of service-def-hash.nu
+# Used to validate the current service-def-hash.nu implementation
 
 use ../lib/build/hash.nu [compute-service-def-hash]
 use ./helpers.nu [setup-test-environment cleanup-test-environment with-test-cleanup]

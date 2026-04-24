@@ -426,7 +426,7 @@ export def validate-version-manifest [
     return {valid: false, errors: $errors}
   }
   
-  # Phase 2: Validate expanded tags (only if platforms exist and Phase 1 passed)
+  # pass 2: validate expanded tags (only if platforms exist and pass 1 passed)
   if $platforms != null {
     use ../platforms/core.nu [get-platform-names get-default-platform expand-version-to-platforms]
     
@@ -1055,7 +1055,7 @@ export def validate-manifest-file [
     }
   })
   
-  # Load platforms manifest if it exists for Phase 2 validation
+  # Load platforms manifest if it exists for expanded-tag validation
   # Optimization: Only load if it exists (already checked in validate-service-complete)
   let has_platforms = (check-platforms-manifest-exists $service)
   let platforms = (if $has_platforms {
@@ -1072,7 +1072,7 @@ export def validate-manifest-file [
     null
   })
   
-  # Pass platforms manifest to enable Phase 2 validation (tag collision detection after expansion)
+  # Pass platforms manifest to enable expanded-tag validation (tag collision detection after expansion)
   # Note: platforms can be null for single-platform services
   validate-version-manifest $manifest $platforms
 }
