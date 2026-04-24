@@ -632,8 +632,9 @@ example by copying it into a temporary path like `/tmp/ssh-build-context/`) and
 then copy only the needed files into their final locations. Do not hardcode
 paths to repo-root SSH material or assume it is always present.
 
-- `ssh/dockypody-dev-ed25519` -> staged to build context
-- `ssh/dockypody-dev-ed25519.pub` -> staged to build context
+- `ssh/dockypody` -> staged to build context
+- `ssh/dockypody.pub` -> staged to build context
+- `ssh/ssh.json` -> staged if present
 - `ssh/known_hosts` -> staged if present
 
 ## Verification Checklist
