@@ -21,13 +21,14 @@
 
 use ./utils.nu [run_as directory_empty]
 
-# Execute all scripts in /docker-entrypoint-hooks.d/{hook_name}/
+# Execute all scripts in {base_dir}/{hook_name}/
 # Supports hooks: pre-installation, post-installation, pre-upgrade, post-upgrade, before-starting
 # Supports both .sh (shell) and .nu (nushell) scripts
-export def run_path [hook_name: string, user: string] {
-  let hook_folder = $"/docker-entrypoint-hooks.d/($hook_name)"
+# --base-dir defaults to /docker-entrypoint-hooks.d; override for testing
+export def run_path [hook_name: string, user: string, --base-dir: string = "/docker-entrypoint-hooks.d"] {
+  let hook_folder = $"($base_dir)/($hook_name)"
 
-  print $"=> Searching for hook scripts \(*.sh, *.nu\) to run, located in the folder \"($hook_folder)\""
+  print $"=> Searching for hook scripts \(*.sh, *.nu\) to run, located in folder \"($hook_folder)\""
 
   # Check if hook folder exists and is not empty
   if not ($hook_folder | path exists) {

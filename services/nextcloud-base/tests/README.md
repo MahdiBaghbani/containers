@@ -1,6 +1,7 @@
 # Nextcloud Base Scripts Test Suite
 
-Unit tests for `nextcloud-base` service scripts. Tests validate script logic in isolation using controlled test environments with fixtures.
+Unit tests for `nextcloud-base` service scripts. Tests validate script logic in
+isolation using controlled test environments with fixtures.
 
 ## Running Tests
 
@@ -31,18 +32,19 @@ nu test-runner.nu --suite redis-config
 
 ## Test Suites
 
-| Suite           | Module                | Tests | Coverage                                      |
-| --------------- | --------------------- | ----- | --------------------------------------------- |
-| utils           | utils.nu              | 16    | detect_user_group, directory_empty, file_env, get_env_or_default |
-| nextcloud-init  | nextcloud-init.nu     | 10    | version_greater, version comparison logic     |
-| entrypoint      | entrypoint-init.nu    | 14    | Command parsing, init skip logic, version decisions, major version validation |
-| source-prep     | source-prep.nu        | 10    | Source mount detection, rsync options, directory preparation |
-| apache-config   | apache-config.nu      | 8     | Apache command detection, APACHE_DISABLE_REWRITE_IP handling |
-| redis-config    | redis-config.nu       | 16    | Redis host detection, connection types, save path construction, PHP config |
-| hooks           | hooks.nu              | 12    | Hook folder detection, script discovery, executable checks, hook naming |
-| post-install    | post-install.nu       | 13    | OCC command construction, config modification, log setup |
+| Suite          | Module             | Tests | Coverage                                                                                                                |
+| -------------- | ------------------ | ----- | -----------------------------------------------------------------------------                                           |
+| utils          | utils.nu           | 16    | detect_user_group, directory_empty, file_env, get_env_or_default                                                        |
+| nextcloud-init | nextcloud-init.nu  | 10    | version_greater, version comparison logic                                                                               |
+| entrypoint     | entrypoint-init.nu | 21    | Command parsing, init skip logic, version decisions, major version validation, fatal-wrapper policy, wrapper file audit |
+| source-prep    | source-prep.nu     | 10    | Source mount detection, rsync options, directory preparation                                                            |
+| apache-config  | apache-config.nu   | 8     | Apache command detection, APACHE_DISABLE_REWRITE_IP handling                                                            |
+| redis-config   | redis-config.nu    | 16    | Redis host detection, connection types, save path construction, PHP config                                              |
+| hooks          | hooks.nu           | 14    | Hook folder detection, script discovery, executable checks, hook naming, run_path invocation                            |
+| post-install   | post-install.nu    | 13    | OCC command construction, config modification, log setup                                                                |
+| seeded-users   | seeded-users.nu    | 18    | sh_quote, normalize_accounts, validate_account, seed_users no-op paths, occ command building                            |
 
-Total: **99 tests**
+Total: **123 tests**
 
 ## Test Structure
 
@@ -119,7 +121,8 @@ hide-env TEST_VAR  # cleanup
 
 ### Testing Non-Exported Functions
 
-For non-exported functions (like `check_config_differences` in entrypoint-init.nu):
+For non-exported functions (like `check_config_differences` in
+`entrypoint-init.nu`):
 
 1. Copy the function locally in the test file
 2. Test the logic in isolation
@@ -137,11 +140,15 @@ Located in `fixtures/`:
 
 ## Testing Philosophy
 
-1. **Logic testing only**: Tests validate conditional branches and data transformations, not actual external command execution (rsync, php, su, chown)
+1. **Logic testing only**: Tests validate conditional branches and
+   data transformations, not actual external command execution (rsync, php,
+   su, chown)
 
-2. **Controlled environment**: All file operations use `/tmp` with proper cleanup
+2. **Controlled environment**: All file operations use `/tmp` with proper
+   cleanup
 
-3. **No Docker required**: Tests run without Docker containers or Nextcloud installations
+3. **No Docker required**: Tests run without Docker containers or Nextcloud
+   installations
 
 4. **Isolation**: Each test cleans up after itself to prevent pollution
 

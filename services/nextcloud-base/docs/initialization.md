@@ -22,17 +22,22 @@ Container initialization is triggered by `entrypoint.sh`:
 ```bash
 #!/bin/bash
 # Run initialization via Nushell script
-# Don't use set -e here - we want to continue even if initialization has warnings
+# Don't use set -e here; the Nushell orchestrator owns fatal decisions.
 if [ -f /usr/bin/entrypoint-init.nu ]; then
   if command -v nu >/dev/null 2>&1; then
-    nu /usr/bin/entrypoint-init.nu "$@" || {
-      echo "Warning: Initialization failed, continuing..." >&2
-    }
+    nu /usr/bin/entrypoint-init.nu "$@"
+    status=$?
+    if [ "$status" -ne 0 ]; then
+      echo "Error: Initialization failed with exit code ${status}; refusing to run CMD." >&2
+      exit "$status"
+    fi
   else
-    echo "Warning: nu not found; skipping /usr/bin/entrypoint-init.nu" >&2
+    echo "Error: nu not found; cannot run /usr/bin/entrypoint-init.nu" >&2
+    exit 1
   fi
 else
-  echo "Warning: /usr/bin/entrypoint-init.nu not found; skipping init" >&2
+  echo "Error: /usr/bin/entrypoint-init.nu not found; refusing to run CMD" >&2
+  exit 1
 fi
 
 # Exec the CMD (e.g., apache2-foreground)
@@ -51,51 +56,54 @@ Initialization runs if:
 
 ```text
 1. Apache Configuration
-   └─> Disable remoteip if APACHE_DISABLE_REWRITE_IP set
+   \-> Disable remoteip if APACHE_DISABLE_REWRITE_IP set
 
 2. User/Group Detection
-   ├─> Root: use APACHE_RUN_USER/APACHE_RUN_GROUP (default: www-data)
-   └─> Non-root: use current UID/GID
+   |-> Root: use APACHE_RUN_USER/APACHE_RUN_GROUP (default: www-data)
+   \-> Non-root: use current UID/GID
 
 3. Redis Configuration
-   └─> Generate PHP session handler config if REDIS_HOST set
+   \-> Generate PHP session handler config if REDIS_HOST set
 
 4. Source Preparation
-   ├─> Detect CI volume mount (/usr/src/nextcloud -> /var/www/html)
-   ├─> Copy source if needed (rsync)
-   └─> Prepare directories (data, custom_apps, occ executable)
+   |-> Detect CI volume mount (/usr/src/nextcloud -> /var/www/html)
+   |-> Copy source if needed (rsync)
+   \-> Prepare directories (data, custom_apps, occ executable)
 
 5. Version Detection
-   ├─> Read installed version (/var/www/html/version.php)
-   ├─> Read image version (/usr/src/nextcloud/version.php)
-   ├─> Validate: no downgrade
-   └─> Validate: no major version jump
+   |-> Read installed version (/var/www/html/version.php)
+   |-> Read image version (/usr/src/nextcloud/version.php)
+   |-> Validate: no downgrade
+   \-> Validate: no major version jump
 
 6. Source Sync (if version upgrade/install needed)
-   ├─> Rsync with upgrade.exclude
-   ├─> Sync config, data, custom_apps, themes (if empty)
-   └─> Force sync version.php
+   |-> Rsync with upgrade.exclude
+   |-> Sync config, data, custom_apps, themes (if empty)
+   \-> Force sync version.php
 
 7a. Fresh Installation (installed = 0.0.0.0)
-   ├─> pre-installation hook
-   ├─> occ maintenance:install
-   ├─> Custom post-install (OCM)
-   └─> post-installation hook
+   |-> pre-installation hook
+   |-> occ maintenance:install
+   |-> Custom post-install (OCM)
+   \-> post-installation hook
 
 7b. Upgrade (installed < image)
-   ├─> pre-upgrade hook
-   ├─> occ upgrade
-   └─> post-upgrade hook
+   |-> pre-upgrade hook
+   |-> occ upgrade
+   \-> post-upgrade hook
 
 8. Htaccess Update (if NEXTCLOUD_INIT_HTACCESS set)
-   └─> occ maintenance:update:htaccess
+   \-> occ maintenance:update:htaccess
 
 9. Config File Diff Warnings
-   └─> Compare /usr/src/nextcloud/config/*.php vs /var/www/html/config/*.php
+   \-> Compare /usr/src/nextcloud/config/*.php vs /var/www/html/config/*.php
 
-10. Before-Starting Hook
+10. Seeded Test Users (if NEXTCLOUD_SEEDED_USERS_FILE is set)
+    \-> Create/update local or CI test users idempotently
 
-11. Return (exec CMD in entrypoint.sh)
+11. Before-Starting Hook
+
+12. Return (exec CMD in entrypoint.sh)
 ```
 
 ## Source Preparation
@@ -498,10 +506,10 @@ export def run_path [hook_name: string, user: string]
 **Discovery Logic:**
 
 1. Check `/docker-entrypoint-hooks.d/{hook_name}/` exists
-2. Find all `*.sh` files
+2. Find all `*.sh` and `*.nu` files
 3. Check executable flag
 4. Sort alphabetically
-5. Execute each script via `run_as`
+5. Execute shell scripts via `run_as`; execute Nushell scripts with `nu`
 
 ### Executing Hooks
 
@@ -534,6 +542,48 @@ php /var/www/html/occ app:enable myapp
 # Set custom config
 php /var/www/html/occ config:system:set myconfig --value=myvalue
 ```
+
+Nushell hooks use the same discovery rules:
+
+```nu
+#!/usr/bin/env nu
+# /docker-entrypoint-hooks.d/post-installation/90-install-app.nu
+
+use /usr/bin/lib/utils.nu [run_as]
+
+let uid = (^id -u | into int)
+let user = if $uid == 0 {
+  ($env.APACHE_RUN_USER? | default "www-data") | str replace --regex "^#" ""
+} else {
+  ($uid | into string)
+}
+
+run_as $user "php /var/www/html/occ app:enable myapp"
+```
+
+## Seeded Test Users
+
+Set `NEXTCLOUD_SEEDED_USERS_FILE` to create local/CI test accounts after
+Nextcloud is installed or upgraded and before `before-starting` hooks run. The
+file can be a NUON record with an `accounts` field:
+
+```nuon
+{
+  accounts: {
+    michiel: {
+      username: "michiel"
+      password: "michiel"
+      display_name: "Michiel de Jong"
+      email: "michiel@example.test"
+    }
+  }
+}
+```
+
+Each account requires `username` and `password`. `display_name` and `email` are
+optional. Existing users are skipped; settings are re-applied so repeated
+starts stay idempotent. This is for test stacks and automation, not production
+account provisioning.
 
 ## Error Handling
 
@@ -631,6 +681,7 @@ Each major step logs its status:
 
 ```bash
 chmod +x /docker-entrypoint-hooks.d/post-installation/*.sh
+chmod +x /docker-entrypoint-hooks.d/post-installation/*.nu
 ```
 
 ## See Also

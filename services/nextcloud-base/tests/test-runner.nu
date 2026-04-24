@@ -20,7 +20,7 @@
 # Test runner for nextcloud-base scripts unit tests
 
 def main [
-  --suite: string = "all"       # Which test suite to run (all, utils, nextcloud-init, entrypoint, source-prep, apache-config, redis-config, hooks, post-install)
+  --suite: string = "all"       # Which test suite to run (all, utils, nextcloud-init, entrypoint, source-prep, apache-config, redis-config, hooks, post-install, seeded-users)
   --verbose                      # Show detailed output
 ] {
   print "Running Nextcloud Base Scripts Test Suite\n"
@@ -39,7 +39,7 @@ def main [
   })
   
   let test_suites = if $suite == "all" {
-    ["utils", "nextcloud-init", "entrypoint", "source-prep", "apache-config", "redis-config", "hooks", "post-install"]
+    ["utils", "nextcloud-init", "entrypoint", "source-prep", "apache-config", "redis-config", "hooks", "post-install", "seeded-users"]
   } else {
     [$suite]
   }
