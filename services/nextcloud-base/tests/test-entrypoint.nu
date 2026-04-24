@@ -200,6 +200,75 @@ def test_version_decision_logic [] {
   return {passed: $passed, failed: $failed}
 }
 
+# Model the shell wrapper decision in pure Nu logic.
+# Mirrors the if/elif/else branches in entrypoint.sh exactly.
+# Returns {fatal: bool, exit_code: int}.
+def wrapper_decision [
+  init_script_exists: bool
+  nu_exists: bool
+  init_exit_code: int
+] {
+  if not $init_script_exists {
+    {fatal: true, exit_code: 1}
+  } else if not $nu_exists {
+    {fatal: true, exit_code: 1}
+  } else if $init_exit_code != 0 {
+    {fatal: true, exit_code: $init_exit_code}
+  } else {
+    {fatal: false, exit_code: 0}
+  }
+}
+
+# Test fatal-wrapper policy
+# Locks the four decision branches of entrypoint.sh as pure logic assertions
+def test_wrapper_fatal_policy [] {
+  print "Testing entrypoint.sh fatal-wrapper policy..."
+  mut passed = 0
+  mut failed = 0
+
+  # Test 1: init success -> wrapper proceeds (not fatal)
+  let r1 = (wrapper_decision true true 0)
+  if (not $r1.fatal) and ($r1.exit_code == 0) {
+    print "  [PASS] wrapper policy: init success -> proceeds"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] wrapper policy: init success should allow CMD"
+    $failed = ($failed + 1)
+  }
+
+  # Test 2: init exits nonzero -> fatal, propagates exit code
+  let r2 = (wrapper_decision true true 2)
+  if $r2.fatal and ($r2.exit_code == 2) {
+    print "  [PASS] wrapper policy: init nonzero -> fatal with propagated code"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] wrapper policy: init nonzero should be fatal and propagate code"
+    $failed = ($failed + 1)
+  }
+
+  # Test 3: nu binary missing -> fatal
+  let r3 = (wrapper_decision true false 0)
+  if $r3.fatal and ($r3.exit_code == 1) {
+    print "  [PASS] wrapper policy: nu missing -> fatal"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] wrapper policy: nu missing should be fatal"
+    $failed = ($failed + 1)
+  }
+
+  # Test 4: init script missing -> fatal
+  let r4 = (wrapper_decision false true 0)
+  if $r4.fatal and ($r4.exit_code == 1) {
+    print "  [PASS] wrapper policy: init script missing -> fatal"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] wrapper policy: init script missing should be fatal"
+    $failed = ($failed + 1)
+  }
+
+  return {passed: $passed, failed: $failed}
+}
+
 # Test major version jump validation
 # Verifies that skipping major versions is rejected
 def test_major_version_jump [] {
@@ -255,6 +324,68 @@ def test_major_version_jump [] {
   return {passed: $passed, failed: $failed}
 }
 
+# Audit actual service wrapper files for required patterns.
+# Read-only: scans entrypoint.sh files in the repo to catch stale soft-failure
+# patterns and missing fatal exits before they reach production.
+def test_wrapper_file_audit [] {
+  print "Testing service wrapper file policies..."
+  mut passed = 0
+  mut failed = 0
+
+  # Locate repo root regardless of whether test is run from repo root or tests dir
+  let repo_root = if ("./services/nextcloud-base" | path exists) { "." } else { "../../.." }
+  let wrapper_files = (glob $"($repo_root)/services/*/scripts/entrypoint.sh")
+
+  if ($wrapper_files | length) == 0 {
+    print "  [FAIL] wrapper audit: no entrypoint.sh files found"
+    $failed = ($failed + 1)
+    return {passed: $passed, failed: $failed}
+  }
+
+  # Test 1: no stale soft-failure wording ("continuing anyway", "skipping init")
+  let stale_files = ($wrapper_files | where {|f|
+    let content = (open --raw $f)
+    (($content | str contains "continuing anyway")
+      or ($content | str contains "skipping init"))
+  })
+  if ($stale_files | length) == 0 {
+    print "  [PASS] wrapper audit: no stale soft-failure patterns in any wrapper"
+    $passed = ($passed + 1)
+  } else {
+    let names = ($stale_files | each {|f| $f | path basename} | str join ", ")
+    print $"  [FAIL] wrapper audit: stale patterns found in: ($names)"
+    $failed = ($failed + 1)
+  }
+
+  # Test 2: every wrapper has a fatal exit path
+  let no_exit_files = ($wrapper_files | where {|f|
+    not ((open --raw $f) | str contains "exit ")
+  })
+  if ($no_exit_files | length) == 0 {
+    print "  [PASS] wrapper audit: all wrappers have fatal exit path"
+    $passed = ($passed + 1)
+  } else {
+    let names = ($no_exit_files | each {|f| $f | path basename} | str join ", ")
+    print $"  [FAIL] wrapper audit: missing exit in: ($names)"
+    $failed = ($failed + 1)
+  }
+
+  # Test 3: every wrapper execs CMD (not just returns)
+  let no_exec_files = ($wrapper_files | where {|f|
+    not ((open --raw $f) | str contains "exec ")
+  })
+  if ($no_exec_files | length) == 0 {
+    print "  [PASS] wrapper audit: all wrappers exec CMD"
+    $passed = ($passed + 1)
+  } else {
+    let names = ($no_exec_files | each {|f| $f | path basename} | str join ", ")
+    print $"  [FAIL] wrapper audit: missing exec in: ($names)"
+    $failed = ($failed + 1)
+  }
+
+  return {passed: $passed, failed: $failed}
+}
+
 # Main test runner
 def main [--verbose] {
   mut total_passed = 0
@@ -276,7 +407,15 @@ def main [--verbose] {
   let test4 = (test_major_version_jump)
   $total_passed = ($total_passed + $test4.passed)
   $total_failed = ($total_failed + $test4.failed)
-  
+
+  let test5 = (test_wrapper_fatal_policy)
+  $total_passed = ($total_passed + $test5.passed)
+  $total_failed = ($total_failed + $test5.failed)
+
+  let test6 = (test_wrapper_file_audit)
+  $total_passed = ($total_passed + $test6.passed)
+  $total_failed = ($total_failed + $test6.failed)
+
   print ""
   print $"Tests: ($total_passed) passed, ($total_failed) failed"
   

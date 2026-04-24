@@ -16,23 +16,23 @@ The entrypoint system provides container lifecycle management through a modular 
 
 ```text
 services/nextcloud-base/scripts/
-├── entrypoint.sh                    # Bash wrapper (entry point)
-├── entrypoint-init.nu              # Nushell orchestrator
-└── lib/
-    ├── utils.nu                    # Core utilities
-    ├── apache-config.nu            # Apache configuration
-    ├── redis-config.nu             # Redis session handler
-    ├── source-prep.nu              # Source preparation & CI mounts
-    ├── nextcloud-init.nu           # Install/upgrade logic
-    ├── hooks.nu                    # Hook execution
-    └── post-install.nu             # OCM custom logic
+|-- entrypoint.sh                    # Bash wrapper (entry point)
+|-- entrypoint-init.nu              # Nushell orchestrator
+\-- lib/
+    |-- utils.nu                    # Core utilities
+    |-- apache-config.nu            # Apache configuration
+    |-- redis-config.nu             # Redis session handler
+    |-- source-prep.nu              # Source preparation & CI mounts
+    |-- nextcloud-init.nu           # Install/upgrade logic
+    |-- hooks.nu                    # Hook execution
+    \-- post-install.nu             # OCM custom logic
 ```
 
 ### Design Principles
 
 1. **Separation of Concerns** - Each module handles one domain
 2. **Selective Imports** - Import only what's needed (no wildcards)
-3. **Fail-Fast** - Critical errors exit immediately
+3. **Fail-Fast** - Critical errors exit immediately and stop the wrapper
 4. **Idempotent** - Can be run multiple times safely
 5. **Observable** - Log all major operations
 
@@ -188,10 +188,10 @@ export def run_path [hook_name: string, user: string]
 **Hook Discovery:**
 
 1. Check `/docker-entrypoint-hooks.d/{hook_name}/` exists
-2. Find all `*.sh` files
+2. Find all `*.sh` and `*.nu` files
 3. Verify executable flag
 4. Sort alphabetically
-5. Execute via `run_as`
+5. Execute shell hooks via `run_as`; execute Nushell hooks with `nu`
 
 **Error Handling:**
 
@@ -226,16 +226,17 @@ def setup_log_files []
 ```text
 Installation Flow:
   pre-installation
-  ├─> occ maintenance:install
-  ├─> Custom post-install (OCM)
-  └─> post-installation
+  |-> occ maintenance:install
+  |-> Custom post-install (OCM)
+  \-> post-installation
 
 Upgrade Flow:
   pre-upgrade
-  ├─> occ upgrade
-  └─> post-upgrade
+  |-> occ upgrade
+  \-> post-upgrade
 
 Final:
+  seeded test users (if NEXTCLOUD_SEEDED_USERS_FILE is set)
   before-starting (both flows)
 ```
 
@@ -245,17 +246,17 @@ Final:
 
 ```text
 /docker-entrypoint-hooks.d/
-├── pre-installation/
-│   └── 01-prepare.sh
-├── post-installation/
-│   ├── 01-install-app.sh
-│   └── 02-configure.sh
-├── pre-upgrade/
-│   └── 01-backup.sh
-├── post-upgrade/
-│   └── 01-verify.sh
-└── before-starting/
-    └── 01-finalize.sh
+|-- pre-installation/
+|   \-- 01-prepare.sh
+|-- post-installation/
+|   |-- 01-install-app.sh
+|   \-- 02-configure.nu
+|-- pre-upgrade/
+|   \-- 01-backup.sh
+|-- post-upgrade/
+|   \-- 01-verify.sh
+\-- before-starting/
+    \-- 01-finalize.sh
 ```
 
 **Hook Script Template:**
@@ -264,18 +265,35 @@ Final:
 #!/bin/sh
 set -eu
 
-# This hook runs as www-data user if container is root
-# Use occ commands directly:
+# Shell hooks run as the Nextcloud runtime user when the container starts as root.
 php /var/www/html/occ app:enable myapp
 
 # Or any other initialization:
 echo "Custom initialization completed"
 ```
 
+Nushell hooks are also supported:
+
+```nu
+#!/usr/bin/env nu
+
+use /usr/bin/lib/utils.nu [run_as]
+
+let uid = (^id -u | into int)
+let user = if $uid == 0 {
+  ($env.APACHE_RUN_USER? | default "www-data") | str replace --regex "^#" ""
+} else {
+  ($uid | into string)
+}
+
+run_as $user "php /var/www/html/occ app:enable myapp"
+```
+
 **Permissions:**
 
 ```bash
-chmod +x /docker-entrypoint-hooks.d/*/hook.sh
+chmod +x /docker-entrypoint-hooks.d/*/*.sh
+chmod +x /docker-entrypoint-hooks.d/*/*.nu
 ```
 
 ### Mounting Hooks
@@ -465,9 +483,9 @@ Custom post-installation logic runs **after** Nextcloud installation but **befor
 ```text
 Flow:
   pre-installation hook
-  ├─> occ maintenance:install
-  ├─> Custom post-install (OCM) <-- HERE
-  └─> post-installation hook
+  |-> occ maintenance:install
+  |-> Custom post-install (OCM) <-- HERE
+  \-> post-installation hook
 ```
 
 ### Why After Install?
@@ -500,7 +518,9 @@ Flow:
 
 ### Fail-Fast Philosophy
 
-All critical operations fail immediately:
+All critical operations fail immediately. Warnings are handled inside the
+Nushell orchestrator and exit 0; any nonzero orchestrator exit stops the wrapper
+before Apache or PHP-FPM starts.
 
 ```nu
 # Example: Source copy validation

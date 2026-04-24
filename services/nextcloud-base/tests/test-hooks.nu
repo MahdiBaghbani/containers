@@ -21,6 +21,7 @@
 # Tests hook script discovery and execution logic
 
 use ../scripts/lib/utils.nu [directory_empty]
+use ../scripts/lib/hooks.nu [run_path]
 
 # Test hook folder detection logic
 # Verifies correct detection of hook folder states
@@ -57,34 +58,35 @@ def test_hook_folder_detection [] {
     $failed = ($failed + 1)
   }
   
-  # Test 3: Folder with non-.sh files
+  # Test 3: Folder with non-.sh and non-.nu files
   let other_folder = $"($test_base)/other-files"
   mkdir $other_folder
   "text content" | save $"($other_folder)/readme.txt"
   "config content" | save $"($other_folder)/config.ini"
   
-  let sh_files = (ls $other_folder | where {|f| $f.type == file and ($f.name | str ends-with ".sh")})
-  if ($sh_files | length) == 0 {
-    print "  [PASS] hook folder: no .sh files detected in non-script folder"
+  let hook_files = (ls $other_folder | where {|f| $f.type == file and (($f.name | str ends-with ".sh") or ($f.name | str ends-with ".nu"))})
+  if ($hook_files | length) == 0 {
+    print "  [PASS] hook folder: no .sh or .nu files detected in non-script folder"
     $passed = ($passed + 1)
   } else {
-    print "  [FAIL] hook folder: should find no .sh files"
+    print "  [FAIL] hook folder: should find no .sh or .nu files"
     $failed = ($failed + 1)
   }
   
-  # Test 4: Folder with .sh files
+  # Test 4: Folder with .sh and .nu files
   let scripts_folder = $"($test_base)/scripts"
   mkdir $scripts_folder
   "#!/bin/sh\necho test1" | save $"($scripts_folder)/01-first.sh"
   "#!/bin/sh\necho test2" | save $"($scripts_folder)/02-second.sh"
+  "#!/usr/bin/env nu\nprint test3" | save $"($scripts_folder)/03-third.nu"
   "readme content" | save $"($scripts_folder)/README.md"
   
-  let sh_files2 = (ls $scripts_folder | where {|f| $f.type == file and ($f.name | str ends-with ".sh")})
-  if ($sh_files2 | length) == 2 {
-    print "  [PASS] hook folder: .sh files detected correctly"
+  let hook_files2 = (ls $scripts_folder | where {|f| $f.type == file and (($f.name | str ends-with ".sh") or ($f.name | str ends-with ".nu"))})
+  if ($hook_files2 | length) == 3 {
+    print "  [PASS] hook folder: .sh and .nu files detected correctly"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] hook folder: expected 2 .sh files, found ($sh_files2 | length)"
+    print $"  [FAIL] hook folder: expected 3 hook files, found ($hook_files2 | length)"
     $failed = ($failed + 1)
   }
   
@@ -95,7 +97,7 @@ def test_hook_folder_detection [] {
 }
 
 # Test script discovery and sorting logic
-# Verifies scripts are sorted by name
+# Verifies .sh and .nu scripts are both discovered and sorted by name
 def test_script_discovery [] {
   print "Testing script discovery..."
   mut passed = 0
@@ -104,21 +106,22 @@ def test_script_discovery [] {
   let test_base = $"/tmp/nextcloud-test-(random uuid)"
   mkdir $test_base
   
-  # Create scripts with specific naming to test sorting
+  # Create .sh and .nu scripts with specific naming to test sorting
   let hook_folder = $"($test_base)/hooks"
   mkdir $hook_folder
   "#!/bin/sh\necho c" | save $"($hook_folder)/03-third.sh"
   "#!/bin/sh\necho a" | save $"($hook_folder)/01-first.sh"
   "#!/bin/sh\necho b" | save $"($hook_folder)/02-second.sh"
+  "#!/usr/bin/env nu\nprint d" | save $"($hook_folder)/04-fourth.nu"
   
-  # Test 1: Scripts are found
-  let scripts = (ls $hook_folder | where {|f| $f.type == file and ($f.name | str ends-with ".sh")} | sort-by name)
+  # Test 1: Both .sh and .nu scripts are found
+  let scripts = (ls $hook_folder | where {|f| $f.type == file and (($f.name | str ends-with ".sh") or ($f.name | str ends-with ".nu"))} | sort-by name)
   
-  if ($scripts | length) == 3 {
-    print "  [PASS] script discovery: found all 3 scripts"
+  if ($scripts | length) == 4 {
+    print "  [PASS] script discovery: found all 4 scripts (.sh and .nu)"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] script discovery: expected 3 scripts, found ($scripts | length)"
+    print $"  [FAIL] script discovery: expected 4 scripts, found ($scripts | length)"
     $failed = ($failed + 1)
   }
   
@@ -132,12 +135,12 @@ def test_script_discovery [] {
     $failed = ($failed + 1)
   }
   
-  # Test 3: Sort order is correct (ascending)
+  # Test 3: Sort order is correct across both extensions (ascending by filename)
   let script_names = ($scripts | get name | each {|n| $n | path basename})
-  let expected_order = ["01-first.sh", "02-second.sh", "03-third.sh"]
+  let expected_order = ["01-first.sh", "02-second.sh", "03-third.sh", "04-fourth.nu"]
   
   if $script_names == $expected_order {
-    print "  [PASS] script discovery: sort order is correct"
+    print "  [PASS] script discovery: sort order is correct across .sh and .nu"
     $passed = ($passed + 1)
   } else {
     print $"  [FAIL] script discovery: sort order incorrect"
@@ -160,30 +163,33 @@ def test_executable_check [] {
   let test_base = $"/tmp/nextcloud-test-(random uuid)"
   mkdir $test_base
   
-  # Create executable and non-executable scripts
+  # Create executable and non-executable scripts (.sh and .nu)
   let hook_folder = $"($test_base)/hooks"
   mkdir $hook_folder
   
   let exec_script = $"($hook_folder)/01-executable.sh"
   let nonexec_script = $"($hook_folder)/02-nonexec.sh"
+  let exec_nu_script = $"($hook_folder)/03-executable.nu"
   
   "#!/bin/sh\necho exec" | save $exec_script
   "#!/bin/sh\necho nonexec" | save $nonexec_script
+  "#!/usr/bin/env nu\nprint exec-nu" | save $exec_nu_script
   
-  # Make first script executable
+  # Make .sh and .nu exec scripts executable; leave nonexec_script without +x
   ^chmod +x $exec_script
+  ^chmod +x $exec_nu_script
   
-  # Test 1: Executable script is detected
+  # Test 1: Executable .sh script is detected
   let is_exec1 = (^test -x $exec_script | complete | get exit_code) == 0
   if $is_exec1 {
-    print "  [PASS] executable check: executable script detected"
+    print "  [PASS] executable check: executable .sh script detected"
     $passed = ($passed + 1)
   } else {
-    print "  [FAIL] executable check: executable script should be detected"
+    print "  [FAIL] executable check: executable .sh script should be detected"
     $failed = ($failed + 1)
   }
   
-  # Test 2: Non-executable script is detected
+  # Test 2: Non-executable script is detected as non-executable
   let is_exec2 = (^test -x $nonexec_script | complete | get exit_code) == 0
   if not $is_exec2 {
     print "  [PASS] executable check: non-executable script detected"
@@ -193,6 +199,16 @@ def test_executable_check [] {
     $failed = ($failed + 1)
   }
   
+  # Test 3: Executable .nu script is detected
+  let is_exec3 = (^test -x $exec_nu_script | complete | get exit_code) == 0
+  if $is_exec3 {
+    print "  [PASS] executable check: executable .nu script detected"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] executable check: executable .nu script should be detected"
+    $failed = ($failed + 1)
+  }
+
   # Cleanup
   rm -rf $test_base
   
@@ -250,6 +266,56 @@ def test_hook_naming [] {
   return {passed: $passed, failed: $failed}
 }
 
+# Test that run_path actually executes a .nu hook against a temp hook root.
+# Uses --base-dir to avoid touching /docker-entrypoint-hooks.d.
+# The hook writes a marker file; we verify the file exists after the call.
+def test_run_path_invocation [] {
+  print "Testing run_path invocation with temp hook dir..."
+  mut passed = 0
+  mut failed = 0
+
+  let test_base = $"/tmp/nextcloud-test-(random uuid)"
+  let hook_root = $"($test_base)/hooks.d"
+  let hook_name = "pre-installation"
+  let hook_folder = $"($hook_root)/($hook_name)"
+  let marker_file = $"($test_base)/hook-ran-marker"
+
+  mkdir $hook_folder
+
+  # Write a .nu hook that creates a marker file (avoids run_as / root requirements)
+  let hook_script = $"($hook_folder)/01-mark.nu"
+  $"'hook-ran' | save --force '($marker_file)'" | save $hook_script
+  ^chmod +x $hook_script
+
+  let run_ok = (try {
+    run_path $hook_name "unused" --base-dir $hook_root
+    true
+  } catch {|err|
+    print $"    run_path error: ($err.msg)"
+    false
+  })
+
+  if $run_ok and ($marker_file | path exists) {
+    let content = ((open --raw $marker_file) | str trim)
+    if $content == "hook-ran" {
+      print "  [PASS] run_path: .nu hook executed and marker written"
+      $passed = ($passed + 1)
+    } else {
+      print $"  [FAIL] run_path: marker content unexpected: ($content)"
+      $failed = ($failed + 1)
+    }
+  } else if not $run_ok {
+    print "  [FAIL] run_path: invocation raised an error"
+    $failed = ($failed + 1)
+  } else {
+    print "  [FAIL] run_path: marker file not created by hook"
+    $failed = ($failed + 1)
+  }
+
+  rm -rf $test_base
+  {passed: $passed, failed: $failed}
+}
+
 # Main test runner
 def main [--verbose] {
   mut total_passed = 0
@@ -271,7 +337,11 @@ def main [--verbose] {
   let test4 = (test_hook_naming)
   $total_passed = ($total_passed + $test4.passed)
   $total_failed = ($total_failed + $test4.failed)
-  
+
+  let test5 = (test_run_path_invocation)
+  $total_passed = ($total_passed + $test5.passed)
+  $total_failed = ($total_failed + $test5.failed)
+
   print ""
   print $"Tests: ($total_passed) passed, ($total_failed) failed"
   

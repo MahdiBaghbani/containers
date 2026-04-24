@@ -67,7 +67,9 @@ Supports Nextcloud's official hook system:
 - `post-upgrade` - After upgrade
 - `before-starting` - Before Apache starts
 
-Place `.sh` scripts in `/docker-entrypoint-hooks.d/{hook-name}/`
+Place executable `.sh` or `.nu` scripts in
+`/docker-entrypoint-hooks.d/{hook-name}/`. Shell hooks run through the
+container user wrapper; Nushell hooks run with `nu`.
 
 ## Quick Start
 
@@ -116,6 +118,8 @@ docker run -d \
 - `NEXTCLOUD_ADMIN_PASSWORD` - Admin password (required for auto-install)
 - `NEXTCLOUD_DATA_DIR` - Data directory (default: /var/www/html/data)
 - `NEXTCLOUD_TRUSTED_DOMAINS` - Space-separated list of trusted domains
+- `NEXTCLOUD_SEEDED_USERS_FILE` - Optional path to a NUON file for idempotent
+  local/CI test-user creation after install or upgrade
 
 ### Database
 
@@ -206,18 +210,18 @@ The OCM test suite uses `https-only` mode for WAYF (Where Are You From) tests.
 
 ```text
 nextcloud-base
-├── PHP 8.2 Apache Runtime
-│   ├── Extensions: APCu, imagick, memcached, redis, gd, intl, ...
-│   └── Apache Modules: rewrite, headers, remoteip, ssl, security2
-├── Nushell Entrypoint System
-│   ├── entrypoint.sh (bash wrapper)
-│   ├── entrypoint-init.nu (orchestrator)
-│   └── lib/ (modular functions)
-├── TLS Integration
-│   ├── CA bundle from common-tools
-│   └── Service certificate (nextcloud)
-└── Hook System
-    └── /docker-entrypoint-hooks.d/
+|-- PHP 8.2 Apache Runtime
+|   |-- Extensions: APCu, imagick, memcached, redis, gd, intl, ...
+|   \-- Apache Modules: rewrite, headers, remoteip, ssl, security2
+|-- Nushell Entrypoint System
+|   |-- entrypoint.sh (bash wrapper)
+|   |-- entrypoint-init.nu (orchestrator)
+|   \-- lib/ (modular functions)
+|-- TLS Integration
+|   |-- CA bundle from common-tools
+|   \-- Service certificate (nextcloud)
+\-- Hook System
+    \-- /docker-entrypoint-hooks.d/
 ```
 
 ### Build Dependencies
