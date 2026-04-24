@@ -39,6 +39,7 @@ export def test-help [] {
   print "  validate         Validation tests"
   print "  registries       Registry tests"
   print "  ci               CI helper tests"
+  print "  ghcr-purge       GHCR purge desired-tag and decision logic tests"
 }
 
 # Test CLI entrypoint - called from dockypody.nu
@@ -49,7 +50,7 @@ export def test-cli [
   print "Running OCM Containers Test Suite\n"
   
   let test_suites = if $suite == "all" {
-    ["architecture", "manifests", "services", "tls", "tag-generation", "build-system", "defaults", "pull", "validate", "registries", "ci"]
+    ["architecture", "manifests", "services", "tls", "tag-generation", "build-system", "defaults", "pull", "validate", "registries", "ci", "ghcr-purge"]
   } else {
     [$suite]
   }

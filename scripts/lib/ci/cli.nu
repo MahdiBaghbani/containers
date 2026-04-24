@@ -27,6 +27,7 @@ use ../build/dep-nodes.nu [get-matching-dependency-shards]
 use ../build/pull.nu [compute-canonical-image-ref]
 use ../registries/info.nu [get-registry-info]
 use ../registries/core.nu [login-default-registry]
+use ./ghcr/cli.nu [ghcr-purge-cli validate-force-flags]
 
 # Re-export for direct module usage
 export use ./deps.nu [get-direct-dependency-services get-all-dependency-services]
@@ -340,18 +341,22 @@ export def ci-help [] {
   print "  load-owner          Load owner tarballs"
   print "  save-owner          Save owner tarballs"
   print "  prepare-node-deps   Download and load dependency shards from artifacts (CI only)"
-  print "  workflow            Generate CI workflows (--target all|build|build-push|orchestrator)"
+  print "  workflow            Generate CI workflows (--target all|build|build-push|orchestrator|image-purge)"
   print "  images              List canonical image references for a service"
   print "  login-registry      Log in to container registry (CI only)"
+  print "  ghcr-purge          Purge stale GHCR package versions based on SSOT"
   print ""
   print "Options:"
   print "  --service <name>        Target service"
   print "  --version <name>        Target version (for prepare-node-deps)"
   print "  --platform <name>       Target platform (for prepare-node-deps)"
   print "  --dependencies <list>   Comma-separated dependency services (for prepare-node-deps)"
-  print "  --target <name>         Workflow target (for workflow: all, build, build-push, orchestrator)"
+  print "  --target <name>         Workflow target (for workflow: all, build, build-push, orchestrator, image-purge)"
   print "  --transitive            Include transitive dependencies"
-  print "  --dry-run               Show what would be done"
+  print "  --dry-run               Show what would be done without deleting"
+  print "  --max-deletes <n>       Global budget: max versions deleted across ALL services in this run (0 = unlimited, default: 0)"
+  print "  --force                 For ci ghcr-purge: when desired_tags is empty, delete all candidates instead of only untagged ones."
+  print "                          Requires --service (single service only) and --dry-run=false."
   print "  --debug                 Enable verbose output"
 }
 
@@ -438,8 +443,8 @@ def list-service-images [service: string] {
 
 # CI CLI entrypoint - called from dockypody.nu
 export def ci-cli [
-  subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, prepare-node-deps, workflow, images, shard helpers, help
-  flags: record        # Flags: { service, version, platform, dependencies, target, ref, sha, transitive, debug, dry_run }
+  subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, prepare-node-deps, workflow, images, shard helpers, ghcr-purge, help
+  flags: record        # Flags: { service, version, platform, dependencies, target, ref, sha, transitive, debug, dry_run, max_deletes, force }
 ] {
   let service = (try { $flags.service } catch { "" })
   let version = (try { $flags.version } catch { "" })
@@ -449,6 +454,8 @@ export def ci-cli [
   let transitive = (try { $flags.transitive } catch { false })
   let debug = (try { $flags.debug } catch { false })
   let dry_run = (try { $flags.dry_run } catch { false })
+  let max_deletes = (try { $flags.max_deletes } catch { 0 })
+  let force = (try { $flags.force } catch { false })
   let ref = (try { $flags.ref } catch { "" })
   let sha = (try { $flags.sha } catch { "" })
   
@@ -497,6 +504,9 @@ export def ci-cli [
       if not $ok {
         exit 1
       }
+    }
+    "ghcr-purge" => {
+      ghcr-purge-cli $service $dry_run $max_deletes $debug $force
     }
     _ => {
       print $"Unknown ci subcommand: ($subcommand)"

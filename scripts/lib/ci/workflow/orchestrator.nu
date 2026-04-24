@@ -20,6 +20,7 @@
 use ../../services/core.nu [list-service-names]
 use ../deps.nu [get-direct-dependency-services get-all-dependency-services]
 use ./constants.nu [gen-workflow-header service-to-job-id services-to-job-ids format-needs-list]
+use ./steps.nu [step-checkout step-install-nushell]
 
 def get-services-with-deps [] {
     let services = (list-service-names)
@@ -90,6 +91,38 @@ def gen-build-complete-job [all_job_ids: list] {
 "
 }
 
+def gen-ghcr-purge-job [all_job_ids: list, max_deletes: int] {
+    let needs_yaml = (format-needs-list $all_job_ids)
+
+    $"  ghcr_purge:
+    name: GHCR Purge Stale Versions
+($needs_yaml)    if: ${{ inputs.push == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Nushell
+        env:
+          NU_VERSION: 0.108.0
+        run: |
+          curl -fsSL -o /tmp/nu.tar.gz \"https://github.com/nushell/nushell/releases/download/0.108.0/nu-0.108.0-x86_64-unknown-linux-gnu.tar.gz\"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+      - name: Purge stale GHCR versions
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: \${{ github.repository }}
+        run: nu scripts/dockypody.nu ci ghcr-purge --dry-run=false --max-deletes=($max_deletes)
+        # --max-deletes is a global budget across ALL services in this run.
+        # Increase it or set to 0 to mean unlimited when many stale versions exist.
+"
+}
+
 export def generate-orchestrator [] {
     let services_with_deps = (get-services-with-deps)
     
@@ -118,7 +151,10 @@ export def generate-orchestrator [] {
     let all_job_ids = ($services_with_deps | get job_id)
     let complete_job = (gen-build-complete-job $all_job_ids)
     $jobs_yaml = $jobs_yaml + $complete_job
-    
+
+    let purge_job = (gen-ghcr-purge-job $all_job_ids 200)
+    $jobs_yaml = $jobs_yaml + "\n" + $purge_job
+
     $header + $graph_comment + "\n" + $jobs_yaml
 }
 
@@ -156,5 +192,76 @@ jobs:
     uses: ./.github/workflows/build-orchestrator.yml
     with:
       push: false
+'
+}
+
+export def generate-ghcr-purge [] {
+    let header = (gen-workflow-header
+        "Manually purge stale GHCR package versions based on SSOT"
+        "nu scripts/dockypody.nu ci workflow --target image-purge"
+        "Image Purge"
+        'on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run - show what would be deleted without deleting"
+        required: false
+        type: boolean
+        default: true
+      service:
+        description: "Service to purge (leave empty for all services)"
+        required: false
+        type: string
+        default: ""
+      max_deletes:
+        description: "Global budget: max versions to delete across ALL services in this run (0 = unlimited)"
+        required: false
+        type: number
+        default: 100
+      force:
+        description: "Force-wipe empty-SSOT service: delete all candidates, not just untagged ones. Requires service to be set and dry_run=false."
+        required: false
+        type: boolean
+        default: false')
+
+    $header + '
+jobs:
+  purge_ghcr:
+    name: GHCR Purge Stale Versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Nushell
+        env:
+          NU_VERSION: 0.108.0
+        run: |
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/0.108.0/nu-0.108.0-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+      - name: Purge stale GHCR versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          SERVICE_FLAG=""
+          if [ -n "${{ inputs.service }}" ]; then
+            SERVICE_FLAG="--service ${{ inputs.service }}"
+          fi
+          FORCE_FLAG=""
+          if [ "${{ inputs.force }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+          # --max-deletes is a global budget across ALL services in this run.
+          nu scripts/dockypody.nu ci ghcr-purge \
+            --dry-run=${{ inputs.dry_run }} \
+            --max-deletes=${{ inputs.max_deletes }} \
+            $SERVICE_FLAG \
+            $FORCE_FLAG
 '
 }

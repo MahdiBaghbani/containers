@@ -19,16 +19,16 @@
 # Delegates to focused modules under workflow/
 
 use ./workflow/constants.nu [
-    ORCHESTRATOR_PATH BUILD_PATH BUILD_PUSH_PATH BUILD_SERVICE_PATH
+    ORCHESTRATOR_PATH BUILD_PATH BUILD_PUSH_PATH BUILD_SERVICE_PATH GHCR_PURGE_PATH
 ]
 use ./workflow/build-service.nu
 use ./workflow/orchestrator.nu
 
 # Get workflow specifications for the given target
 export def get-workflows-for-target [
-    target: string  # Target: all, build, build-push, orchestrator, build-service
+    target: string  # Target: all, build, build-push, orchestrator, build-service, image-purge
 ] {
-    let valid_targets = ["all" "build" "build-push" "orchestrator" "build-service"]
+    let valid_targets = ["all" "build" "build-push" "orchestrator" "build-service" "image-purge"]
     if not ($target in $valid_targets) {
         error make {
             msg: $"Invalid target: ($target). Must be one of: ($valid_targets | str join ', ')"
@@ -62,6 +62,13 @@ export def get-workflows-for-target [
         $workflows = ($workflows | append {
             path: $BUILD_SERVICE_PATH
             contents: (build-service generate)
+        })
+    }
+
+    if ($target == "image-purge" or $target == "all") {
+        $workflows = ($workflows | append {
+            path: $GHCR_PURGE_PATH
+            contents: (orchestrator generate-ghcr-purge)
         })
     }
 

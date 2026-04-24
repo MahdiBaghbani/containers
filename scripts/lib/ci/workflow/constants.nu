@@ -21,6 +21,7 @@ export const ORCHESTRATOR_PATH = ".github/workflows/build-orchestrator.yml"
 export const BUILD_PATH = ".github/workflows/build.yml"
 export const BUILD_PUSH_PATH = ".github/workflows/build-push.yml"
 export const BUILD_SERVICE_PATH = ".github/workflows/build-service.yml"
+export const GHCR_PURGE_PATH = ".github/workflows/image-purge.yml"
 
 export const SPDX_HEADER = "# SPDX-License-Identifier: AGPL-3.0-or-later
 # DockyPody: container build scripts and images
