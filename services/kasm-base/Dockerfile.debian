@@ -228,16 +228,21 @@ RUN mkdir -p /opt/dockypody/ssh && \
     chown root:1000 /opt/dockypody/ssh && \
     chmod 0750 /opt/dockypody/ssh && \
     if [ "$SSH_ENABLED" = "true" ]; then \
-      if [ -f /tmp/ssh-build-context/dockypody-dev-ed25519 ]; then \
-        install -m 0640 -o root -g 1000 /tmp/ssh-build-context/dockypody-dev-ed25519 /opt/dockypody/ssh/dockypody-dev-ed25519 && \
-        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/dockypody-dev-ed25519.pub /opt/dockypody/ssh/dockypody-dev-ed25519.pub && \
+      if [ -f /tmp/ssh-build-context/dockypody ]; then \
+        install -m 0640 -o root -g 1000 /tmp/ssh-build-context/dockypody /opt/dockypody/ssh/dockypody && \
+        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/dockypody.pub /opt/dockypody/ssh/dockypody.pub && \
         echo "SSH keypair installed"; \
+      fi; \
+      if [ -f /tmp/ssh-build-context/ssh.json ]; then \
+        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
+        echo "SSH ssh.json installed"; \
       fi; \
       if [ -f /tmp/ssh-build-context/known_hosts ]; then \
         install -m 0644 -o root -g 1000 /tmp/ssh-build-context/known_hosts /opt/dockypody/ssh/known_hosts && \
         echo "SSH known_hosts installed"; \
       fi; \
-    fi
+    fi && \
+    rm -rf /tmp/ssh-build-context || true
 
 EXPOSE 5901 6901
 

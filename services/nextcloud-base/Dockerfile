@@ -292,11 +292,19 @@ COPY ./config/apache/*.conf /etc/apache2/sites-available/
 COPY ./ssh /tmp/ssh-build-context/
 RUN if [ "$SSH_ENABLED" = "true" ]; then \
       mkdir -p /opt/dockypody/ssh && \
-      if [ -f /tmp/ssh-build-context/dockypody-dev-ed25519.pub ]; then \
-        cp /tmp/ssh-build-context/dockypody-dev-ed25519.pub /opt/dockypody/ssh/ && \
+      if [ -f /tmp/ssh-build-context/dockypody.pub ]; then \
+        cp /tmp/ssh-build-context/dockypody.pub /opt/dockypody/ssh/dockypody.pub && \
         echo "SSH public key installed"; \
+      else \
+        echo "Warning: dockypody.pub not found in build context; sshd authorized_keys will not be installed" >&2; \
+      fi; \
+      if [ -f /tmp/ssh-build-context/ssh.json ]; then \
+        cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json; \
+      else \
+        echo "Warning: ssh.json not found in build context; ssh key_name defaults apply" >&2; \
       fi; \
     fi
+RUN rm -rf /tmp/ssh-build-context || true
 
 ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
     OCM_SSH_MODE="${SSH_MODE}" \
