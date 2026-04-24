@@ -36,7 +36,7 @@
 - [Nushell Development](guides/nushell-development.md) - Nushell scripting guide
 - [Docker Buildx](guides/docker-buildx.md) - Docker Buildx features and cache mounts
 - [System Administration](guides/system-administration.md) - System administration tasks
-- [CI/CD Workflows](guides/ci-cd.md) - CI/CD workflow documentation (pending)
+- [CI/CD Workflows](guides/ci-cd.md) - CI/CD workflow documentation
 
 ## Reference (API/Schema)
 
@@ -44,7 +44,7 @@
 - [Config Schema](reference/config-schema.md) - Service configuration schema
 - [Version Manifest Schema](reference/version-manifest-schema.md) - Version manifest schema
 - [Platform Manifest Schema](reference/platform-manifest-schema.md) - Platform manifest schema
-- [Makefile Reference](reference/makefile-reference.md) - Makefile documentation (pending)
+- [Makefile Reference](reference/makefile-reference.md) - Makefile reference (stub)
 
 ## Service Documentation
 

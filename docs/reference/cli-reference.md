@@ -54,6 +54,11 @@ nu scripts/dockypody.nu ssh key --force
 nu scripts/dockypody.nu ci list-deps --service nextcloud
 nu scripts/dockypody.nu ci workflow --target all
 nu scripts/dockypody.nu ci images --service nextcloud
+nu scripts/dockypody.nu ci ghcr-purge --dry-run
+# --max-deletes is a global budget across all services in the run
+nu scripts/dockypody.nu ci ghcr-purge --dry-run=false --max-deletes=200
+# Force-wipe is allowed only for a single service and only with --dry-run=false
+nu scripts/dockypody.nu ci ghcr-purge --service nextcloud --dry-run=false --max-deletes=200 --force
 
 # Validate commands
 nu scripts/dockypody.nu validate --all-services
@@ -80,8 +85,9 @@ nu scripts/dockypody.nu docs lint --fix
 | `ci load-deps` | Load dependency tarballs | `ci/cli.nu [ci-cli]` |
 | `ci load-owner` | Load owner tarballs | `ci/cli.nu [ci-cli]` |
 | `ci save-owner` | Save owner tarballs | `ci/cli.nu [ci-cli]` |
-| `ci workflow` | Generate CI workflows (--target all\|build\|build-push\|orchestrator) | `ci/cli.nu [ci-cli]` |
+| `ci workflow` | Generate CI workflows (--target all\|build\|build-push\|orchestrator\|build-service\|ghcr-purge) | `ci/cli.nu [ci-cli]` |
 | `ci images` | List canonical image references | `ci/cli.nu [ci-cli]` |
+| `ci ghcr-purge` | Purge stale GHCR package versions (SSOT-based) | `ci/cli.nu [ci-cli]` |
 | `docs lint` | Lint documentation files | `docs/cli.nu [docs-cli]` |
 
 ### CLI Architecture
