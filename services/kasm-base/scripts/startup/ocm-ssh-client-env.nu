@@ -24,7 +24,7 @@
 #   OCM_SSH_ENABLED       - "true" to enable SSH client setup
 #   OCM_SSH_DEFAULT_USER  - SSH user for generated config (default: root)
 #   OCM_SSH_PORT          - SSH port for generated config (default: 22)
-#   OCM_SSH_PRIVATE_KEY   - Path to private key (default: /opt/dockypody/ssh/dockypody-dev-ed25519)
+#   OCM_SSH_PRIVATE_KEY   - Path to private key (default: derived from /opt/dockypody/ssh/ssh.json key_name, fallback: /opt/dockypody/ssh/dockypody)
 #   OCM_SSH_KNOWN_HOSTS   - Path to known_hosts (default: /opt/dockypody/ssh/known_hosts)
 
 def setup-ssh-directory [] {
@@ -105,6 +105,21 @@ Host 172.*
     print $"[ocm-ssh-client-env] Generated SSH config at ($config_file)"
 }
 
+def get-default-private-key [] {
+    let ssh_json_path = "/opt/dockypody/ssh/ssh.json"
+    let key_name = if ($ssh_json_path | path exists) {
+        try {
+            let meta = (open $ssh_json_path)
+            $meta.key_name? | default "dockypody"
+        } catch {
+            "dockypody"
+        }
+    } else {
+        "dockypody"
+    }
+    $"/opt/dockypody/ssh/($key_name)"
+}
+
 def main [] {
     let enabled = ($env.OCM_SSH_ENABLED? | default "false" | str downcase | str trim)
     if $enabled != "true" {
@@ -114,7 +129,7 @@ def main [] {
 
     let user = ($env.OCM_SSH_DEFAULT_USER? | default "root" | str trim)
     let port = ($env.OCM_SSH_PORT? | default "22" | str trim)
-    let private_key = ($env.OCM_SSH_PRIVATE_KEY? | default "/opt/dockypody/ssh/dockypody-dev-ed25519" | str trim)
+    let private_key = ($env.OCM_SSH_PRIVATE_KEY? | default (get-default-private-key) | str trim)
     let public_key = $"($private_key).pub"
     let known_hosts = ($env.OCM_SSH_KNOWN_HOSTS? | default "/opt/dockypody/ssh/known_hosts" | str trim)
 
