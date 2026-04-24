@@ -50,8 +50,9 @@ The system supports three SSH modes:
 
 ```text
 ssh/
-├── dockypody-dev-ed25519       # Default private key (dev-only)
-├── dockypody-dev-ed25519.pub   # Default public key
+├── ssh.json                    # Metadata (key_name, comment, default_user fallback)
+├── dockypody                   # Default private key (dev-only)
+├── dockypody.pub               # Default public key
 └── known_hosts                 # Default known hosts (optional)
 ```
 
@@ -119,9 +120,10 @@ The build system projects these arguments from merged config:
 
 The build system stages SSH material into the build context:
 
-1. Copies `ssh/dockypody-dev-ed25519` and `.pub` to build context
-2. Copies `ssh/known_hosts` if present
-3. Cleans up after build (success or failure)
+1. Copies `ssh/ssh.json` if present
+2. Copies `ssh/dockypody` and `.pub` to build context
+3. Copies `ssh/known_hosts` if present
+4. Cleans up after build (success or failure)
 
 ## Dockerfile Patterns
 
@@ -205,7 +207,7 @@ This feature is explicitly **dev and E2E only**:
 - Root access is enabled by default for fast debugging
 - Password authentication is disabled (key-only)
 - Host keys are generated at runtime, never baked into images
-- The default keypair (`dockypody-dev-ed25519`) is development-only
+- The default keypair (`dockypody`) is development-only
 - Production deployments should mount custom keys via secrets
 
 ## Network Boundary
@@ -225,13 +227,19 @@ SSH can be completely disabled by:
 Generate a new default keypair:
 
 ```bash
-nu scripts/lib/ssh/cli.nu --generate-keypair
+nu scripts/dockypody.nu ssh key
 ```
 
-Or directly with ssh-keygen:
+Regenerate (delete and re-create) the default keypair:
 
 ```bash
-ssh-keygen -t ed25519 -f ssh/dockypody-dev-ed25519 -N "" -C "dockypody-dev@local"
+nu scripts/dockypody.nu ssh key --force
+```
+
+Or generate directly with ssh-keygen:
+
+```bash
+ssh-keygen -t ed25519 -f ssh/dockypody -N "" -C "docky@pody"
 ```
 
 ## Error Handling
@@ -239,7 +247,7 @@ ssh-keygen -t ed25519 -f ssh/dockypody-dev-ed25519 -N "" -C "dockypody-dev@local
 | Error | Cause | Resolution |
 | ----- | ----- | ---------- |
 | `ssh: mode is required when enabled=true` | Missing `ssh.mode` field | Add `mode: "server"` or `"client"` |
-| `SSH keypair not found` | Missing `ssh/dockypody-dev-ed25519` | Generate keypair |
+| `SSH keypair not found` | Missing `ssh/dockypody` | Generate keypair |
 | `sshd: no hostkeys available` | Host keys not generated | Ensure `start-sshd-if-enabled` runs before the main process |
 | `Permission denied (publickey)` | authorized_keys missing | Check keypair copy in entrypoint |
 

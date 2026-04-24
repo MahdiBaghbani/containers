@@ -45,13 +45,14 @@ This generates:
 ### 2. Generate SSH Keypair (First Time Only)
 
 ```bash
-nu scripts/lib/ssh/cli.nu --generate-keypair
+nu scripts/dockypody.nu ssh key
 ```
 
 This generates:
 
-- `ssh/dockypody-dev-ed25519` - Default private key (dev-only)
-- `ssh/dockypody-dev-ed25519.pub` - Default public key
+- `ssh/ssh.json` - Metadata (key_name, comment, default_user fallback)
+- `ssh/dockypody` - Default private key (dev-only)
+- `ssh/dockypody.pub` - Default public key
 
 The SSH keypair enables dev and E2E SSH access between containers. It is NOT used in production.
 
