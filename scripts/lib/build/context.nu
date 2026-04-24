@@ -19,6 +19,7 @@
 # See docs/concepts/build-system.md for architecture
 
 use ../tls/lib.nu [get-tls-mode]
+use ../ssh/lib.nu [read-ssh-metadata]
 
 export def extract-tls-metadata [
     cfg: record,
@@ -259,7 +260,15 @@ export def extract-ssh-metadata [
         "disabled"
     })
 
-    let ssh_default_user = (try { $cfg.ssh.default_user | default "root" } catch { "root" })
+    # default_user priority: cfg.ssh.default_user -> ssh/ssh.json.default_user -> "root"
+    let ssh_json = (try { read-ssh-metadata } catch { null })
+    let fallback_user = if $ssh_json != null {
+        $ssh_json.default_user? | default "root"
+    } else {
+        "root"
+    }
+    let ssh_default_user = (try { $cfg.ssh.default_user | default $fallback_user } catch { $fallback_user })
+
     let ssh_port = (try { $cfg.ssh.port | default 22 } catch { 22 })
     let ssh_listen = (try { $cfg.ssh.listen | default "0.0.0.0" } catch { "0.0.0.0" })
 
@@ -292,6 +301,13 @@ export def prepare-ssh-context [
     # Always create the ssh directory so Dockerfile COPY ./ssh/ never fails.
     mkdir $ssh_dest
 
+    # Stage ssh.json if present so sshd.nu can read key_name at container runtime.
+    let ssh_json_src = $"($ssh_src)/ssh.json"
+    if ($ssh_json_src | path exists) {
+        cp $ssh_json_src $"($ssh_dest)/ssh.json"
+        print "Staged ssh.json into build context"
+    }
+
     # Always stage the shared sshd runtime module so Dockerfile
     # COPY ./scripts/lib/sshd.nu never fails.
     let sshd_module_src = "scripts/lib/ssh/sshd.nu"
@@ -314,17 +330,25 @@ export def prepare-ssh-context [
         error make {msg: "ssh_mode parameter is required when ssh_enabled=true. This is a build system bug."}
     }
 
+    # Resolve key_name from ssh.json (fallback: "dockypody").
+    let ssh_meta = (try { read-ssh-metadata $ssh_src } catch { null })
+    let key_name = if $ssh_meta != null {
+        $ssh_meta.key_name? | default "dockypody"
+    } else {
+        "dockypody"
+    }
+
     mut staged_files = []
 
-    let private_key = $"($ssh_src)/dockypody-dev-ed25519"
-    let public_key = $"($ssh_src)/dockypody-dev-ed25519.pub"
+    let private_key = $"($ssh_src)/($key_name)"
+    let public_key  = $"($ssh_src)/($key_name).pub"
 
     if $ssh_mode == "server" {
         # Server mode: stage only the public key. Never stage the private key -
         # doing so risks baking it into the image layer.
         if ($public_key | path exists) {
-            cp $public_key $"($ssh_dest)/dockypody-dev-ed25519.pub"
-            $staged_files = ($staged_files | append "dockypody-dev-ed25519.pub")
+            cp $public_key $"($ssh_dest)/($key_name).pub"
+            $staged_files = ($staged_files | append $"($key_name).pub")
             print $"Staged SSH public key for ($service)"
         } else {
             print $"WARNING: SSH public key not found at ($public_key). SSH server authorization may fail."
@@ -332,9 +356,9 @@ export def prepare-ssh-context [
     } else {
         # client / client-and-server: stage the full keypair.
         if ($private_key | path exists) {
-            cp $private_key $"($ssh_dest)/dockypody-dev-ed25519"
-            cp $public_key $"($ssh_dest)/dockypody-dev-ed25519.pub"
-            $staged_files = ($staged_files | append ["dockypody-dev-ed25519" "dockypody-dev-ed25519.pub"])
+            cp $private_key $"($ssh_dest)/($key_name)"
+            cp $public_key $"($ssh_dest)/($key_name).pub"
+            $staged_files = ($staged_files | append [$"($key_name)" $"($key_name).pub"])
             print $"Staged SSH keypair for ($service)"
         } else {
             print $"WARNING: SSH keypair not found at ($private_key). SSH connections may fail."
