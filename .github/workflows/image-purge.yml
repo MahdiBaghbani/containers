@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Manually purge stale GHCR package versions based on SSOT
+#
+# GENERATED FILE - Do not edit manually
+# Regenerate with: nu scripts/dockypody.nu ci workflow --target image-purge
+
+name: Image Purge
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run - show what would be deleted without deleting"
+        required: false
+        type: boolean
+        default: true
+      service:
+        description: "Service to purge (leave empty for all services)"
+        required: false
+        type: string
+        default: ""
+      max_deletes:
+        description: "Global budget: max versions to delete across ALL services in this run (0 = unlimited)"
+        required: false
+        type: number
+        default: 100
+      force:
+        description: "Force-wipe empty-SSOT service: delete all candidates, not just untagged ones. Requires service to be set and dry_run=false."
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  purge_ghcr:
+    name: GHCR Purge Stale Versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Nushell
+        env:
+          NU_VERSION: 0.108.0
+        run: |
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/0.108.0/nu-0.108.0-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+      - name: Purge stale GHCR versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          SERVICE_FLAG=""
+          if [ -n "${{ inputs.service }}" ]; then
+            SERVICE_FLAG="--service ${{ inputs.service }}"
+          fi
+          FORCE_FLAG=""
+          if [ "${{ inputs.force }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
+          # --max-deletes is a global budget across ALL services in this run.
+          nu scripts/dockypody.nu ci ghcr-purge \
+            --dry-run=${{ inputs.dry_run }} \
+            --max-deletes=${{ inputs.max_deletes }} \
+            $SERVICE_FLAG \
+            $FORCE_FLAG

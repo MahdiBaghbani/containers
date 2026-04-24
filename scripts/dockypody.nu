@@ -38,7 +38,7 @@ def show-help [] {
   print "  validate           Validate configurations"
   print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean)"
   print "  ssh <subcommand>   Manage SSH keypair (key)"
-  print "  ci <subcommand>    CI helper operations (list-deps, load-deps, images, etc.)"
+  print "  ci <subcommand>    CI helper operations (list-deps, load-deps, images, ghcr-purge, etc.)"
   print "  docs <subcommand>  Documentation tools (lint)"
   print ""
   print "Examples:"
@@ -104,6 +104,7 @@ def main [
   --fix,
   # Common flags
   --dry-run,
+  --max-deletes: int = 0,
   --verbose
 ] {
   # Handle top-level help (command is null, "help", "--help", or "-h")
@@ -173,7 +174,7 @@ def main [
     "ci" => {
       # Normalize help flags to "help" subcommand - ci-cli handles it internally
       let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run
+      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force
     }
     "docs" => {
       # Normalize help flags to "help" subcommand - docs-cli handles it internally
@@ -256,7 +257,9 @@ def run-ci-command [
   sha: string,
   transitive: bool,
   debug: bool,
-  dry_run: bool
+  dry_run: bool,
+  max_deletes: int,
+  force: bool
 ] {
   use ./lib/ci/cli.nu [ci-cli]
   ci-cli $subcommand {
@@ -269,7 +272,9 @@ def run-ci-command [
     sha: $sha,
     transitive: $transitive,
     debug: $debug,
-    dry_run: $dry_run
+    dry_run: $dry_run,
+    max_deletes: $max_deletes,
+    force: $force
   }
 }
 
