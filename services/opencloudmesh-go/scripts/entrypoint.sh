@@ -17,17 +17,22 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Run initialization via Nushell script
-# Don't use set -e here - we want to continue even if initialization has warnings
+# Don't use set -e here; the Nushell orchestrator decides which paths are fatal.
+# Warnings are handled inside the orchestrator and must exit 0.
 if [ -f /usr/bin/entrypoint-init.nu ]; then
   if command -v nu >/dev/null 2>&1; then
     nu /usr/bin/entrypoint-init.nu "$@" || {
-      echo "Warning: Initialization script exited with error, but continuing to run CMD..." >&2
+      status=$?
+      echo "Error: Initialization script failed with exit code ${status}; refusing to run CMD." >&2
+      exit "$status"
     }
   else
-    echo "Warning: nu not found; skipping /usr/bin/entrypoint-init.nu" >&2
+    echo "Error: nu not found; cannot run /usr/bin/entrypoint-init.nu." >&2
+    exit 1
   fi
 else
-  echo "Warning: /usr/bin/entrypoint-init.nu not found; skipping init" >&2
+  echo "Error: /usr/bin/entrypoint-init.nu not found; refusing to run CMD." >&2
+  exit 1
 fi
 
 # Exec the CMD arguments directly
