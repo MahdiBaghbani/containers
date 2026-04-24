@@ -434,12 +434,12 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test19)
   
-  # Test 20: Validate-manifest-file performs Phase 2 validation for multi-platform
-  let test20 = (run-test "validate-manifest-file Phase 2 validation with platforms" {
+  # Test 20: Validate-manifest-file performs expanded-tag validation for multi-platform
+  let test20 = (run-test "validate-manifest-file expanded-tag validation with platforms" {
     use ../lib/validate/core.nu [validate-version-manifest]
     use ../lib/platforms/core.nu [expand-version-to-platforms get-default-platform]
     
-    # Create a scenario that would pass Phase 1 but fail Phase 2
+    # Create a scenario that would pass base validation but fail expanded-tag validation
     # (version names without platform suffixes, but collision after expansion)
     let platforms = {
       default: "debian",
@@ -460,7 +460,7 @@ def main [--verbose] {
       ]
     }
     
-    # Validate with platforms (Phase 2 should catch tag collision)
+    # Validate with platforms (expanded-tag validation should catch tag collision)
     let result = (validate-version-manifest $bad_manifest $platforms)
     
     if $result.valid {
@@ -474,14 +474,14 @@ def main [--verbose] {
     }
     
     if $verbose_flag {
-      print $"    Phase 2 validation correctly detected tag collision: ($result.errors.0)"
+      print $"    Expanded-tag validation correctly detected tag collision: ($result.errors.0)"
     }
     true
   } $verbose_flag)
   $results = ($results | append $test20)
   
   # Test 21: validate-manifest-file loads platforms manifest automatically
-  let test21 = (run-test "validate-manifest-file auto-loads platforms for Phase 2" {
+  let test21 = (run-test "validate-manifest-file auto-loads platforms for expanded-tag validation" {
     use ../lib/validate/core.nu [validate-manifest-file]
     
     # For this test, we'll verify that validate-manifest-file works correctly
