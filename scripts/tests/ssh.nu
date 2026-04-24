@@ -207,8 +207,10 @@ def main [--verbose] {
         let fake_repo = (^mktemp -d | str trim)
         let fake_ssh_dir = ($fake_repo | path join "ssh")
         mkdir $fake_ssh_dir
-        let fake_key = ($fake_ssh_dir | path join "dockypody-dev-ed25519")
-        let fake_pub = ($fake_ssh_dir | path join "dockypody-dev-ed25519.pub")
+        # ssh.json SSOT drives key_name; key files must match.
+        '{"key_name":"dockypody","comment":"docky@pody","default_user":"root"}' | save -f ($fake_ssh_dir | path join "ssh.json")
+        let fake_key = ($fake_ssh_dir | path join "dockypody")
+        let fake_pub = ($fake_ssh_dir | path join "dockypody.pub")
         "FAKE PRIVATE KEY" | save -f $fake_key
         "FAKE PUBLIC KEY" | save -f $fake_pub
 
@@ -236,8 +238,8 @@ def main [--verbose] {
             error make {msg: "Expected ssh dir to be created in build context"}
         }
 
-        let staged_key = ($ctx | path join "ssh" "dockypody-dev-ed25519")
-        let staged_pub = ($ctx | path join "ssh" "dockypody-dev-ed25519.pub")
+        let staged_key = ($ctx | path join "ssh" "dockypody")
+        let staged_pub = ($ctx | path join "ssh" "dockypody.pub")
 
         if ($staged_key | path exists) {
             rm-temp-context $fake_repo
@@ -277,8 +279,10 @@ def main [--verbose] {
         let fake_repo = (^mktemp -d | str trim)
         let fake_ssh_dir = ($fake_repo | path join "ssh")
         mkdir $fake_ssh_dir
-        let fake_key = ($fake_ssh_dir | path join "dockypody-dev-ed25519")
-        let fake_pub = ($fake_ssh_dir | path join "dockypody-dev-ed25519.pub")
+        # ssh.json SSOT drives key_name; key files must match.
+        '{"key_name":"dockypody","comment":"docky@pody","default_user":"root"}' | save -f ($fake_ssh_dir | path join "ssh.json")
+        let fake_key = ($fake_ssh_dir | path join "dockypody")
+        let fake_pub = ($fake_ssh_dir | path join "dockypody.pub")
         "FAKE PRIVATE KEY" | save -f $fake_key
         "FAKE PUBLIC KEY" | save -f $fake_pub
 
@@ -300,8 +304,8 @@ def main [--verbose] {
             error make {msg: "Expected dir_created=true when SSH enabled"}
         }
 
-        let staged_key = ($ctx | path join "ssh" "dockypody-dev-ed25519")
-        let staged_pub = ($ctx | path join "ssh" "dockypody-dev-ed25519.pub")
+        let staged_key = ($ctx | path join "ssh" "dockypody")
+        let staged_pub = ($ctx | path join "ssh" "dockypody.pub")
 
         if not ($staged_key | path exists) {
             rm-temp-context $fake_repo

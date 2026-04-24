@@ -15,17 +15,44 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# SSH CLI entry point
+# SSH CLI facade - mirrors tls/cli.nu structure
 
-use ./key.nu
+use ./lib.nu [generate-ssh-keypair]
 
-export def main [
-    --generate-keypair (-g)  # Generate default SSH keypair
+# Show SSH CLI help
+export def ssh-help [] {
+    print "Usage: nu scripts/dockypody.nu ssh <subcommand> [options]"
+    print ""
+    print "Subcommands:"
+    print "  key   Generate default SSH keypair (reads key_name/comment from ssh/ssh.json)"
+    print ""
+    print "Options:"
+    print "  --force   Overwrite existing keypair"
+}
+
+# SSH CLI entrypoint - called from dockypody.nu
+export def ssh-cli [
+    subcommand: string,  # Subcommand: key, help
+    flags: record        # Flags: { force }
 ] {
-    if $generate_keypair {
-        key
-    } else {
-        print "DockyPody SSH management"
-        print "Usage: nu scripts/lib/ssh/cli.nu --generate-keypair"
+    let force = (try { $flags.force } catch { false })
+
+    match $subcommand {
+        "help" | "--help" | "-h" => {
+            ssh-help
+        }
+        "key" => {
+            if $force {
+                generate-ssh-keypair --force
+            } else {
+                generate-ssh-keypair
+            }
+        }
+        _ => {
+            print $"Unknown ssh subcommand: ($subcommand)"
+            print ""
+            ssh-help
+            exit 1
+        }
     }
 }

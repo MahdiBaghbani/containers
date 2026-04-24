@@ -92,6 +92,21 @@ Subsystem sftp /usr/lib/openssh/sftp-server
     print $"[ocm-sshd] Configured sshd_config port=($port) user=($user)"
 }
 
+def get-default-pubkey-path [] {
+    let ssh_json_path = "/opt/dockypody/ssh/ssh.json"
+    let key_name = if ($ssh_json_path | path exists) {
+        try {
+            let meta = (open $ssh_json_path)
+            $meta.key_name? | default "dockypody"
+        } catch {
+            "dockypody"
+        }
+    } else {
+        "dockypody"
+    }
+    $"/opt/dockypody/ssh/($key_name).pub"
+}
+
 def setup-authorized-keys [user: string] {
     let user_info = (try { ^getent passwd $user } catch { "" })
     let home_dir = if ($user_info | str trim | is-empty) {
@@ -107,7 +122,7 @@ def setup-authorized-keys [user: string] {
         mkdir $ssh_dir
     }
 
-    let default_pub_key = "/opt/dockypody/ssh/dockypody-dev-ed25519.pub"
+    let default_pub_key = (get-default-pubkey-path)
     if ($default_pub_key | path exists) {
         let pub_key_content = (open --raw $default_pub_key)
         if not ($authorized_keys | path exists) {

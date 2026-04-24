@@ -37,6 +37,7 @@ def show-help [] {
   print "  test               Run test suites"
   print "  validate           Validate configurations"
   print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean)"
+  print "  ssh <subcommand>   Manage SSH keypair (key)"
   print "  ci <subcommand>    CI helper operations (list-deps, load-deps, images, etc.)"
   print "  docs <subcommand>  Documentation tools (lint)"
   print ""
@@ -45,6 +46,8 @@ def show-help [] {
   print "  nu scripts/dockypody.nu build --service gaia --all-versions"
   print "  nu scripts/dockypody.nu test --suite defaults"
   print "  nu scripts/dockypody.nu tls ca"
+  print "  nu scripts/dockypody.nu ssh key"
+  print "  nu scripts/dockypody.nu ssh key --force"
   print "  nu scripts/dockypody.nu ci list-deps --service nextcloud"
   print "  nu scripts/dockypody.nu docs lint"
   print ""
@@ -110,6 +113,10 @@ def main [
   }
   
   match $command {
+    "ssh" => {
+      let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
+      run-ssh-command $subcmd $force
+    }
     "build" => {
       if $subcommand == "help" or $subcommand == "--help" or $subcommand == "-h" {
         build-help
@@ -201,6 +208,16 @@ def run-validate-command [service: string, all_services: bool, manifests_only: b
     service: $service,
     all_services: $all_services,
     manifests_only: $manifests_only
+  }
+}
+
+def run-ssh-command [
+  subcommand: string,
+  force: bool
+] {
+  use ./lib/ssh/cli.nu [ssh-cli]
+  ssh-cli $subcommand {
+    force: $force
   }
 }
 
