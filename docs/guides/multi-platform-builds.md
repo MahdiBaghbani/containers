@@ -21,6 +21,13 @@
 
 This guide covers the multi-platform build system that allows building different container image variants for different base platforms (e.g., Debian, Alpine, Ubuntu).
 
+## Terminology note
+
+In DockyPody, "platform" in `platforms.nuon` means a configuration variant
+(tag suffix like `-debian` or `-production`), not a CPU architecture.
+CPU architecture is controlled by Docker Buildx `--platform` (for example
+`linux/amd64`). In CI, DockyPody builds `linux/amd64` only.
+
 ## Overview
 
 The multi-platform build system allows a single service to produce multiple image variants, each optimized for a different base platform. This is useful when you need:

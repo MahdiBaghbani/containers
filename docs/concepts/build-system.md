@@ -797,6 +797,7 @@ The CI system uses a three-layer architecture:
 3. **Entry workflows** (generated) - Thin wrappers that trigger the orchestrator
    - **build.yml**: Build-only verification (passes `push: false`)
    - **build-push.yml**: Build and push to ghcr.io (passes `push: true`, manual workflow_dispatch only)
+   - **image-purge.yml**: Purge stale GHCR package versions (SSOT-based, manual workflow_dispatch)
 
 ### Generator Commands
 
@@ -804,13 +805,15 @@ The CI system uses a three-layer architecture:
 # Preview all workflows (dry-run)
 nu scripts/dockypody.nu ci workflow --target all --dry-run
 
-# Generate all three workflows
+# Generate all workflows
 nu scripts/dockypody.nu ci workflow --target all
 
 # Generate specific workflows
 nu scripts/dockypody.nu ci workflow --target orchestrator
 nu scripts/dockypody.nu ci workflow --target build
 nu scripts/dockypody.nu ci workflow --target build-push
+nu scripts/dockypody.nu ci workflow --target build-service
+nu scripts/dockypody.nu ci workflow --target image-purge
 ```
 
 ### What Gets Generated
@@ -992,6 +995,20 @@ overrides: {
 - The implementation in `scripts/lib/manifest/core.nu` detects source types and routes to appropriate merge functions
 
 For complete details on multi-platform builds, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
+
+## Terminology: platform variants vs CPU architecture
+
+DockyPody uses the word "platform" in two different ways:
+
+- Variant platform: The value from `services/<service>/platforms.nuon`
+  `platforms[].name` (for example `debian`, `alpine`, `production`). This
+  selects a configuration variant and becomes a tag suffix like
+  `v1.0.0-debian`.
+- CPU architecture platform: The Docker Buildx `--platform` value (for example
+  `linux/amd64`).
+
+In CI, DockyPody builds a single CPU architecture (`linux/amd64`) and uses
+variant platforms only for config and tag suffixes.
 
 ## Tag Generation
 

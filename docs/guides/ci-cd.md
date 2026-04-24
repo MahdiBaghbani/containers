@@ -30,6 +30,29 @@ The build system uses reusable GitHub Actions workflows:
 
 Builds are triggered by workflow dispatch (manual), not inferred from commits.
 
+## GHCR package retention (SSOT purge)
+
+When you push the same tag (for example `latest`) multiple times, GHCR keeps old
+package versions as untagged history. Over time this can consume significant
+storage.
+
+DockyPody supports a SSOT-based purge that deletes GHCR package versions that
+are not referenced by the current `services/**/{versions,platforms}.nuon`
+state.
+
+- Manual workflow: `.github/workflows/image-purge.yml`
+- Auto purge: `ghcr_purge` job inside `.github/workflows/build-orchestrator.yml`
+  (runs only when `push: true` and all builds succeeded)
+- CLI entrypoint: `nu scripts/dockypody.nu ci ghcr-purge`
+
+Safety and fault tolerance:
+
+- Manual workflow defaults to `dry_run=true`.
+- Use `--max-deletes` (and the workflow input `max_deletes`) to cap deletions. This is a global budget across all services in the run.
+- If a service's SSOT desired tag set is empty, the purge deletes only untagged versions by default. Use `--force` with `--service` and `--dry-run=false` to allow a full wipe for that single service.
+- If the token cannot delete package versions (permission denied), the purge
+  step should warn and skip instead of failing the build.
+
 ## Docker Image Caching
 
 CI workflows use `actions/cache` to store and restore Docker images between runs. This speeds up builds by reusing previously built dependency images.

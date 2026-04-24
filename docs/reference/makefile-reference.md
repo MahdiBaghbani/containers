@@ -19,9 +19,9 @@
 
 # Makefile Reference
 
-> **Status:** Documentation pending implementation
+> **Status:** Stub (topic list only)
 
-This section will document Makefile targets and their Nushell script equivalents.
+This page is a topic list for the Makefile surface. It does not yet describe each target.
 
 ## Topics to Document
 

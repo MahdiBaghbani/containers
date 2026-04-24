@@ -129,7 +129,7 @@ CI/CD workflows are available for GitHub Actions and Forgejo Actions:
 - GitHub: `.github/workflows/build-containers.yml`
 - Forgejo: `.forgejo/workflows/build-containers.yml`
 
-See [CI/CD Workflows](docs/guides/ci-cd.md) for workflow documentation (pending).
+See [CI/CD Workflows](docs/guides/ci-cd.md) for workflow documentation.
 
 ## Conventions
 
