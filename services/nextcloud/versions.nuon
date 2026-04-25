@@ -1,11 +1,11 @@
 {
-  "default": "v32.0.2",
+  "default": "v33.0.2",
 
   "defaults": {
     "sources": {
       "nextcloud": {
         "url": "https://github.com/nextcloud/server",
-        "ref": "v32.0.2"
+        "ref": "v33.0.2"
       }
     },
     "dependencies": {
@@ -28,12 +28,16 @@
       }
     },
     {
-      "name": "v32.0.2",
-      "latest": true,
+      "name": "v33.0.2",
+      "latest": true
+    },
+    {
+      "name": "v32.0.8",
+      "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "ref": "v32.0.2"
+            "ref": "v32.0.8"
           }
         }
       }
