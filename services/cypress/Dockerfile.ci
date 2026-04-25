@@ -77,15 +77,22 @@ RUN if command -v google-chrome >/dev/null 2>&1; then \
 
 RUN --mount=type=cache,id=cypress-npm-cache,target=/root/.npm,sharing=locked \
     --mount=type=cache,id=cypress-dl-cypress-v1-${CYPRESS_VERSION}-linux-x64,target=/var/cache/dockypody/cypress,sharing=locked \
+    set -eu; \
+    if command -v cypress >/dev/null 2>&1 && cypress --version | grep -F "${CYPRESS_VERSION}" >/dev/null 2>&1; then \
+      echo "OK: Cypress already present and matches pin"; \
+      exit 0; \
+    fi; \
     if command -v npm >/dev/null 2>&1; then \
       npm --version >/dev/null; \
     else \
       echo "Error: npm not found in base image ${CYPRESS_FACTORY_IMAGE}" && exit 1; \
-    fi && \
-    export CYPRESS_CACHE_FOLDER="/var/cache/dockypody/cypress" && \
-    npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}" && \
+    fi; \
+    export CYPRESS_CACHE_FOLDER="/var/cache/dockypody/cypress"; \
+    npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}"; \
     cypress --version | grep -F "${CYPRESS_VERSION}" >/dev/null 2>&1 || \
-    (echo "Cypress version mismatch after install (expected ${CYPRESS_VERSION})" && exit 1) && \
-    mkdir -p /root/.cache/Cypress && \
-    cp -a /var/cache/dockypody/cypress/. /root/.cache/Cypress/
+      (echo "Cypress version mismatch after install (expected ${CYPRESS_VERSION})" && exit 1); \
+    mkdir -p /root/.cache/Cypress; \
+    if [ -d "/var/cache/dockypody/cypress" ]; then \
+      cp -a /var/cache/dockypody/cypress/. /root/.cache/Cypress/; \
+    fi
 
