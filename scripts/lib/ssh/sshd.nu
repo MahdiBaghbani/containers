@@ -85,7 +85,7 @@ SyslogFacility AUTH
 AllowUsers ($user)
 
 # Subsystem
-Subsystem sftp /usr/lib/openssh/sftp-server
+Subsystem sftp internal-sftp
 "
 
     $config_content | save -f $sshd_config
