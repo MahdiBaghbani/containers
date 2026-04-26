@@ -414,6 +414,21 @@ def main [--verbose] {
     $results = ($results | append $test_platform_invalid)
 
     # ------------------------------------------------------------------
+    # sshd config content tests
+    # ------------------------------------------------------------------
+
+    let test_sftp_subsystem = (run-test "sshd.nu: uses internal-sftp subsystem" {
+        let repo_root = (get-repo-root)
+        let sshd_path = ($repo_root | path join "scripts" "lib" "ssh" "sshd.nu")
+        let content = (open --raw $sshd_path)
+        if not ($content | str contains "Subsystem sftp internal-sftp") {
+            error make {msg: "sshd.nu must contain 'Subsystem sftp internal-sftp'"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_sftp_subsystem)
+
+    # ------------------------------------------------------------------
     # Summary
     # ------------------------------------------------------------------
 
