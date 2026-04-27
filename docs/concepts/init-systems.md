@@ -32,12 +32,17 @@ Kubernetes does NOT have an `init: true` equivalent. For Kubernetes deployments,
 
 ## DockyPody Standard
 
-All non-distroless DockyPody containers embed tini-static:
+All non-distroless DockyPody containers embed tini-static copied from a stage
+based on the common-tools image:
 
 ```dockerfile
 COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 ```
+
+The exact stage name does not matter as long as it is built from
+`COMMON_TOOLS_IMAGE` (common aliases: `common-tools`, `common-tools-runtime`,
+`compress`).
 
 ### Why tini-static?
 

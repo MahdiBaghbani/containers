@@ -51,8 +51,8 @@ nu scripts/dockypody.nu ssh key
 This generates:
 
 - `ssh/ssh.json` - Metadata (key_name, comment, default_user fallback)
-- `ssh/dockypody` - Default private key (dev-only)
-- `ssh/dockypody.pub` - Default public key
+- `ssh/dockypody` - Default private key (dev-only, key_name=dockypody)
+- `ssh/dockypody.pub` - Default public key (key_name=dockypody)
 
 The SSH keypair enables dev and E2E SSH access between containers. It is NOT used in production.
 

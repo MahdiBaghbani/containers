@@ -622,7 +622,43 @@ RUN apt-get install \
 # The build system stages the shared sshd module into the build context as:
 #   scripts/lib/sshd.nu
 # so the service can copy it alongside its other entrypoint libs.
-COPY --chmod=755 ./scripts/lib/*.nu /usr/bin/lib/
+COPY --chmod=755 ./scripts/lib/sshd.nu /usr/bin/lib/sshd.nu
+
+# Install staged SSH material in a coherent way. For server-capable images, gate
+# on modes that include server behavior.
+COPY ./ssh /tmp/ssh-build-context/
+RUN if [ "$SSH_ENABLED" = "true" ] && { [ "$SSH_MODE" = "server" ] || [ "$SSH_MODE" = "client-and-server" ]; }; then \
+      mkdir -p /opt/dockypody/ssh && \
+      for pub in /tmp/ssh-build-context/*.pub; do \
+        if [ -f "$pub" ]; then \
+          cp "$pub" /opt/dockypody/ssh/ && \
+          echo "SSH public key installed"; \
+        fi; \
+      done; \
+      if [ -f /tmp/ssh-build-context/ssh.json ]; then \
+        cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
+        chmod 0644 /opt/dockypody/ssh/ssh.json; \
+      else \
+        echo "Warning: ssh.json not found in build context; ssh key_name defaults apply" >&2; \
+      fi; \
+      if [ "$SSH_MODE" = "client-and-server" ]; then \
+        for src in /tmp/ssh-build-context/*; do \
+          if [ ! -f "$src" ]; then continue; fi; \
+          base="$(basename "$src")"; \
+          case "$base" in \
+            *.pub|ssh.json|known_hosts) \
+              ;; \
+            *) \
+              cp "$src" "/opt/dockypody/ssh/$base" && \
+              chmod 0640 "/opt/dockypody/ssh/$base"; \
+              ;; \
+          esac; \
+        done; \
+      fi; \
+    else \
+      echo "SSH disabled or not in server/client-and-server mode, skipping SSH install"; \
+    fi && \
+    rm -rf /tmp/ssh-build-context || true
 
 ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
     OCM_SSH_MODE="${SSH_MODE}" \
@@ -639,8 +675,8 @@ example by copying it into a temporary path like `/tmp/ssh-build-context/`) and
 then copy only the needed files into their final locations. Do not hardcode
 paths to repo-root SSH material or assume it is always present.
 
-- `ssh/dockypody` -> staged to build context
-- `ssh/dockypody.pub` -> staged to build context
+- `ssh/<key_name>` -> staged to build context only for client modes
+- `ssh/<key_name>.pub` -> staged to build context
 - `ssh/ssh.json` -> staged if present
 - `ssh/known_hosts` -> staged if present
 
