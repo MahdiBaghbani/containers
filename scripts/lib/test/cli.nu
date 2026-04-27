@@ -32,6 +32,7 @@ export def test-help [] {
   print "  manifests        Version manifest tests"
   print "  services         Service configuration tests"
   print "  tls              TLS certificate tests"
+  print "  ssh              SSH configuration tests"
   print "  tag-generation   Tag generation tests"
   print "  build-system     Build system tests"
   print "  defaults         Default value tests"
@@ -50,7 +51,7 @@ export def test-cli [
   print "Running OCM Containers Test Suite\n"
   
   let test_suites = if $suite == "all" {
-    ["architecture", "manifests", "services", "tls", "tag-generation", "build-system", "defaults", "pull", "validate", "registries", "ci", "ghcr-purge"]
+    ["architecture", "manifests", "services", "tls", "ssh", "tag-generation", "build-system", "defaults", "pull", "validate", "registries", "ci", "ghcr-purge"]
   } else {
     [$suite]
   }

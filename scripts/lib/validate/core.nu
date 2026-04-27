@@ -139,15 +139,9 @@ export def validate-version-defaults [
     $defaults
   })
   
-  # Validate global defaults structure
-  # For single-platform services (platforms == null), allow infrastructure fields in defaults
+  # Validate global defaults structure (infrastructure fields always forbidden in version defaults)
   let global_errors = (if not ($global_defaults | is-empty) {
-    let is_single_platform = ($platforms == null)
-    let structure_validation = (if $is_single_platform {
-      validate-version-overrides-structure $global_defaults "defaults" --allow-infrastructure
-    } else {
-      validate-version-overrides-structure $global_defaults "defaults"
-    })
+    let structure_validation = (validate-version-overrides-structure $global_defaults "defaults")
     if not $structure_validation.valid {
       $structure_validation.errors
     } else {
