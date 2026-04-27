@@ -21,7 +21,7 @@
 # Warnings are handled inside the orchestrator and must exit 0.
 if [ -f /usr/bin/entrypoint-init.nu ]; then
   if command -v nu >/dev/null 2>&1; then
-    nu /usr/bin/entrypoint-init.nu "$@" || {
+    nu /usr/bin/entrypoint-init.nu || {
       status=$?
       echo "Error: Initialization script failed with exit code ${status}; refusing to run CMD." >&2
       exit "$status"

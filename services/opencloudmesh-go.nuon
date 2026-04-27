@@ -14,14 +14,14 @@
   "tls": {
     "enabled": true,
     "mode": "ca-and-cert",
-    "cert_name": "ocm-go",
+    "cert_name": "ocmgo",
     "instances": 1,
     "domain_suffix": "docker",
     "sans": [
-      "DNS:ocm-go1.docker",
-      "DNS:ocm-go2.docker",
-      "DNS:ocm-go3.docker",
-      "DNS:ocm-go4.docker"
+      "DNS:ocmgo1.docker",
+      "DNS:ocmgo2.docker",
+      "DNS:ocmgo3.docker",
+      "DNS:ocmgo4.docker"
     ]
   }
 }
