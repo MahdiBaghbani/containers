@@ -111,7 +111,7 @@ def start_ocm_go [origin: string, mode: string, admin_user: string, admin_pass: 
   ^sh -c $command
 }
 
-def main [...args] {
+def main [] {
   write_nsswitch
 
   let host = (get_env_or_default "HOST" "" | str trim)

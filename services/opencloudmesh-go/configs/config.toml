@@ -3,5 +3,5 @@ listen_addr = ":443"
 
 [tls]
 mode = "static"
-cert_file = "/tls/ocm-go.crt"
-key_file = "/tls/ocm-go.key"
+cert_file = "/tls/ocmgo.crt"
+key_file = "/tls/ocmgo.key"
