@@ -35,27 +35,21 @@ FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 
 FROM ${MITMPROXY_UPSTREAM_IMAGE}
 
-ARG TLS_ENABLED="false"
-ARG TLS_MODE="disabled"
-ARG TLS_CERT_NAME=""
-ARG TLS_CA_NAME=""
+ARG TLS_ENABLED
+ARG TLS_MODE
+ARG TLS_CERT_NAME
+ARG TLS_CA_NAME
 
-ARG SSH_ENABLED="false"
-ARG SSH_MODE="disabled"
-ARG SSH_DEFAULT_USER="root"
-ARG SSH_PORT="22"
-ARG SSH_LISTEN="0.0.0.0"
+ARG SSH_ENABLED
+ARG SSH_MODE
+ARG SSH_DEFAULT_USER
+ARG SSH_PORT
+ARG SSH_LISTEN
 
 ARG COMMON_TOOLS_IMAGE
 
 ENV DOCKYPODY_CA_DIR_MOUNT="/certificate-authority" \
     DOCKYPODY_CA_DIR_DEFAULT="/opt/dockypody/certificate-authority-default"
-
-ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
-    OCM_SSH_MODE="${SSH_MODE}" \
-    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
-    OCM_SSH_PORT="${SSH_PORT}" \
-    OCM_SSH_LISTEN="${SSH_LISTEN}"
 
 USER root
 
@@ -126,18 +120,36 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
     fi
 
 COPY ./ssh /tmp/ssh-build-context/
-RUN if [ "$SSH_ENABLED" = "true" ]; then \
+RUN if [ "$SSH_ENABLED" = "true" ] && { [ "$SSH_MODE" = "server" ] || [ "$SSH_MODE" = "client-and-server" ]; }; then \
       mkdir -p /opt/dockypody/ssh && \
-      if [ -f /tmp/ssh-build-context/dockypody.pub ]; then \
-        cp /tmp/ssh-build-context/dockypody.pub /opt/dockypody/ssh/dockypody.pub; \
-      else \
-        echo "Warning: dockypody.pub not found in build context; sshd authorized_keys will not be installed" >&2; \
-      fi; \
+      for pub in /tmp/ssh-build-context/*.pub; do \
+        if [ -f "$pub" ]; then \
+          cp "$pub" /opt/dockypody/ssh/ && \
+          echo "SSH public key installed"; \
+        fi; \
+      done; \
       if [ -f /tmp/ssh-build-context/ssh.json ]; then \
-        cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json; \
+        cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
+        chmod 0644 /opt/dockypody/ssh/ssh.json; \
       else \
         echo "Warning: ssh.json not found in build context; ssh key_name defaults apply" >&2; \
       fi; \
+      if [ "$SSH_MODE" = "client-and-server" ]; then \
+        for src in /tmp/ssh-build-context/*; do \
+          if [ ! -f "$src" ]; then continue; fi; \
+          base="$(basename "$src")"; \
+          case "$base" in \
+            *.pub|ssh.json|known_hosts) \
+              ;; \
+            *) \
+              cp "$src" "/opt/dockypody/ssh/$base" && \
+              chmod 0640 "/opt/dockypody/ssh/$base"; \
+              ;; \
+          esac; \
+        done; \
+      fi; \
+    else \
+      echo "SSH disabled or not in server/client-and-server mode, skipping SSH install"; \
     fi && \
     rm -rf /tmp/ssh-build-context || true
 
@@ -147,6 +159,12 @@ COPY --chmod=755 ./scripts/lib/sshd.nu /usr/bin/lib/sshd.nu
 COPY --chmod=755 ./scripts/mitm-entrypoint.nu /usr/local/bin/mitm-entrypoint.nu
 COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
 COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
+
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
 
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 CMD ["/usr/local/bin/nu", "/usr/local/bin/mitm-entrypoint.nu"]
