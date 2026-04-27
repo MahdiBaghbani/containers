@@ -1,0 +1,29 @@
+{
+  "default": "alpine",
+  "platforms": [
+    {
+      "name": "alpine",
+      "dockerfile": "services/ocis/Dockerfile.alpine",
+      "external_images": {
+        "node": {
+          "name": "node",
+          "build_arg": "BASE_NODE_IMAGE"
+        },
+        "go": {
+          "name": "golang",
+          "build_arg": "BASE_GO_IMAGE"
+        },
+        "runtime": {
+          "name": "alpine",
+          "build_arg": "BASE_RUNTIME_IMAGE"
+        }
+      },
+      "dependencies": {
+        "common-tools": {
+          "service": "common-tools",
+          "build_arg": "COMMON_TOOLS_IMAGE"
+        }
+      }
+    }
+  ]
+}
