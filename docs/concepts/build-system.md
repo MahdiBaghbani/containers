@@ -379,7 +379,8 @@ In CI, dependency caches are restored before building using the `dependencies` i
 2. Each service job includes a `dependencies` input with comma-separated direct dependency service names
 3. `build-service.yml` parses this input into up to 8 slots (`dep1` through `dep8`)
 4. Each non-empty slot triggers a cache restore step for that dependency's image cache
-5. After cache restore, `ci-load-dep-tarballs.nu` loads the restored tarballs into Docker
+5. After artifacts are restored, `nu scripts/dockypody.nu ci load-deps` loads
+   the restored tarballs into Docker
 
 **Example:**
 
@@ -855,7 +856,6 @@ This logic is centralized in `scripts/lib/ci/deps.nu` and used by both the gener
 ```text
 scripts/
 - dockypody.nu                # Canonical CLI entrypoint
-- build.nu                    # Build orchestration (legacy, routes through dockypody)
 - lib/
   - build/                    # Build domain
     - cache.nu              # Dep-cache mode and tarball management
@@ -884,11 +884,10 @@ scripts/
   - ssh/                      # SSH domain
     - lib.nu                # Shared SSH helpers
     - copy.nu               # SSH build context copying
-    - key.nu                # Key generation CLI
     - cli.nu                # SSH CLI entry point
     - clean.nu              # SSH cleanup
   - tls/                      # TLS domain
-    - validation.nu         # CA sync and validation
+    - validation.nu         # TLS validation helpers
   - validate/                 # Validation domain
     - core.nu               # Config validation
     - ssh.nu                # SSH config validation
@@ -1163,7 +1162,9 @@ Disk usage snapshots are captured at four phases:
 
 The `after-version` phase is particularly useful for multi-version builds (e.g., `cernbox-web` with `testing`, `master`, `v1.0.0`) to identify which specific version exhausts disk space.
 
-**Note:** In CI, dependency images are loaded via `ci-load-dep-tarballs.nu` before `build.nu` runs. The `pre` and `after-deps` phases occur after cache restoration.
+**Note:** In CI, dependency images are loaded via `nu scripts/dockypody.nu ci
+load-deps` before `nu scripts/dockypody.nu build ...` runs. The `pre` and
+`after-deps` phases occur after cache restoration.
 
 ### Snapshot Contents
 

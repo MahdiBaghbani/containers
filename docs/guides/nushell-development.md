@@ -1098,7 +1098,9 @@ let prev_cache = $cache  # Immutable copy
 $cache = (try { $result.field } catch { $prev_cache })  # Works!
 ```
 
-**Impact**: This affected production code in `build.nu` where `$sha_cache` was captured in `catch` blocks, causing linting errors.
+**Impact**: This affected production code in the build domain under
+`scripts/lib/build/` where `$sha_cache` was captured in `catch` blocks, causing
+linting errors.
 
 **Pattern for safe fallback with mutable variables**:
 

@@ -51,10 +51,12 @@ The system supports three SSH modes:
 ```text
 ssh/
 ├── ssh.json                    # Metadata (key_name, comment, default_user fallback)
-├── dockypody                   # Default private key (dev-only)
-├── dockypody.pub               # Default public key
+├── <key_name>                  # Private key (dev-only, client mode only)
+├── <key_name>.pub              # Public key
 └── known_hosts                 # Default known hosts (optional)
 ```
+
+Default `key_name` is `dockypody`.
 
 ## Service Configuration
 
@@ -121,9 +123,10 @@ The build system projects these arguments from merged config:
 The build system stages SSH material into the build context:
 
 1. Copies `ssh/ssh.json` if present
-2. Copies `ssh/dockypody` and `.pub` to build context
-3. Copies `ssh/known_hosts` if present
-4. Cleans up after build (success or failure)
+2. Copies `ssh/<key_name>.pub` to build context
+3. Copies `ssh/<key_name>` to build context only for client modes
+4. Copies `ssh/known_hosts` if present
+5. Cleans up after build (success or failure)
 
 ## Dockerfile Patterns
 
@@ -163,6 +166,47 @@ ARG SSH_LISTEN="0.0.0.0"
 
 RUN apt-get install --no-install-recommends --assume-yes \
     openssh-server;
+
+# Server-capable images should only install SSH material when SSH is enabled and
+# the selected mode includes server behavior:
+# - server
+# - client-and-server
+#
+# Keep this logic coherent across services so Dockerfile behavior matches the
+# runtime sshd module.
+COPY ./ssh /tmp/ssh-build-context/
+RUN if [ "$SSH_ENABLED" = "true" ] && { [ "$SSH_MODE" = "server" ] || [ "$SSH_MODE" = "client-and-server" ]; }; then \
+      mkdir -p /opt/dockypody/ssh && \
+      for pub in /tmp/ssh-build-context/*.pub; do \
+        if [ -f "$pub" ]; then \
+          cp "$pub" /opt/dockypody/ssh/ && \
+          echo "SSH public key installed"; \
+        fi; \
+      done; \
+      if [ -f /tmp/ssh-build-context/ssh.json ]; then \
+        cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
+        chmod 0644 /opt/dockypody/ssh/ssh.json; \
+      else \
+        echo "Warning: ssh.json not found in build context; ssh key_name defaults apply" >&2; \
+      fi; \
+      if [ "$SSH_MODE" = "client-and-server" ]; then \
+        for src in /tmp/ssh-build-context/*; do \
+          if [ ! -f "$src" ]; then continue; fi; \
+          base="$(basename "$src")"; \
+          case "$base" in \
+            *.pub|ssh.json|known_hosts) \
+              ;; \
+            *) \
+              cp "$src" "/opt/dockypody/ssh/$base" && \
+              chmod 0640 "/opt/dockypody/ssh/$base"; \
+              ;; \
+          esac; \
+        done; \
+      fi; \
+    else \
+      echo "SSH disabled or not in server/client-and-server mode, skipping SSH install"; \
+    fi && \
+    rm -rf /tmp/ssh-build-context || true
 
 # The build system stages the shared sshd module into the build context as:
 #   scripts/lib/sshd.nu
