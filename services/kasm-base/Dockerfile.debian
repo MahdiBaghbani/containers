@@ -37,16 +37,16 @@ FROM ${BASE_RUNTIME_IMAGE}
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG TLS_ENABLED="false"
-ARG TLS_MODE="disabled"
-ARG TLS_CERT_NAME=""
-ARG TLS_CA_NAME=""
+ARG TLS_ENABLED
+ARG TLS_MODE
+ARG TLS_CERT_NAME
+ARG TLS_CA_NAME
 
-ARG SSH_ENABLED="false"
-ARG SSH_MODE="disabled"
-ARG SSH_DEFAULT_USER="root"
-ARG SSH_PORT="22"
-ARG SSH_LISTEN="0.0.0.0"
+ARG SSH_ENABLED
+ARG SSH_MODE
+ARG SSH_DEFAULT_USER
+ARG SSH_PORT
+ARG SSH_LISTEN
 
 ARG BASE_RUNTIME_IMAGE
 ARG COMMON_TOOLS_IMAGE
@@ -228,19 +228,22 @@ RUN mkdir -p /opt/dockypody/ssh && \
     chown root:1000 /opt/dockypody/ssh && \
     chmod 0750 /opt/dockypody/ssh && \
     if [ "$SSH_ENABLED" = "true" ]; then \
-      if [ -f /tmp/ssh-build-context/dockypody ]; then \
-        install -m 0640 -o root -g 1000 /tmp/ssh-build-context/dockypody /opt/dockypody/ssh/dockypody && \
-        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/dockypody.pub /opt/dockypody/ssh/dockypody.pub && \
-        echo "SSH keypair installed"; \
-      fi; \
-      if [ -f /tmp/ssh-build-context/ssh.json ]; then \
-        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
-        echo "SSH ssh.json installed"; \
-      fi; \
-      if [ -f /tmp/ssh-build-context/known_hosts ]; then \
-        install -m 0644 -o root -g 1000 /tmp/ssh-build-context/known_hosts /opt/dockypody/ssh/known_hosts && \
-        echo "SSH known_hosts installed"; \
-      fi; \
+      for src in /tmp/ssh-build-context/*; do \
+        if [ ! -f "$src" ]; then continue; fi; \
+        base="$(basename "$src")"; \
+        case "$base" in \
+          *.pub) \
+            install -m 0644 -o root -g 1000 "$src" "/opt/dockypody/ssh/$base"; \
+            ;; \
+          ssh.json|known_hosts) \
+            install -m 0644 -o root -g 1000 "$src" "/opt/dockypody/ssh/$base"; \
+            ;; \
+          *) \
+            install -m 0640 -o root -g 1000 "$src" "/opt/dockypody/ssh/$base"; \
+            ;; \
+        esac; \
+      done; \
+      echo "SSH material installed"; \
     fi && \
     rm -rf /tmp/ssh-build-context || true
 

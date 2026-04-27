@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-ARG BASE_RUNTIME_IMAGE="redhat/ubi9-minimal:latest"
+ARG BASE_RUNTIME_IMAGE="redhat/ubi9-minimal:9.7"
 ARG NUSHELL_REF="0.108.0"
 ARG NUSHELL_URL="https://github.com/nushell/nushell"
 ARG UPX_REF="v5.0.2"
