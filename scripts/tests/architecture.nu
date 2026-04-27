@@ -104,7 +104,7 @@ def main [--verbose] {
   let test5 = (run-test "CLI domains have cli.nu files" {
     let lib_path = "scripts/lib"
     # Domains that must have CLI entrypoints
-    let cli_domains = ["build", "ci", "docs", "registries", "services", "test", "tls", "validate"]
+    let cli_domains = ["build", "ci", "docs", "registries", "services", "ssh", "test", "tls", "validate"]
     
     let missing_clis = ($cli_domains | where {|domain|
       let cli_path = $"($lib_path)/($domain)/cli.nu"

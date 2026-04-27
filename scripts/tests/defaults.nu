@@ -1134,4 +1134,10 @@ def main [--verbose] {
   $results = ($results | append $test30)
   
   print-test-summary $results
+
+  if ($results | all {|r| $r}) {
+    exit 0
+  } else {
+    exit 1
+  }
 }

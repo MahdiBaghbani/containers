@@ -429,6 +429,64 @@ def main [--verbose] {
     $results = ($results | append $test_sftp_subsystem)
 
     # ------------------------------------------------------------------
+    # Dockerfile SSH coherence drift tests
+    # ------------------------------------------------------------------
+
+    let test_dockerfile_ssh_gate = (run-test "Dockerfile drift: server-family uses correct SSH build-time gate" {
+        let repo_root = (get-repo-root)
+        let dockerfiles = [
+            "services/opencloud/Dockerfile.alpine"
+            "services/ocis/Dockerfile.alpine"
+            "services/mitmproxy/Dockerfile"
+            "services/nextcloud-base/Dockerfile"
+            "services/revad-base/Dockerfile.development"
+        ]
+        let gate = 'if [ "$SSH_ENABLED" = "true" ] && { [ "$SSH_MODE" = "server" ] || [ "$SSH_MODE" = "client-and-server" ]; }; then'
+        let missing = ($dockerfiles | filter {|rel|
+            let path = ($repo_root | path join $rel)
+            if not ($path | path exists) {
+                true
+            } else {
+                let content = (open --raw $path)
+                not ($content | str contains $gate)
+            }
+        })
+        if not ($missing | is-empty) {
+            let list = ($missing | str join ", ")
+            error make {msg: $"SSH gate pattern missing or wrong in: ($list)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_dockerfile_ssh_gate)
+
+    let test_dockerfile_no_chmod_ssh_json = (run-test "Dockerfile drift: server-family has no 'chmod 600 /opt/dockypody/ssh/ssh.json'" {
+        let repo_root = (get-repo-root)
+        let dockerfiles = [
+            "services/opencloud/Dockerfile.alpine"
+            "services/ocis/Dockerfile.alpine"
+            "services/mitmproxy/Dockerfile"
+            "services/nextcloud-base/Dockerfile"
+            "services/revad-base/Dockerfile.development"
+        ]
+        let forbidden = 'chmod 600 /opt/dockypody/ssh/ssh.json'
+        let offenders = ($dockerfiles | filter {|rel|
+            let path = ($repo_root | path join $rel)
+            if not ($path | path exists) {
+                false
+            } else {
+                let content = (open --raw $path)
+                $content | str contains $forbidden
+            }
+        })
+        if not ($offenders | is-empty) {
+            let list = ($offenders | str join ", ")
+            error make {msg: $"Forbidden chmod found in: ($list)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_dockerfile_no_chmod_ssh_json)
+
+    # ------------------------------------------------------------------
     # Summary
     # ------------------------------------------------------------------
 
