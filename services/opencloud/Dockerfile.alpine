@@ -1,0 +1,181 @@
+# syntax=docker/dockerfile:1.7
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+#
+
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-alpine"
+ARG BASE_NODE_IMAGE="node:24-alpine"
+ARG BASE_GO_IMAGE="golang:1.24-alpine"
+ARG BASE_RUNTIME_IMAGE="alpine:3.22"
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME="opencloud"
+ARG TLS_CA_NAME=""
+
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools
+
+FROM ${BASE_NODE_IMAGE} AS generate
+
+ARG EDITION="rolling"
+
+ARG OPENCLOUD_REPO_MODE="remote"
+ARG OPENCLOUD_REPO_URL
+ARG OPENCLOUD_REPO_REF
+ARG OPENCLOUD_REPO_SHA=""
+ARG OPENCLOUD_REPO_PATH=".build-sources/opencloud_repo"
+ARG CACHEBUST=""
+
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add --no-cache \
+      bash \
+      build-base \
+      git \
+      make \
+      python3
+
+WORKDIR /opencloud
+
+RUN --mount=type=bind,source=${OPENCLOUD_REPO_PATH:-.},target=/mnt/src,ro \
+    if [ "$OPENCLOUD_REPO_MODE" = "local" ]; then \
+      mkdir -p /opencloud && cp -a /mnt/src/. /opencloud/; \
+    else \
+      git clone --depth 1 --branch "$OPENCLOUD_REPO_REF" "$OPENCLOUD_REPO_URL" /opencloud; \
+      if [ -n "$OPENCLOUD_REPO_SHA" ]; then git -C /opencloud checkout "$OPENCLOUD_REPO_SHA"; fi; \
+    fi
+
+RUN corepack enable
+
+ENV EDITION="${EDITION}"
+RUN make ci-node-generate
+RUN make node-generate-prod
+
+FROM ${BASE_GO_IMAGE} AS build
+ARG EDITION="rolling"
+
+ARG CACHEBUST=""
+
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add --no-cache \
+      bash \
+      build-base \
+      git \
+      make \
+      pkgconf \
+      vips-dev
+
+WORKDIR /opencloud/opencloud
+
+COPY --from=generate /opencloud/opencloud/ /opencloud/opencloud/
+
+ENV EDITION="${EDITION}"
+RUN make ci-go-generate
+RUN make build ENABLE_VIPS=true
+
+FROM ${BASE_RUNTIME_IMAGE}
+
+ARG TLS_ENABLED="false"
+ARG TLS_MODE="disabled"
+ARG TLS_CERT_NAME="opencloud"
+ARG TLS_CA_NAME=""
+
+ARG SSH_ENABLED="false"
+ARG SSH_MODE="disabled"
+ARG SSH_DEFAULT_USER="root"
+ARG SSH_PORT="22"
+ARG SSH_LISTEN="0.0.0.0"
+
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
+
+ENV DOCKYPODY_TLS_CERT_NAME="${TLS_CERT_NAME}"
+
+USER root
+
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add --no-cache \
+      attr \
+      bash \
+      ca-certificates \
+      curl \
+      mailcap \
+      openssh-server \
+      su-exec \
+      tree \
+      vips && \
+    echo 'hosts: files dns' > /etc/nsswitch.conf
+
+RUN mkdir -p /etc/ssl/certs /tmp
+COPY --from=common-tools /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
+RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
+      cp /tmp/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt && \
+      echo "CA bundle copied from common-tools"; \
+    else \
+      echo "Internal CA bundle disabled (TLS disabled or cert-only mode)"; \
+    fi && \
+    rm -f /tmp/ca-bundle.crt
+
+COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
+
+COPY --from=build --chmod=755 /opencloud/opencloud/bin/opencloud /usr/bin/opencloud
+
+RUN addgroup -g 1000 -S opencloud && adduser -S -D -u 1000 -G opencloud opencloud
+RUN mkdir -p /etc/opencloud /var/lib/opencloud /var/lib/opencloud/web/assets/apps && chown -R 1000:1000 /etc/opencloud /var/lib/opencloud
+
+VOLUME ["/etc/opencloud", "/var/lib/opencloud"]
+
+COPY ./configs/ /opt/dockypody/templates/opencloud/
+
+COPY ./tls /tmp/tls-source/
+COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
+
+RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
+      echo "CA-only mode: CA bundle copied via COPY --from=common-tools, copy-tls.nu skipped" && \
+      rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
+    elif [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "ca-only" ]; then \
+      nu /tmp/copy-tls.nu \
+      --enabled "'$TLS_ENABLED'" \
+      --mode "'$TLS_MODE'" \
+      --ca-name "'$TLS_CA_NAME'" \
+      --cert-name "'$TLS_CERT_NAME'" \
+      --source-certs "/tmp/tls-source" \
+      --dest "/tls"; \
+    else \
+      echo "TLS disabled: skipping service TLS install"; \
+    fi
+
+RUN rm -rf /tmp/tls-source /tmp/copy-tls.nu || true
+
+COPY ./ssh /tmp/ssh-build-context/
+RUN if [ "$SSH_ENABLED" = "true" ] && [ "$SSH_MODE" = "server" ]; then \
+      mkdir -p /opt/dockypody/ssh && \
+      cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
+      cp /tmp/ssh-build-context/opencloud.pub /opt/dockypody/ssh/dockypody.pub && \
+      chmod 600 /opt/dockypody/ssh/ssh.json && \
+      chmod 644 /opt/dockypody/ssh/dockypody.pub && \
+      rm -rf /tmp/ssh-build-context && \
+      echo "SSH configuration installed"; \
+    else \
+      echo "SSH disabled or not in server mode, skipping SSH install"; \
+      rm -rf /tmp/ssh-build-context || true; \
+    fi
+
+COPY --chmod=755 ./scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/local/bin/entrypoint-init.nu
+COPY --chmod=755 ./scripts/lib/sshd.nu /usr/bin/lib/sshd.nu
+
+EXPOSE 9200
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+CMD ["/usr/bin/opencloud", "server"]

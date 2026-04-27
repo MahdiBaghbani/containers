@@ -1,0 +1,36 @@
+{
+  "default": "main",
+  "defaults": {
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-alpine"
+      }
+    },
+    "external_images": {
+      "node": {
+        "tag": "24-alpine"
+      },
+      "go": {
+        "tag": "1.24-alpine"
+      },
+      "runtime": {
+        "tag": "3.22"
+      }
+    },
+    "build_args": {
+      "EDITION": "rolling"
+    },
+    "sources": {
+      "opencloud_repo": {
+        "url": "https://github.com/opencloud-eu/opencloud",
+        "ref": "main"
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "main",
+      "latest": true
+    }
+  ]
+}

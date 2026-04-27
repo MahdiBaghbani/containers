@@ -1,0 +1,28 @@
+{
+  "name": "opencloud",
+  "context": "services/opencloud",
+  "labels": {
+    "org.opencontainers.image.title": "OpenCloud (DockyPody)",
+    "org.opencontainers.image.description": "DockyPody-owned OpenCloud image for OCM test environments"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "opencloud",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:opencloud1.docker",
+      "DNS:opencloud2.docker",
+      "DNS:opencloud3.docker",
+      "DNS:opencloud4.docker"
+    ]
+  },
+  "ssh": {
+    "enabled": true,
+    "mode": "server",
+    "default_user": "root",
+    "port": 22,
+    "listen": "0.0.0.0"
+  }
+}
