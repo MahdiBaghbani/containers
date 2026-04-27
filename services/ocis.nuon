@@ -1,0 +1,28 @@
+{
+  "name": "ocis",
+  "context": "services/ocis",
+  "labels": {
+    "org.opencontainers.image.title": "OCIS (DockyPody)",
+    "org.opencontainers.image.description": "DockyPody-owned OCIS image for OCM test environments"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "ocis",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:ocis1.docker",
+      "DNS:ocis2.docker",
+      "DNS:ocis3.docker",
+      "DNS:ocis4.docker"
+    ]
+  },
+  "ssh": {
+    "enabled": true,
+    "mode": "server",
+    "default_user": "root",
+    "port": 22,
+    "listen": "0.0.0.0"
+  }
+}

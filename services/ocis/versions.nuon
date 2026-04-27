@@ -1,0 +1,33 @@
+{
+  "default": "master",
+  "defaults": {
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-alpine"
+      }
+    },
+    "external_images": {
+      "node": {
+        "tag": "24-alpine"
+      },
+      "go": {
+        "tag": "1.25-alpine"
+      },
+      "runtime": {
+        "tag": "3.23.4"
+      }
+    },
+    "sources": {
+      "ocis_repo": {
+        "url": "https://github.com/owncloud/ocis",
+        "ref": "master"
+      }
+    }
+  },
+  "versions": [
+    {
+      "name": "master",
+      "latest": true
+    }
+  ]
+}
