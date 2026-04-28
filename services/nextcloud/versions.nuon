@@ -1,5 +1,5 @@
 {
-  "default": "v33.0.2",
+  "default": "v33.0.3",
 
   "defaults": {
     "sources": {
@@ -11,6 +11,9 @@
     "dependencies": {
       "nextcloud-base": {
         "version": "8.3-apache-debian"
+      },
+      "common-tools": {
+        "version": "v1.0.0-debian"
       }
     }
   },
@@ -28,22 +31,22 @@
       }
     },
     {
-      "name": "v33.0.2",
+      "name": "v33.0.3",
       "latest": true
     },
     {
-      "name": "v32.0.8",
+      "name": "v32.0.9",
       "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "ref": "v32.0.8"
+            "ref": "v32.0.9"
           }
         }
       }
     },
     {
-      "name": "v33-codeflow",
+      "name": "v34-codeflow",
       "latest": false,
       "overrides": {
         "sources": {

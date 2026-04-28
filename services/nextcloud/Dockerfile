@@ -18,25 +18,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ARG NEXTCLOUD_BASE_IMAGE="nextcloud-base:v1.0.0-debian"
-ARG BASE_BUILD_IMAGE="debian:trixie-slim"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
 
 ################################
 ###  Source Preparation      ###
 ################################
-FROM ${BASE_BUILD_IMAGE} AS source-prepare
-
-RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean; \
-    apt-get update; \
-    DEBIAN_FRONTEND=noninteractive \
-    apt-get install \
-    --no-install-recommends \
-    --assume-yes \
-    ca-certificates \
-    git;
-
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+FROM ${COMMON_TOOLS_IMAGE} AS source-prepare
 
 WORKDIR /
 
