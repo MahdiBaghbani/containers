@@ -109,10 +109,10 @@ RUN if [ "${PACK_WITH_UPX}" = "true" ]; then \
 ################################
 FROM ${BASE_RUNTIME_IMAGE} AS directory
 
-ARG TLS_ENABLED="false"
-ARG TLS_MODE="disabled"
-ARG TLS_CERT_NAME=""
-ARG TLS_CA_NAME=""
+ARG TLS_ENABLED
+ARG TLS_MODE
+ARG TLS_CERT_NAME
+ARG TLS_CA_NAME
 ARG COMMON_TOOLS_IMAGE
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
