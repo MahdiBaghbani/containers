@@ -79,58 +79,42 @@ def test_occ_command_construction [] {
   return {passed: $passed, failed: $failed}
 }
 
-# Test config file modification logic
-# Verifies sed command construction for config.php
-def test_config_modification [] {
-  print "Testing config modification logic..."
+# Test post-install no longer contains direct config.php mutation
+# The allow_local_remote_servers config is now handled by managed-config.nu
+def test_no_direct_config_mutation [] {
+  print "Testing no direct config mutation in post-install..."
   mut passed = 0
   mut failed = 0
-  
-  let test_base = $"/tmp/nextcloud-test-(random uuid)"
-  mkdir $test_base
-  
-  # Create test config file
-  let config_file = $"($test_base)/config.php"
-  let config_content = "<?php
-$CONFIG = [
-  'instanceid' => 'test123',
-];"
-  $config_content | save $config_file
-  
-  # Test 1: Config file exists
-  if ($config_file | path exists) {
-    print "  [PASS] config modification: config file exists"
+
+  let post_install_src = (open --raw "../scripts/lib/post-install.nu")
+
+  # Test 1: post-install.nu must not contain a sed invocation for allow_local_remote_servers
+  if not ($post_install_src | str contains "allow_local_remote_servers") {
+    print "  [PASS] post-install: no allow_local_remote_servers reference"
     $passed = ($passed + 1)
   } else {
-    print "  [FAIL] config modification: config file should exist"
+    print "  [FAIL] post-install: still references allow_local_remote_servers"
     $failed = ($failed + 1)
   }
-  
-  # Test 2: Config file is readable
-  let content = (open --raw $config_file)
-  if ($content | str length) > 0 {
-    print "  [PASS] config modification: config file readable"
+
+  # Test 2: post-install.nu must not call sed for config.php insertion
+  if not ($post_install_src | str contains "sed -i") {
+    print "  [PASS] post-install: no sed -i call"
     $passed = ($passed + 1)
   } else {
-    print "  [FAIL] config modification: config file should be readable"
+    print "  [FAIL] post-install: still contains sed -i"
     $failed = ($failed + 1)
   }
-  
-  # Test 3: Sed insertion command format (simulate)
-  let line_to_insert = "  'allow_local_remote_servers' => true,"
-  let sed_cmd = $"3 i\\($line_to_insert)"
-  
-  if ($sed_cmd | str contains "allow_local_remote_servers") {
-    print "  [PASS] config modification: sed command contains setting"
+
+  # Test 3: post-install.nu still contains the other expected occ commands
+  if ($post_install_src | str contains "db:add-missing-indices") {
+    print "  [PASS] post-install: db:add-missing-indices present"
     $passed = ($passed + 1)
   } else {
-    print "  [FAIL] config modification: sed command should contain setting"
+    print "  [FAIL] post-install: db:add-missing-indices missing"
     $failed = ($failed + 1)
   }
-  
-  # Cleanup
-  rm -rf $test_base
-  
+
   return {passed: $passed, failed: $failed}
 }
 
@@ -192,22 +176,21 @@ def test_post_install_steps [] {
   mut passed = 0
   mut failed = 0
   
-  # Expected steps in order
+  # Expected steps in order (allow_local_remote_servers is now managed by managed-config.nu)
   let steps = [
     "Add missing database indices"
     "Run maintenance repair"
     "Set maintenance window start"
-    "Configure allow_local_remote_servers"
     "Disable firstrunwizard"
     "Setup log files"
   ]
-  
+
   # Test 1: All steps are defined
-  if ($steps | length) == 6 {
-    print "  [PASS] post-install steps: all 6 steps defined"
+  if ($steps | length) == 5 {
+    print "  [PASS] post-install steps: all 5 steps defined"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] post-install steps: expected 6 steps, got ($steps | length)"
+    print $"  [FAIL] post-install steps: expected 5 steps, got ($steps | length)"
     $failed = ($failed + 1)
   }
   
@@ -244,7 +227,7 @@ def main [--verbose] {
   $total_passed = ($total_passed + $test1.passed)
   $total_failed = ($total_failed + $test1.failed)
   
-  let test2 = (test_config_modification)
+  let test2 = (test_no_direct_config_mutation)
   $total_passed = ($total_passed + $test2.passed)
   $total_failed = ($total_failed + $test2.failed)
   

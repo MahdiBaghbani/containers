@@ -324,6 +324,55 @@ def test_major_version_jump [] {
   return {passed: $passed, failed: $failed}
 }
 
+# Test allow-local managed config placement in the entrypoint flow
+# Verifies the helper runs for both upgrade/install and normal restarts before
+# later startup steps such as seeded users.
+def test_allow_local_config_placement [] {
+  print "Testing allow-local managed config placement..."
+  mut passed = 0
+  mut failed = 0
+
+  let content = (open --raw "../scripts/entrypoint-init.nu")
+  let sync_idx = ($content | str index-of "\n    sync_source $user_info.user $user_info.group\n")
+  let apply_idx = ($content | str index-of "\n  apply_allow_local_config\n")
+  let seed_idx = ($content | str index-of "\n  seed_users $user_info.user\n")
+  let up_to_date_idx = ($content | str index-of "\n    print \"Nextcloud is up to date\"\n")
+
+  if $apply_idx != null {
+    print "  [PASS] entrypoint: apply_allow_local_config is present"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] entrypoint: apply_allow_local_config should be present"
+    $failed = ($failed + 1)
+  }
+
+  if ($sync_idx != null) and ($apply_idx != null) and ($apply_idx > $sync_idx) {
+    print "  [PASS] entrypoint: apply_allow_local_config runs after sync_source"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] entrypoint: apply_allow_local_config should run after sync_source"
+    $failed = ($failed + 1)
+  }
+
+  if ($apply_idx != null) and ($seed_idx != null) and ($apply_idx < $seed_idx) {
+    print "  [PASS] entrypoint: apply_allow_local_config runs before seed_users"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] entrypoint: apply_allow_local_config should run before seed_users"
+    $failed = ($failed + 1)
+  }
+
+  if ($up_to_date_idx != null) and ($apply_idx != null) and ($apply_idx > $up_to_date_idx) {
+    print "  [PASS] entrypoint: apply_allow_local_config still runs on up-to-date starts"
+    $passed = ($passed + 1)
+  } else {
+    print "  [FAIL] entrypoint: apply_allow_local_config should still run on up-to-date starts"
+    $failed = ($failed + 1)
+  }
+
+  return {passed: $passed, failed: $failed}
+}
+
 # Audit actual service wrapper files for required patterns.
 # Read-only: scans entrypoint.sh files in the repo to catch stale soft-failure
 # patterns and missing fatal exits before they reach production.
@@ -408,13 +457,17 @@ def main [--verbose] {
   $total_passed = ($total_passed + $test4.passed)
   $total_failed = ($total_failed + $test4.failed)
 
-  let test5 = (test_wrapper_fatal_policy)
+  let test5 = (test_allow_local_config_placement)
   $total_passed = ($total_passed + $test5.passed)
   $total_failed = ($total_failed + $test5.failed)
 
-  let test6 = (test_wrapper_file_audit)
+  let test6 = (test_wrapper_fatal_policy)
   $total_passed = ($total_passed + $test6.passed)
   $total_failed = ($total_failed + $test6.failed)
+
+  let test7 = (test_wrapper_file_audit)
+  $total_passed = ($total_passed + $test7.passed)
+  $total_failed = ($total_failed + $test7.failed)
 
   print ""
   print $"Tests: ($total_passed) passed, ($total_failed) failed"
