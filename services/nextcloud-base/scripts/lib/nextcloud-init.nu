@@ -259,10 +259,6 @@ export def install_nextcloud [user: string] {
   run_as $user "php /var/www/html/occ maintenance:repair --include-expensive" | ignore
   run_as $user "php /var/www/html/occ config:system:set maintenance_window_start --type=integer --value=1" | ignore
   
-  # Enable local remote servers for OCM/federation
-  print "Enabling local remote servers..."
-  run_as $user "php /var/www/html/occ config:system:set allow_local_remote_servers --type=boolean --value=true" | ignore
-  
   # Disable first run wizard
   print "Disabling first run wizard..."
   run_as $user "php /var/www/html/occ app:disable firstrunwizard" | ignore

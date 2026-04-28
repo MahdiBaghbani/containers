@@ -282,8 +282,9 @@ RUN mkdir -p /usr/bin/lib
 COPY --chmod=755 ./scripts/lib/*.nu /usr/bin/lib/
 
 # Copy config files
-RUN mkdir -p /usr/src/nextcloud/config
+RUN mkdir -p /usr/src/nextcloud/config /usr/src/config/nextcloud
 COPY ./config/*.php /usr/src/nextcloud/config/
+COPY ./config/managed/*.config.php /usr/src/config/nextcloud/
 
 # Copy Apache site configs
 COPY ./config/apache/*.conf /etc/apache2/sites-available/
