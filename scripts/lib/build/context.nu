@@ -104,7 +104,7 @@ export def cleanup-tls-context [
     }
 
     let tls_scripts_dir = $"($context)/scripts/tls"
-    if ($tls_scripts_dir | path exists) and ((ls $tls_scripts_dir | length) == 0) {
+    if ($tls_scripts_dir | path exists) and ((ls -a $tls_scripts_dir | length) == 0) {
         rmdir $tls_scripts_dir
     }
     print "Cleaned up TLS helper script(s) from service context"
@@ -238,7 +238,7 @@ export def cleanup-ca-context [
     try { rm -rf $ca_dir_ctx } catch { }
     # Remove the tls dir only if it exists and is now empty.
     let tls_dir = $"($context)/tls"
-    if ($tls_dir | path exists) and ((ls $tls_dir | length) == 0) {
+    if ($tls_dir | path exists) and ((ls -a $tls_dir | length) == 0) {
         rmdir $tls_dir
     }
     print "Cleaned up staged CA material from build context"
@@ -394,11 +394,11 @@ export def cleanup-ssh-context [
     let sshd_module = $"($context)/scripts/lib/sshd.nu"
     try { rm -f $sshd_module } catch { }
     let lib_dir = $"($context)/scripts/lib"
-    if ($lib_dir | path exists) and ((ls $lib_dir | length) == 0) {
+    if ($lib_dir | path exists) and ((ls -a $lib_dir | length) == 0) {
         try { rmdir $lib_dir } catch { }
     }
     let scripts_dir = $"($context)/scripts"
-    if ($scripts_dir | path exists) and ((ls $scripts_dir | length) == 0) {
+    if ($scripts_dir | path exists) and ((ls -a $scripts_dir | length) == 0) {
         try { rmdir $scripts_dir } catch { }
     }
 

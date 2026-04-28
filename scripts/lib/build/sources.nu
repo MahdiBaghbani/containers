@@ -185,17 +185,10 @@ export def prepare-local-sources-context [
             error make {msg: $"Local source '($source_key)' has empty path field"}
         }
         
-        # Resolve path relative to repo root
-        let resolved_source_path = (if ($path_value | path expand | str starts-with "/") {
-            # Absolute path - validate it's within repo root
-            let abs_path = ($path_value | path expand)
-            let repo_root_expanded = ($repo_root | path expand)
-            if not ($abs_path | str starts-with $repo_root_expanded) {
-                error make {msg: $"Local source '($source_key)' path '($path_value)' is outside repository root"}
-            }
-            $abs_path
+        # Resolve path to absolute; boundary validation is delegated to validate-local-path
+        let resolved_source_path = (if ($path_value | str starts-with "/") {
+            ($path_value | path expand)
         } else {
-            # Relative path - resolve relative to repo root
             ($repo_root | path join $path_value | path expand)
         })
         
