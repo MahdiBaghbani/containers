@@ -25,13 +25,13 @@ FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 FROM ${BASE_NODE_IMAGE} AS generate
 
 ARG OCIS_REPO_MODE="remote"
-ARG OCIS_REPO_URL
-ARG OCIS_REPO_REF
+ARG OCIS_REPO_URL="https://github.com/owncloud/ocis"
+ARG OCIS_REPO_REF="master"
 ARG OCIS_REPO_SHA=""
-ARG OCIS_REPO_PATH=".build-sources/ocis_repo"
-ARG CACHEBUST=""
+ARG OCIS_REPO_PATH=""
+ARG CACHEBUST="default"
 
-RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
     apk add --no-cache \
       bash \
       build-base \
@@ -42,23 +42,29 @@ RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
 WORKDIR /ocis
 
 RUN --mount=type=bind,source=${OCIS_REPO_PATH:-.},target=/mnt/src,ro \
+    --mount=type=cache,id=ocis-git-${CACHEBUST:-${OCIS_REPO_REF}},target=/src/ocis-git-cache,sharing=shared \
     if [ "$OCIS_REPO_MODE" = "local" ]; then \
       mkdir -p /ocis && cp -a /mnt/src/. /ocis/; \
     else \
-      git clone --depth 1 --branch "$OCIS_REPO_REF" "$OCIS_REPO_URL" /ocis; \
+      mkdir -p /src/ocis-git-cache && \
+      if [ ! -d /src/ocis-git-cache/.git ]; then \
+        git clone --depth 1 --recursive --shallow-submodules --branch "$OCIS_REPO_REF" "$OCIS_REPO_URL" /src/ocis-git-cache; \
+      fi && \
+      cp -a /src/ocis-git-cache/. /ocis/ && \
       if [ -n "$OCIS_REPO_SHA" ]; then git -C /ocis checkout "$OCIS_REPO_SHA"; fi; \
     fi
 
 RUN corepack enable
 
-RUN make ci-node-generate
-RUN make node-generate-prod
+RUN --mount=type=cache,id=ocis-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    --mount=type=cache,id=ocis-pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
+    make ci-node-generate
 
 FROM ${BASE_GO_IMAGE} AS build
 
-ARG CACHEBUST=""
+ARG CACHEBUST="default"
 
-RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
     apk add --no-cache \
       bash \
       build-base \
@@ -71,33 +77,26 @@ WORKDIR /ocis/ocis
 
 COPY --from=generate /ocis/ocis/ /ocis/ocis/
 
-RUN make ci-go-generate
-RUN make build ENABLE_VIPS=true
+RUN --mount=type=cache,id=ocis-go-mod-cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,id=ocis-go-build-cache,target=/root/.cache/go-build,sharing=locked \
+    make ci-go-generate build ENABLE_VIPS=true
 
 FROM ${BASE_RUNTIME_IMAGE}
 
-ARG TLS_ENABLED="false"
-ARG TLS_MODE="disabled"
-ARG TLS_CERT_NAME="ocis"
-ARG TLS_CA_NAME=""
+ARG TLS_ENABLED
+ARG TLS_MODE
+ARG TLS_CERT_NAME
+ARG TLS_CA_NAME
 
-ARG SSH_ENABLED="false"
-ARG SSH_MODE="disabled"
-ARG SSH_DEFAULT_USER="root"
-ARG SSH_PORT="22"
-ARG SSH_LISTEN="0.0.0.0"
-
-ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
-    OCM_SSH_MODE="${SSH_MODE}" \
-    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
-    OCM_SSH_PORT="${SSH_PORT}" \
-    OCM_SSH_LISTEN="${SSH_LISTEN}"
-
-ENV DOCKYPODY_TLS_CERT_NAME="${TLS_CERT_NAME}"
+ARG SSH_ENABLED
+ARG SSH_MODE
+ARG SSH_DEFAULT_USER
+ARG SSH_PORT
+ARG SSH_LISTEN
 
 USER root
 
-RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
     apk add --no-cache \
       attr \
       bash \
@@ -139,38 +138,70 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
       echo "CA-only mode: CA bundle copied via COPY --from=common-tools, copy-tls.nu skipped" && \
       rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     elif [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "ca-only" ]; then \
+      if [ ! -f /tmp/copy-tls.nu ]; then \
+        echo "Error: copy-tls.nu not found. This should not happen for non-ca-only modes." && exit 1; \
+      fi && \
       nu /tmp/copy-tls.nu \
       --enabled "'$TLS_ENABLED'" \
       --mode "'$TLS_MODE'" \
       --ca-name "'$TLS_CA_NAME'" \
       --cert-name "'$TLS_CERT_NAME'" \
-      --source-certs "/tmp/tls-source" \
-      --dest "/tls"; \
+      --source-certs /tmp/tls-source/certificates/ \
+      --dest /tls/ && \
+      if [ -d /tls ]; then chown -R 1000:1000 /tls/; fi && \
+      rm -rf /tmp/tls-source /tmp/copy-tls.nu; \
     else \
       echo "TLS disabled: skipping service TLS install"; \
+      rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     fi
-
-RUN rm -rf /tmp/tls-source /tmp/copy-tls.nu || true
 
 COPY ./ssh /tmp/ssh-build-context/
-RUN if [ "$SSH_ENABLED" = "true" ] && [ "$SSH_MODE" = "server" ]; then \
+RUN if [ "$SSH_ENABLED" = "true" ] && { [ "$SSH_MODE" = "server" ] || [ "$SSH_MODE" = "client-and-server" ]; }; then \
       mkdir -p /opt/dockypody/ssh && \
-      cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
-      cp /tmp/ssh-build-context/ocis.pub /opt/dockypody/ssh/dockypody.pub && \
-      chmod 600 /opt/dockypody/ssh/ssh.json && \
-      chmod 644 /opt/dockypody/ssh/dockypody.pub && \
-      rm -rf /tmp/ssh-build-context && \
-      echo "SSH configuration installed"; \
+      for pub in /tmp/ssh-build-context/*.pub; do \
+        if [ -f "$pub" ]; then \
+          cp "$pub" /opt/dockypody/ssh/ && \
+          echo "SSH public key installed"; \
+        fi; \
+      done; \
+      if [ -f /tmp/ssh-build-context/ssh.json ]; then \
+        cp /tmp/ssh-build-context/ssh.json /opt/dockypody/ssh/ssh.json && \
+        chmod 0644 /opt/dockypody/ssh/ssh.json; \
+      else \
+        echo "Warning: ssh.json not found in build context; ssh key_name defaults apply" >&2; \
+      fi; \
+      if [ "$SSH_MODE" = "client-and-server" ]; then \
+        for src in /tmp/ssh-build-context/*; do \
+          if [ ! -f "$src" ]; then continue; fi; \
+          base="$(basename "$src")"; \
+          case "$base" in \
+            *.pub|ssh.json|known_hosts) \
+              ;; \
+            *) \
+              cp "$src" "/opt/dockypody/ssh/$base" && \
+              chmod 0640 "/opt/dockypody/ssh/$base"; \
+              ;; \
+          esac; \
+        done; \
+      fi; \
     else \
-      echo "SSH disabled or not in server mode, skipping SSH install"; \
-      rm -rf /tmp/ssh-build-context || true; \
-    fi
+      echo "SSH disabled or not in server/client-and-server mode, skipping SSH install"; \
+    fi && \
+    rm -rf /tmp/ssh-build-context || true
 
-COPY --chmod=755 ./scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/local/bin/entrypoint-init.nu
+ENV OCM_SSH_ENABLED="${SSH_ENABLED}" \
+    OCM_SSH_MODE="${SSH_MODE}" \
+    OCM_SSH_DEFAULT_USER="${SSH_DEFAULT_USER}" \
+    OCM_SSH_PORT="${SSH_PORT}" \
+    OCM_SSH_LISTEN="${SSH_LISTEN}"
+
+ENV DOCKYPODY_TLS_CERT_NAME="${TLS_CERT_NAME}"
+
+COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
+COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 COPY --chmod=755 ./scripts/lib/sshd.nu /usr/bin/lib/sshd.nu
 
 EXPOSE 9200
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 CMD ["/usr/bin/ocis", "server"]
