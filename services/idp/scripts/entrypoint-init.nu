@@ -20,7 +20,7 @@
 # IDP initialization script
 # Add service-specific initialization here
 
-def main [...args] {
+def --wrapped main [...args] {
     # Stub: idp needs no special initialization at this time
     print "Stub: entrypoint-init.nu executed successfully"
 }

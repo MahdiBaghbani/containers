@@ -23,7 +23,7 @@
 # sshd module is staged flat into the image at /usr/bin/lib/sshd.nu during Docker build.
 use ./lib/sshd.nu [start-sshd-if-enabled]
 
-def main [...args] {
+def --wrapped main [...args] {
   try {
     start-sshd-if-enabled
   } catch {|err|

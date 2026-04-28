@@ -65,7 +65,7 @@ def extract_authprovider_type [mode: string] {
 # Main entrypoint function
 # Orchestrates container initialization by validating mode, running shared setup,
 # routing to mode-specific initialization, and starting the Reva daemon
-def main [...args] {
+def --wrapped main [...args] {
   try {
     start-sshd-if-enabled
   } catch {|err|
