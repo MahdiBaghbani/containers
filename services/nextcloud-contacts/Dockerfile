@@ -98,7 +98,8 @@ WORKDIR /app
 COPY --from=source-prepare /contacts-source /app
 
 # Generate autoloader (app has no runtime composer packages, just PSR-4 autoloading)
-RUN composer dump-autoload --optimize --no-interaction
+RUN --mount=type=cache,id=contacts-composer-cache,target=/root/.composer/cache,sharing=locked \
+    composer dump-autoload --optimize --no-interaction
 
 ########################
 ###   App Assemble   ###

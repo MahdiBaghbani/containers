@@ -6,6 +6,10 @@
       "nextcloud-base": {
         "service": "nextcloud-base",
         "build_arg": "NEXTCLOUD_BASE_IMAGE"
+      },
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
       }
     }
   },
