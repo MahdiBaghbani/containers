@@ -26,12 +26,13 @@ use ./lib/source-prep.nu [prepare_source, merge_apps]
 use ./lib/nextcloud-init.nu [version_greater get_installed_version get_image_version sync_source install_nextcloud upgrade_nextcloud]
 use ./lib/hooks.nu [run_path]
 use ./lib/post-install.nu [run_custom_post_install, setup_log_files]
+use ./lib/managed-config.nu [apply_allow_local_config]
 use ./lib/ca-bundle-sync.nu [sync-ca-bundle]
 use ./lib/seeded-users.nu [seed_users]
 # sshd module is staged flat into the image at /usr/bin/lib/sshd.nu during Docker build.
 use ./lib/sshd.nu [start-sshd-if-enabled]
 
-def main [...cmd_args: string] {
+def --wrapped main [...cmd_args: string] {
   try {
     start-sshd-if-enabled
   } catch {|err|
@@ -101,7 +102,7 @@ def main [...cmd_args: string] {
     }
     
     sync_source $user_info.user $user_info.group
-    
+
     if $installed_version == "0.0.0.0" {
       run_path "pre-installation" $user_info.user
       install_nextcloud $user_info.user
@@ -115,6 +116,8 @@ def main [...cmd_args: string] {
   } else {
     print "Nextcloud is up to date"
   }
+
+  apply_allow_local_config
   
   let nextcloud_init_htaccess = (try { $env.NEXTCLOUD_INIT_HTACCESS? } catch { null })
   

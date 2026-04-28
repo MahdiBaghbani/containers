@@ -38,18 +38,7 @@ export def run_custom_post_install [user: string] {
   print "Setting maintenance window start time..."
   run_as $user "php /var/www/html/occ config:system:set maintenance_window_start --type=integer --value=1"
   
-  # Step 4: Add allow_local_remote_servers to config.php
-  print "Configuring allow_local_remote_servers..."
-  let config_file = "/var/www/html/config/config.php"
-  
-  if ($config_file | path exists) {
-    # Use sed to insert the line after line 2 (after the opening php tag and array start)
-    ^sed -i "3 i\\  'allow_local_remote_servers' => true," $config_file
-  } else {
-    print $"Warning: Config file not found: ($config_file)"
-  }
-  
-  # Step 5: Disable firstrunwizard app
+  # Step 4: Disable firstrunwizard app
   # Note: Legacy script uses console.php, which might be an alias for occ
   print "Disabling firstrunwizard app..."
   let result = (run_as $user "php /var/www/html/occ app:disable firstrunwizard" | complete)
@@ -58,11 +47,11 @@ export def run_custom_post_install [user: string] {
     print "Note: firstrunwizard app disable returned non-zero exit code (may already be disabled)"
   }
   
-  # Step 6: Set admin user email (required for OCM invite acceptance)
+  # Step 5: Set admin user email (required for OCM invite acceptance)
   print "Setting admin user email..."
   set_admin_email $user
-  
-  # Step 7: Create and configure log files
+
+  # Step 6: Create and configure log files
   print "Setting up log files..."
   setup_log_files
   
