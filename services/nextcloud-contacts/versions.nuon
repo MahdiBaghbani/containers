@@ -56,6 +56,11 @@
             "ref": "mahdi/fix/ui-optional-email"
           }
         },
+        "external_images": {
+          "build": {
+            "tag": "24-trixie-slim"
+          }
+        },
         "dependencies": {
           "nextcloud": {
             "version": "sta-ocm-m6-debian"
