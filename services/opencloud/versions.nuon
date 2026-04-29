@@ -1,5 +1,5 @@
 {
-  "default": "main",
+  "default": "v6.1.0",
   "defaults": {
     "dependencies": {
       "common-tools": {
@@ -8,28 +8,77 @@
     },
     "external_images": {
       "node": {
-        "tag": "24-alpine"
+        "tag": "24.15.0-trixie-slim"
       },
       "go": {
-        "tag": "1.24-alpine"
+        "tag": "1.25-alpine"
       },
       "runtime": {
         "tag": "3.22"
       }
     },
     "build_args": {
-      "EDITION": "rolling"
+      "EDITION": "stable",
+      "GO_BUILD_GOPROXY": "https://proxy.golang.org|direct"
     },
     "sources": {
-      "opencloud_repo": {
+      "opencloud": {
         "url": "https://github.com/opencloud-eu/opencloud",
-        "ref": "main"
+        "ref": "v6.1.0"
       }
     }
   },
   "versions": [
     {
       "name": "main",
+      "latest": false,
+      "overrides": {
+        "build_args": {
+          "EDITION": "rolling"
+        },
+        "sources": {
+          "opencloud": {
+            "ref": "main"
+          }
+        }
+      }
+    },
+    {
+      "name": "main-local-web-reva",
+      "latest": false,
+      "overrides": {
+        "build_args": {
+          "EDITION": "rolling"
+        },
+        "sources": {
+          "opencloud": {
+            "ref": "main"
+          },
+          "opencloud_web": {
+            "path": "../opencloud-web"
+          },
+          "opencloud_reva": {
+            "path": "../opencloud-reva"
+          }
+        }
+      }
+    },
+    {
+      "name": "v6.1.0-local-web-reva",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "opencloud_web": {
+            "path": "../opencloud-web"
+          },
+          "opencloud_reva": {
+            "path": "../opencloud-reva"
+          }
+        }
+      }
+    },
+    {
+      "name": "v6.1.0",
       "latest": true
     }
   ]
