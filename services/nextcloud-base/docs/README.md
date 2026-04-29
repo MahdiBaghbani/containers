@@ -159,6 +159,7 @@ docker run -d \
 
 - `NEXTCLOUD_UPDATE` - Force initialization even if not apache/php-fpm (set to 1)
 - `NEXTCLOUD_INIT_HTACCESS` - Update htaccess after init (any value)
+- `NEXTCLOUD_ALLOW_LOCAL_REMOTE_SERVERS_MODE` - Controls the managed `allow_local_remote_servers` fragment (`off` by default, `allow` for explicit local-network OCM test stacks)
 
 ## HTTPS Modes
 
@@ -201,6 +202,8 @@ These certificates are **baked into the image at build time** when TLS is enable
 ### Configuration Source
 
 **Canonical source**: `nextcloud-base` is the canonical source for generic Nextcloud PHP configuration files. All official Nextcloud configs from `.repos/docker/32/apache/config/` are baked into the image at build time in `services/nextcloud-base/config/`.
+
+Managed OCM-owned config fragments are baked separately from `services/nextcloud-base/config/managed/` into `/usr/src/config/nextcloud/` so they survive `/usr/src/nextcloud` source mounts and can be refreshed into persistent runtime volumes.
 
 The OCM test suite uses `https-only` mode for WAYF (Where Are You From) tests.
 

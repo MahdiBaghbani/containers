@@ -24,6 +24,7 @@ services/nextcloud-base/scripts/
     |-- redis-config.nu             # Redis session handler
     |-- source-prep.nu              # Source preparation & CI mounts
     |-- nextcloud-init.nu           # Install/upgrade logic
+    |-- managed-config.nu           # Managed Nextcloud fragment sync/repair
     |-- hooks.nu                    # Hook execution
     \-- post-install.nu             # OCM custom logic
 ```
@@ -215,9 +216,8 @@ def setup_log_files []
 1. Add database indices
 2. Maintenance repair (expensive)
 3. Set maintenance window
-4. Config modifications
-5. Disable firstrunwizard
-6. Log file setup
+4. Disable firstrunwizard
+5. Log file setup
 
 ## Hook System Usage
 

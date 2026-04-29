@@ -465,10 +465,11 @@ export def run_custom_post_install [user: string]
    occ config:system:set maintenance_window_start --type=integer --value=1
    ```
 
-4. **Allow Local Remote Servers:**
+4. **Managed Local Remote Servers Config:**
 
-   - Modifies `/var/www/html/config/config.php`
-   - Adds: `'allow_local_remote_servers' => true,`
+   - Repairs the exact legacy stray `allow_local_remote_servers` line if it previously corrupted `config.php`
+   - Syncs the managed `allow-local-remote-servers.config.php` fragment into `/var/www/html/config/`
+   - The fragment reads `NEXTCLOUD_ALLOW_LOCAL_REMOTE_SERVERS_MODE` and defaults to `off`
 
 5. **Disable Firstrunwizard:**
 
