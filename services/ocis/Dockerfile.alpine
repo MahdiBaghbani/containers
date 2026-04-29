@@ -3,15 +3,30 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # DockyPody: container build scripts and images
 #
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
 
 ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-alpine"
-ARG BASE_NODE_IMAGE="node:24-alpine"
+ARG BASE_NODE_IMAGE="node:24.15.0-trixie-slim"
 ARG BASE_GO_IMAGE="golang:1.25-alpine"
 ARG BASE_RUNTIME_IMAGE="alpine:3.23.4"
 
 ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"
-ARG TLS_CERT_NAME="ocis"
+ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
 
 ARG SSH_ENABLED="false"
@@ -24,44 +39,74 @@ FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 
 FROM ${BASE_NODE_IMAGE} AS generate
 
-ARG OCIS_REPO_MODE="remote"
-ARG OCIS_REPO_URL="https://github.com/owncloud/ocis"
-ARG OCIS_REPO_REF="master"
-ARG OCIS_REPO_SHA=""
-ARG OCIS_REPO_PATH=""
+ARG OCIS_MODE=""
+ARG OCIS_URL="https://github.com/owncloud/ocis"
+ARG OCIS_REF="master"
+ARG OCIS_SHA=""
+ARG OCIS_PATH=""
+
+ARG OCIS_WEB_MODE=""
+ARG OCIS_WEB_URL=""
+ARG OCIS_WEB_REF=""
+ARG OCIS_WEB_SHA=""
+ARG OCIS_WEB_PATH=""
+ARG OCIS_WEB_NODE_OPTIONS="--max-old-space-size=4096"
+
 ARG CACHEBUST="default"
 
-RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
-    apk add --no-cache \
+RUN --mount=type=cache,id=ocis-debian-apt-cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=ocis-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get install \
+    --no-install-recommends \
+    --assume-yes \
       bash \
-      build-base \
+      build-essential \
+      ca-certificates \
+      curl \
       git \
+      gzip \
       make \
-      python3
+      python3; \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 ./scripts/build/web-override.nu /usr/local/bin/web-override.nu
 
 WORKDIR /ocis
 
-RUN --mount=type=bind,source=${OCIS_REPO_PATH:-.},target=/mnt/src,ro \
-    --mount=type=cache,id=ocis-git-${CACHEBUST:-${OCIS_REPO_REF}},target=/src/ocis-git-cache,sharing=shared \
-    if [ "$OCIS_REPO_MODE" = "local" ]; then \
+RUN --mount=type=bind,source=${OCIS_PATH:-.},target=/mnt/src,ro \
+    --mount=type=cache,id=ocis-git-${CACHEBUST:-${OCIS_REF}},target=/src/ocis-git-cache,sharing=shared \
+    if [ "$OCIS_MODE" = "local" ]; then \
       mkdir -p /ocis && cp -a /mnt/src/. /ocis/; \
     else \
       mkdir -p /src/ocis-git-cache && \
       if [ ! -d /src/ocis-git-cache/.git ]; then \
-        git clone --depth 1 --recursive --shallow-submodules --branch "$OCIS_REPO_REF" "$OCIS_REPO_URL" /src/ocis-git-cache; \
+        git clone --depth 1 --recursive --shallow-submodules --branch "$OCIS_REF" "$OCIS_URL" /src/ocis-git-cache; \
       fi && \
       cp -a /src/ocis-git-cache/. /ocis/ && \
-      if [ -n "$OCIS_REPO_SHA" ]; then git -C /ocis checkout "$OCIS_REPO_SHA"; fi; \
+      if [ -n "$OCIS_SHA" ]; then git -C /ocis checkout "$OCIS_SHA"; fi; \
     fi
 
 RUN corepack enable
 
 RUN --mount=type=cache,id=ocis-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
     --mount=type=cache,id=ocis-pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
-    make ci-node-generate
+    --mount=type=bind,source=${OCIS_WEB_PATH:-.},target=/mnt/web,ro \
+    --mount=type=cache,id=ocis-web-git-${CACHEBUST:-${OCIS_WEB_REF}},target=/src/ocis-web-git-cache,sharing=shared \
+    nu /usr/local/bin/web-override.nu
 
 FROM ${BASE_GO_IMAGE} AS build
 
+ARG TARGETARCH="amd64"
+ARG GO_BUILD_GOPROXY=""
+ARG OCIS_REVA_MODE=""
+ARG OCIS_REVA_URL=""
+ARG OCIS_REVA_REF=""
+ARG OCIS_REVA_SHA=""
+ARG OCIS_REVA_PATH=""
 ARG CACHEBUST="default"
 
 RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
@@ -73,16 +118,24 @@ RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sh
       pkgconf \
       vips-dev
 
-WORKDIR /ocis/ocis
+WORKDIR /ocis
 
-COPY --from=generate /ocis/ocis/ /ocis/ocis/
+COPY --from=generate /ocis/ /ocis/
+
+COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 ./scripts/build/reva-override.nu /usr/local/bin/reva-override.nu
+
+RUN --mount=type=bind,source=${OCIS_REVA_PATH:-.},target=/mnt/reva,ro \
+    --mount=type=cache,id=ocis-reva-git-${CACHEBUST:-${OCIS_REVA_REF}},target=/src/ocis-reva-git-cache,sharing=shared \
+    nu /usr/local/bin/reva-override.nu
 
 RUN --mount=type=cache,id=ocis-go-mod-cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=ocis-go-build-cache,target=/root/.cache/go-build,sharing=locked \
-    make ci-go-generate build ENABLE_VIPS=true
+    make -C ocis release-linux-docker-${TARGETARCH} ENABLE_VIPS=true DIST=/dist
 
 FROM ${BASE_RUNTIME_IMAGE}
 
+ARG TARGETARCH="amd64"
 ARG TLS_ENABLED
 ARG TLS_MODE
 ARG TLS_CERT_NAME
@@ -102,6 +155,7 @@ RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sh
       bash \
       ca-certificates \
       curl \
+      libc6-compat \
       mailcap \
       openssh-server \
       su-exec \
@@ -122,7 +176,7 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
 COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini
 
-COPY --from=build --chmod=755 /ocis/ocis/bin/ocis /usr/bin/ocis
+COPY --from=build --chmod=755 /dist/binaries/ocis-linux-${TARGETARCH} /usr/bin/ocis
 
 RUN addgroup -g 1000 -S ocis && adduser -S -D -u 1000 -G ocis ocis
 RUN mkdir -p /etc/ocis /var/lib/ocis && chown -R 1000:1000 /etc/ocis /var/lib/ocis
@@ -130,6 +184,8 @@ RUN mkdir -p /etc/ocis /var/lib/ocis && chown -R 1000:1000 /etc/ocis /var/lib/oc
 VOLUME ["/etc/ocis", "/var/lib/ocis"]
 
 COPY ./configs/ /opt/dockypody/templates/ocis/
+
+RUN mkdir -p /tls
 
 COPY ./tls /tmp/tls-source/
 COPY --chmod=755 ./scripts/tls/copy-tls.nu /tmp/copy-tls.nu
