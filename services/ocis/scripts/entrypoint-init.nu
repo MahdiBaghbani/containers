@@ -22,7 +22,7 @@ def ship-if-missing [src: string, dst: string] {
     }
 }
 
-def main [...args] {
+def --wrapped main [...args] {
     try {
         start-sshd-if-enabled
     } catch {|err|

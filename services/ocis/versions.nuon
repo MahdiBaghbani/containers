@@ -1,14 +1,17 @@
 {
-  "default": "master",
+  "default": "v8.0.1",
   "defaults": {
     "dependencies": {
       "common-tools": {
         "version": "v1.0.0-alpine"
       }
     },
+    "build_args": {
+      "GO_BUILD_GOPROXY": "https://proxy.golang.org|direct"
+    },
     "external_images": {
       "node": {
-        "tag": "24-alpine"
+        "tag": "24.15.0-trixie-slim"
       },
       "go": {
         "tag": "1.25-alpine"
@@ -18,15 +21,57 @@
       }
     },
     "sources": {
-      "ocis_repo": {
+      "ocis": {
         "url": "https://github.com/owncloud/ocis",
-        "ref": "master"
+        "ref": "v8.0.1"
       }
     }
   },
   "versions": [
     {
       "name": "master",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "ocis": {
+            "ref": "master"
+          }
+        }
+      }
+    },
+    {
+      "name": "master-local-web-reva",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "ocis": {
+            "ref": "master"
+          },
+          "ocis_web": {
+            "path": "../ocis-web"
+          },
+          "ocis_reva": {
+            "path": "../ocis-reva"
+          }
+        }
+      }
+    },
+    {
+      "name": "v8.0.1-local-web-reva",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "ocis_web": {
+            "path": "../ocis-web"
+          },
+          "ocis_reva": {
+            "path": "../ocis-reva"
+          }
+        }
+      }
+    },
+    {
+      "name": "v8.0.1",
       "latest": true
     }
   ]
