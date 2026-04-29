@@ -23,7 +23,7 @@ def ship-if-missing [src: string, dst: string] {
     }
 }
 
-def main [...args] {
+def --wrapped main [...args] {
     try {
         start-sshd-if-enabled
     } catch {|err|
@@ -39,5 +39,5 @@ def main [...args] {
     }
 
     # Hand ownership to the non-root runtime uid:gid (1000:1000).
-    ^chown -R 1000:1000 $CONFIG_DIR $STATE_DIR
+    ^chown -R 1000:1000 $CONFIG_DIR $STATE_DIR $ASSETS_DIR
 }
