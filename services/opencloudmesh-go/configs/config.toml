@@ -1,6 +1,9 @@
 mode = "strict"
 listen_addr = ":443"
 
+[outbound_http]
+ssrf_mode = "strict"
+
 [tls]
 mode = "static"
 cert_file = "/tls/ocmgo.crt"

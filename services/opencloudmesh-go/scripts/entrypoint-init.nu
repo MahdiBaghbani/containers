@@ -96,22 +96,52 @@ def validate_mode [] {
   $mode
 }
 
+def validate_ssrf_mode [] {
+  let raw = (get_env_or_default "OCM_GO_SSRF_MODE" "" | str trim)
+  if ($raw | str length) == 0 {
+    return ""
+  }
+
+  let valid = ["strict" "off"]
+  if not ($raw in $valid) {
+    error make { msg: $"OCM_GO_SSRF_MODE must be strict or off; got: ($raw)" }
+  }
+
+  let help_result = (^/app/bin/opencloudmesh-go -h | complete)
+  let help_text = $"($help_result.stdout)($help_result.stderr)"
+  if not ($help_text | str contains "-ssrf-mode") {
+    error make {
+      msg: (
+        [
+          "OCM_GO_SSRF_MODE is set but the installed binary does not support"
+          " -ssrf-mode; bump the image tag to a version that includes this flag"
+        ] | str join
+      )
+    }
+  }
+
+  $raw
+}
+
 def ensure_logfile [] {
   ^touch /var/log/opencloudmesh-go.log
 }
 
-def start_ocm_go [origin: string, mode: string, admin_user: string, admin_pass: string] {
+def start_ocm_go [origin: string, mode: string, ssrf_mode: string, admin_user: string, admin_pass: string] {
   mut command = $"/app/bin/opencloudmesh-go --config /configs/config.toml --public-origin \"($origin)\""
   $command = $command + $" --admin-username \"($admin_user)\" --admin-password \"($admin_pass)\""
   if ($mode | str length) > 0 {
     $command = $command + $" --mode \"($mode)\""
+  }
+  if ($ssrf_mode | str length) > 0 {
+    $command = $command + $" -ssrf-mode \"($ssrf_mode)\""
   }
   $command = $command + " >> /var/log/opencloudmesh-go.log 2>&1 &"
 
   ^sh -c $command
 }
 
-def main [...args] {
+def --wrapped main [...args] {
   write_nsswitch
 
   let host = (get_env_or_default "HOST" "" | str trim)
@@ -139,5 +169,11 @@ def main [...args] {
 
   let origin = (resolve_public_origin $validated_host)
   let mode = (validate_mode)
-  start_ocm_go $origin $mode $admin_user $admin_pass
+  let ssrf_mode = (validate_ssrf_mode)
+
+  let ssrf_display = if ($ssrf_mode | str length) > 0 { $ssrf_mode } else { "default" }
+  let ssrf_flag_status = if ($ssrf_mode | str length) > 0 { "applied" } else { "not applied" }
+  print $"[ocmgo-init] ssrf-mode=($ssrf_display) -ssrf-mode flag: ($ssrf_flag_status)"
+
+  start_ocm_go $origin $mode $ssrf_mode $admin_user $admin_pass
 }
