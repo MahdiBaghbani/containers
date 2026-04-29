@@ -5,7 +5,7 @@
     "sources": {
       "nextcloud": {
         "url": "https://github.com/nextcloud/server",
-        "ref": "v33.0.2"
+        "ref": "v33.0.3"
       }
     },
     "dependencies": {
