@@ -453,7 +453,7 @@ export def build-single-version [
   print $"=== Building ($service):($version_tag) ==="
   print ""
 
-  # Run docker build; ensure CA material and TLS helper are cleaned up on both
+  # Run docker build; ensure all staged material is cleaned up on both
   # success and failure paths.
   let build_error = (try {
     build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $push_val $provenance_val $is_local
