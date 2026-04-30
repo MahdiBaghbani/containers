@@ -5,9 +5,9 @@ networks:
     name: cypress-firefox-mitm-net
 
 services:
-  mitmproxy:
+  cypress-mitmproxy:
     image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
-    container_name: mitmproxy.docker
+    container_name: cypress-mitmproxy.docker
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
@@ -17,23 +17,23 @@ services:
     networks:
       cypress-firefox-mitm-net:
         aliases:
-          - mitmproxy.docker
+          - cypress-mitmproxy.docker
     environment:
       MITM_UI: "true"
-      MITM_UI_SERVER_NAME: "mitmproxy.docker"
+      MITM_UI_SERVER_NAME: "cypress-mitmproxy.docker"
       MITM_UI_TLS_TERMINATION: "true"
       MITM_UI_TLS_CRT: "/tls/mitmproxy.crt"
       MITM_UI_TLS_KEY: "/tls/mitmproxy.key"
       MITM_CA_NAME: "${MITM_CA_NAME:-dockypody}"
     # Host port publish is optional. The point of this example is that Firefox
     # and Cypress can reach mitmweb over the compose network via
-    # https://mitmproxy.docker/.
+    # https://cypress-mitmproxy.docker/.
     # ports:
     #   - "8443:443"
 
-  firefox:
+  cypress-firefox:
     image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
-    container_name: firefox.docker
+    container_name: cypress-firefox.docker
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
@@ -44,18 +44,18 @@ services:
     networks:
       cypress-firefox-mitm-net:
         aliases:
-          - firefox.docker
+          - cypress-firefox.docker
     ports:
       - "${FIREFOX_UI_PORT:-5800}:6901"
     environment:
-      OCM_FIREFOX_START_URL: "https://mitmproxy.docker/"
+      OCM_FIREFOX_START_URL: "https://cypress-mitmproxy.docker/"
     depends_on:
-      mitmproxy:
+      cypress-mitmproxy:
         condition: service_started
 
-  cypress:
+  cypress-runner:
     image: "${CYPRESS_IMAGE:-cypress:v1.0.0-dev}"
-    container_name: cypress.docker
+    container_name: cypress-runner.docker
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
@@ -66,7 +66,7 @@ services:
     networks:
       cypress-firefox-mitm-net:
         aliases:
-          - cypress.docker
+          - cypress-runner.docker
     ports:
       - "${CYPRESS_UI_PORT:-5900}:6901"
     environment:
@@ -74,5 +74,5 @@ services:
     volumes:
       - "./cypress-project:/workspace:rw"
     depends_on:
-      mitmproxy:
+      cypress-mitmproxy:
         condition: service_started
