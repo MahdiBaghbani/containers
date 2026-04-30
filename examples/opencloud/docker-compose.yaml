@@ -1,0 +1,219 @@
+name: opencloud
+
+networks:
+  opencloud-net:
+    name: opencloud-net
+
+volumes:
+  opencloud1-config:
+  opencloud1-data:
+  opencloud2-config:
+  opencloud2-data:
+
+services:
+  opencloud-mitmproxy:
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    container_name: opencloud-mitmproxy.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      opencloud-net:
+        aliases:
+          - opencloud-mitmproxy.docker
+    environment:
+      MITM_UI: "true"
+      MITM_UI_SERVER_NAME: "opencloud-mitmproxy.docker"
+      MITM_UI_TLS_TERMINATION: "true"
+      MITM_UI_TLS_CRT: "/tls/mitmproxy.crt"
+      MITM_UI_TLS_KEY: "/tls/mitmproxy.key"
+      MITM_CA_NAME: "${MITM_CA_NAME:-dockypody}"
+
+  opencloud1:
+    image: "${OPENCLOUD_IMAGE:-opencloud:v6.1.0}"
+    container_name: opencloud1.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - NET_BIND_SERVICE
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      opencloud-net:
+        aliases:
+          - opencloud1.docker
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/ >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    environment:
+      OC_URL: "${OPENCLOUD1_URL:-https://opencloud1.docker}"
+      OC_LOG_LEVEL: "${OPENCLOUD_LOG_LEVEL:-info}"
+      OC_LOG_COLOR: "${OPENCLOUD_LOG_PRETTY:-true}"
+      OC_LOG_PRETTY: "${OPENCLOUD_LOG_PRETTY:-true}"
+      OC_INSECURE: "${OPENCLOUD_INSECURE:-true}"
+      OPENCLOUD_INIT: "${OPENCLOUD1_INIT:-true}"
+      OPENCLOUD_ADMIN_PASSWORD: "${OPENCLOUD1_ADMIN_PASSWORD:-admin}"
+      IDM_CREATE_DEMO_USERS: "${DEMO_USERS:-true}"
+      OC_ADD_RUN_SERVICES: "${START_ADDITIONAL_SERVICES:-ocm}"
+      DOCKYPODY_TLS_CERT_NAME: "${OPENCLOUD1_TLS_CERT_NAME:-opencloud1}"
+      # Direct demo/OTS mode: bind HTTPS on 443 without a reverse proxy.
+      # The image still exposes 9200 for normal reverse-proxy deployments.
+      PROXY_HTTP_ADDR: "0.0.0.0:443"
+      PROXY_ENABLE_BASIC_AUTH: "true"
+      NATS_NATS_HOST: "0.0.0.0"
+      NATS_NATS_PORT: "9233"
+      MICRO_REGISTRY_ADDRESS: "127.0.0.1:9233"
+      GATEWAY_GRPC_ADDR: "0.0.0.0:9142"
+      WEB_UI_CONFIG_FILE: "/etc/opencloud/web-ui-config.json"
+      FRONTEND_OCS_INCLUDE_OCM_SHAREES: "true"
+      FRONTEND_OCS_LIST_OCM_SHARES: "true"
+      FRONTEND_ENABLE_FEDERATED_SHARING_INCOMING: "true"
+      FRONTEND_ENABLE_FEDERATED_SHARING_OUTGOING: "true"
+      GRAPH_INCLUDE_OCM_SHAREES: "true"
+      OCM_OCM_INVITE_MANAGER_INSECURE: "true"
+      OCM_OCM_SHARE_PROVIDER_INSECURE: "true"
+      OCM_OCM_STORAGE_PROVIDER_INSECURE: "true"
+      HTTP_PROXY: "${OPENCLOUD_HTTP_PROXY:-http://opencloud-mitmproxy.docker:8080}"
+      HTTPS_PROXY: "${OPENCLOUD_HTTPS_PROXY:-http://opencloud-mitmproxy.docker:8080}"
+      NO_PROXY: "${OPENCLOUD1_NO_PROXY:-localhost,127.0.0.1,opencloud-mitmproxy.docker,opencloud1.docker}"
+      OCM_PROVIDER_0_NAME: "opencloud1.docker"
+      OCM_PROVIDER_0_DOMAIN: "opencloud1.docker"
+      OCM_PROVIDER_0_FULL_NAME: "opencloud1.docker provider"
+      OCM_PROVIDER_0_ORGANIZATION: "opencloud1.docker"
+      OCM_PROVIDER_0_HOMEPAGE: "https://opencloud1.docker"
+      OCM_PROVIDER_0_DESCRIPTION: "opencloud1.docker cloud storage"
+      OCM_PROVIDER_0_OCM_HOST: "opencloud1.docker"
+      OCM_PROVIDER_0_OCM_ENDPOINT: "https://opencloud1.docker/ocm/"
+      OCM_PROVIDER_0_OCM_PATH: "/ocm/"
+      OCM_PROVIDER_0_WEBDAV_HOST: "opencloud1.docker"
+      OCM_PROVIDER_0_WEBDAV_ENDPOINT: "https://opencloud1.docker/dav/"
+      OCM_PROVIDER_0_WEBDAV_PATH: "/dav/"
+      OCM_PROVIDER_1_NAME: "opencloud2.docker"
+      OCM_PROVIDER_1_DOMAIN: "opencloud2.docker"
+      OCM_PROVIDER_1_FULL_NAME: "opencloud2.docker provider"
+      OCM_PROVIDER_1_ORGANIZATION: "opencloud2.docker"
+      OCM_PROVIDER_1_HOMEPAGE: "https://opencloud2.docker"
+      OCM_PROVIDER_1_DESCRIPTION: "opencloud2.docker cloud storage"
+      OCM_PROVIDER_1_OCM_HOST: "opencloud2.docker"
+      OCM_PROVIDER_1_OCM_ENDPOINT: "https://opencloud2.docker/ocm/"
+      OCM_PROVIDER_1_OCM_PATH: "/ocm/"
+      OCM_PROVIDER_1_WEBDAV_HOST: "opencloud2.docker"
+      OCM_PROVIDER_1_WEBDAV_ENDPOINT: "https://opencloud2.docker/dav/"
+      OCM_PROVIDER_1_WEBDAV_PATH: "/dav/"
+    volumes:
+      - "opencloud1-config:/etc/opencloud"
+      - "opencloud1-data:/var/lib/opencloud"
+
+  opencloud2:
+    image: "${OPENCLOUD_IMAGE:-opencloud:v6.1.0}"
+    container_name: opencloud2.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - NET_BIND_SERVICE
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      opencloud-net:
+        aliases:
+          - opencloud2.docker
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/ >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    environment:
+      OC_URL: "${OPENCLOUD2_URL:-https://opencloud2.docker}"
+      OC_LOG_LEVEL: "${OPENCLOUD_LOG_LEVEL:-info}"
+      OC_LOG_COLOR: "${OPENCLOUD_LOG_PRETTY:-true}"
+      OC_LOG_PRETTY: "${OPENCLOUD_LOG_PRETTY:-true}"
+      OC_INSECURE: "${OPENCLOUD_INSECURE:-true}"
+      OPENCLOUD_INIT: "${OPENCLOUD2_INIT:-true}"
+      OPENCLOUD_ADMIN_PASSWORD: "${OPENCLOUD2_ADMIN_PASSWORD:-admin}"
+      IDM_CREATE_DEMO_USERS: "${DEMO_USERS:-true}"
+      OC_ADD_RUN_SERVICES: "${START_ADDITIONAL_SERVICES:-ocm}"
+      DOCKYPODY_TLS_CERT_NAME: "${OPENCLOUD2_TLS_CERT_NAME:-opencloud2}"
+      # Direct demo/OTS mode: bind HTTPS on 443 without a reverse proxy.
+      # The image still exposes 9200 for normal reverse-proxy deployments.
+      PROXY_HTTP_ADDR: "0.0.0.0:443"
+      PROXY_ENABLE_BASIC_AUTH: "true"
+      NATS_NATS_HOST: "0.0.0.0"
+      NATS_NATS_PORT: "9233"
+      MICRO_REGISTRY_ADDRESS: "127.0.0.1:9233"
+      GATEWAY_GRPC_ADDR: "0.0.0.0:9142"
+      WEB_UI_CONFIG_FILE: "/etc/opencloud/web-ui-config.json"
+      FRONTEND_OCS_INCLUDE_OCM_SHAREES: "true"
+      FRONTEND_OCS_LIST_OCM_SHARES: "true"
+      FRONTEND_ENABLE_FEDERATED_SHARING_INCOMING: "true"
+      FRONTEND_ENABLE_FEDERATED_SHARING_OUTGOING: "true"
+      GRAPH_INCLUDE_OCM_SHAREES: "true"
+      OCM_OCM_INVITE_MANAGER_INSECURE: "true"
+      OCM_OCM_SHARE_PROVIDER_INSECURE: "true"
+      OCM_OCM_STORAGE_PROVIDER_INSECURE: "true"
+      HTTP_PROXY: "${OPENCLOUD_HTTP_PROXY:-http://opencloud-mitmproxy.docker:8080}"
+      HTTPS_PROXY: "${OPENCLOUD_HTTPS_PROXY:-http://opencloud-mitmproxy.docker:8080}"
+      NO_PROXY: "${OPENCLOUD2_NO_PROXY:-localhost,127.0.0.1,opencloud-mitmproxy.docker,opencloud2.docker}"
+      OCM_PROVIDER_0_NAME: "opencloud1.docker"
+      OCM_PROVIDER_0_DOMAIN: "opencloud1.docker"
+      OCM_PROVIDER_0_FULL_NAME: "opencloud1.docker provider"
+      OCM_PROVIDER_0_ORGANIZATION: "opencloud1.docker"
+      OCM_PROVIDER_0_HOMEPAGE: "https://opencloud1.docker"
+      OCM_PROVIDER_0_DESCRIPTION: "opencloud1.docker cloud storage"
+      OCM_PROVIDER_0_OCM_HOST: "opencloud1.docker"
+      OCM_PROVIDER_0_OCM_ENDPOINT: "https://opencloud1.docker/ocm/"
+      OCM_PROVIDER_0_OCM_PATH: "/ocm/"
+      OCM_PROVIDER_0_WEBDAV_HOST: "opencloud1.docker"
+      OCM_PROVIDER_0_WEBDAV_ENDPOINT: "https://opencloud1.docker/dav/"
+      OCM_PROVIDER_0_WEBDAV_PATH: "/dav/"
+      OCM_PROVIDER_1_NAME: "opencloud2.docker"
+      OCM_PROVIDER_1_DOMAIN: "opencloud2.docker"
+      OCM_PROVIDER_1_FULL_NAME: "opencloud2.docker provider"
+      OCM_PROVIDER_1_ORGANIZATION: "opencloud2.docker"
+      OCM_PROVIDER_1_HOMEPAGE: "https://opencloud2.docker"
+      OCM_PROVIDER_1_DESCRIPTION: "opencloud2.docker cloud storage"
+      OCM_PROVIDER_1_OCM_HOST: "opencloud2.docker"
+      OCM_PROVIDER_1_OCM_ENDPOINT: "https://opencloud2.docker/ocm/"
+      OCM_PROVIDER_1_OCM_PATH: "/ocm/"
+      OCM_PROVIDER_1_WEBDAV_HOST: "opencloud2.docker"
+      OCM_PROVIDER_1_WEBDAV_ENDPOINT: "https://opencloud2.docker/dav/"
+      OCM_PROVIDER_1_WEBDAV_PATH: "/dav/"
+    volumes:
+      - "opencloud2-config:/etc/opencloud"
+      - "opencloud2-data:/var/lib/opencloud"
+
+  opencloud-firefox:
+    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    container_name: opencloud-firefox.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      opencloud-net:
+        aliases:
+          - opencloud-firefox.docker
+    ports:
+      - "${FIREFOX_UI_PORT:-5800}:6901"
+    environment:
+      OCM_FIREFOX_START_URL: "${FIREFOX_START_URL:-https://opencloud1.docker/}"
+    depends_on:
+      opencloud-mitmproxy:
+        condition: service_started
+      opencloud1:
+        condition: service_healthy
+      opencloud2:
+        condition: service_healthy
