@@ -1,128 +1,76 @@
-# Nextcloud Docker Compose Example
+## Example: two Nextcloud + Firefox + mitmproxy
 
-This example demonstrates how to run Nextcloud containers built by DockyPody in a development/test environment using Docker Compose.
+This example runs 2 Nextcloud instances plus 1 Firefox and 1 mitmproxy container
+on the same Docker network.
 
-## Prerequisites
+Goals:
 
-- Docker and Docker Compose installed
-- Traefik network `traefik-net` exists (create with: `docker network create --subnet=172.16.85.0/24 traefik-net`)
-- Nextcloud images built (e.g., `nextcloud:v32.0.2-debian`)
+- Keep everything self-contained (no Traefik, no external networks).
+- Use stable in-network hostnames ending in `.docker`.
+- Make DNS inside containers reliable by setting upstream resolvers in Compose.
+- Expose only the Firefox desktop UI port to the host.
+- Make it easy to capture traffic with mitmproxy while driving the UI in Firefox.
 
-## Quick Start
+Hostnames (inside the compose network):
 
-1. **Configure environment variables:**
+- nextcloud1: `https://nextcloud1.docker/`
+- nextcloud2: `https://nextcloud2.docker/`
+- mitmweb UI: `https://nextcloud-mitmproxy.docker/`
 
-   ```bash
-   cp env .env
-   # Edit .env with your settings
-   ```
+### Prerequisites
 
-2. **Create volume directories:**
+- Docker with Compose v2
+- DockyPody images built locally:
+  - `mitmproxy:v1.0.0`
+  - `firefox:v1.0.0`
+  - `nextcloud-contacts:<tag>` (set by `IMAGE_NEXTCLOUD_CONTACTS`)
 
-   ```bash
-   mkdir -p volumes/data/{nextcloud,mariadb,redis}
-   ```
+### Quick start
 
-3. **Start services:**
-
-   ```bash
-   docker compose up -d
-   ```
-
-4. **Access Nextcloud:**
-
-   - URL: `https://1.nextcloud.cloud.test.azadehafzar.io` (or your configured domain)
-   - Admin credentials: Set in `.env` file (`NEXTCLOUD_ADMIN_USER` and `NEXTCLOUD_ADMIN_PASSWORD`)
-
-## Configuration
-
-### Image Version
-
-Edit `IMAGE_NEXTCLOUD` in `.env` to use a different Nextcloud version:
+From this directory:
 
 ```bash
-IMAGE_NEXTCLOUD=v32.0.2-debian
-IMAGE_NEXTCLOUD=latest-debian
-IMAGE_NEXTCLOUD=master-debian
+docker compose up -d
 ```
 
-### Database
+### Firefox UI (host port)
 
-The example uses MariaDB by default. To use PostgreSQL instead:
+- Firefox desktop UI: `https://localhost:5800`
 
-1. Replace `nextcloud-1-test-db` service in `docker-compose.yaml` with PostgreSQL
-2. Update environment variables to use `POSTGRES_*` instead of `MYSQL_*`
-3. Update `MYSQL_HOST` to `POSTGRES_HOST` in Nextcloud service
+The container serves the desktop UI on port 6901; the compose file maps it to
+5800 on the host by default.
 
-### Redis
+### What to validate
 
-Redis is optional but recommended for caching. To disable:
+1. Open Firefox at `https://localhost:5800`.
+2. It should auto-open `https://nextcloud1.docker/`.
+3. Open `https://nextcloud2.docker/` in another tab.
+4. Open `https://nextcloud-mitmproxy.docker/` when you want to inspect mitmweb.
 
-1. Remove `nextcloud-1-test-redis` service
-2. Remove `REDIS_HOST` environment variable from Nextcloud service
-3. Remove Redis dependency from Nextcloud service
+Notes:
 
-### HTTPS Mode
+- This compose stack uses platform-specific hostnames so it can run beside the
+  other examples without container-name collisions.
+- The explicit proxy smoke test below is the deterministic MITM capture check.
+- Nextcloud is configured for WAYF-style contacts invites UX with:
+  - `CONTACTS_ENABLE_OCM_INVITES=true`
+  - `CONTACTS_OCM_INVITES_MODE=advanced`
 
-The `NEXTCLOUD_HTTPS_MODE` environment variable controls Apache HTTP/HTTPS behavior:
+### A deterministic cross-container capture smoke test
 
-- **`off`** (default): HTTP-only mode. Use this when behind a reverse proxy (like Traefik) that handles HTTPS termination. Only port 80 is enabled.
-- **`https-only`**: HTTPS-only mode. Port 80 redirects to HTTPS, port 443 serves HTTPS. Requires TLS certificates at `/tls/server.crt` and `/tls/server.key`.
-- **`http-and-https`**: Both HTTP and HTTPS enabled. Port 80 serves HTTP, port 443 serves HTTPS without forced redirect. Requires TLS certificates.
+This proves mitmproxy can observe traffic from one Nextcloud container to the
+other over the shared network when the request is explicitly proxied.
 
-**For this example (Traefik setup):**
+Run from this directory:
 
-- Use `NEXTCLOUD_HTTPS_MODE=off` (default) since Traefik handles HTTPS termination
-- The container runs HTTP-only internally, Traefik terminates TLS
+```bash
+docker exec nextcloud1.docker sh -lc 'curl -fsS -x http://nextcloud-mitmproxy.docker:8080 https://nextcloud2.docker/.well-known/ocm | head -c 200'
+```
 
-**For direct HTTPS access (no reverse proxy):**
+Then open mitmweb and confirm there is a flow for `nextcloud2.docker/.well-known/ocm`.
 
-- Set `NEXTCLOUD_HTTPS_MODE=https-only` or `http-and-https`
-- Ensure TLS certificates are available in the container at `/tls/server.crt` and `/tls/server.key`
-- Uncomment and expose ports 80 and/or 443 in `docker-compose.yaml`
+### Cleanup
 
-## Services
-
-- **nextcloud-1-test-db**: MariaDB database server
-- **nextcloud-1-test-redis**: Redis cache server
-- **nextcloud-1-test**: Nextcloud application server
-
-## Volumes
-
-Data is persisted in `volumes/data/`:
-
-- `volumes/data/nextcloud/`: Nextcloud application data and files
-- `volumes/data/mariadb/`: MariaDB database files
-- `volumes/data/redis/`: Redis persistence data
-
-## Network
-
-All services connect to the external `traefik-net` network for Traefik routing.
-
-## Troubleshooting
-
-### Database Connection Issues
-
-If Nextcloud can't connect to the database:
-
-1. Check database container is running: `docker ps | grep nextcloud-1-test-db`
-2. Verify database credentials in `.env` match MariaDB service
-3. Check Nextcloud logs: `docker logs nextcloud-1-test`
-
-### Traefik Routing Issues
-
-If Traefik can't route to Nextcloud:
-
-1. Verify `traefik-net` network exists: `docker network ls | grep traefik-net`
-2. Check Traefik labels are correct in `docker-compose.yaml`
-3. Verify domain matches `NEXTCLOUD_DOMAIN` in `.env`
-
-### First-Time Setup
-
-On first run, Nextcloud will automatically install if:
-
-- `NEXTCLOUD_ADMIN_USER` and `NEXTCLOUD_ADMIN_PASSWORD` are set
-- Database credentials are correct
-- Database is accessible
-
-Otherwise, access the web interface to complete manual installation.
+```bash
+docker compose down
+```
