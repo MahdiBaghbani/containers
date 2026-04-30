@@ -1,43 +1,90 @@
-name: nextcloud-1-test
+name: nextcloud
 
 networks:
-  traefik-net:
-    external: true
+  nextcloud-net:
+    name: nextcloud-net
 
 services:
-  nextcloud-1-test-db:
-    image: "mariadb:${IMAGE_MARIADB}"
-    container_name: nextcloud-1-test-db
+  nextcloud-mitmproxy:
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    container_name: nextcloud-mitmproxy.docker
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     networks:
-      traefik-net:
-        ipv4_address: 172.16.86.2
+      nextcloud-net:
+        aliases:
+          - nextcloud-mitmproxy.docker
     environment:
-      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE}"
-      MYSQL_USER: "${MYSQL_USER}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
-    volumes:
-      - "/etc/timezone:/etc/timezone:ro"
-      - "/etc/localtime:/etc/localtime:ro"
-      - "${PWD}/volumes/data/mariadb:/var/lib/mysql"
+      MITM_UI: "true"
+      MITM_UI_SERVER_NAME: "nextcloud-mitmproxy.docker"
+      MITM_UI_TLS_TERMINATION: "true"
+      MITM_UI_TLS_CRT: "/tls/mitmproxy.crt"
+      MITM_UI_TLS_KEY: "/tls/mitmproxy.key"
+      MITM_CA_NAME: "${MITM_CA_NAME:-dockypody}"
+
+  nextcloud-firefox:
+    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    container_name: nextcloud-firefox.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-net:
+        aliases:
+          - nextcloud-firefox.docker
+    ports:
+      - "${FIREFOX_UI_PORT:-5800}:6901"
+    environment:
+      OCM_FIREFOX_START_URL: "${FIREFOX_START_URL:-https://nextcloud1.docker/}"
+    depends_on:
+      nextcloud-mitmproxy:
+        condition: service_started
+      nextcloud1:
+        condition: service_started
+      nextcloud2:
+        condition: service_started
+
+  nextcloud1-db:
+    image: "mariadb:${IMAGE_MARIADB:-11.8}"
+    container_name: nextcloud1-db.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-net:
+        aliases:
+          - nextcloud1-db.docker
+    environment:
+      MYSQL_ROOT_PASSWORD: "${NEXTCLOUD1_MYSQL_ROOT_PASSWORD:-rootpassword}"
+      MYSQL_DATABASE: "${NEXTCLOUD1_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD1_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD1_MYSQL_PASSWORD:-nextcloudpassword}"
     command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
 
-  nextcloud-1-test-redis:
-    image: "valkey/valkey:${IMAGE_VALKEY}"
-    container_name: nextcloud-1-test-redis
+  nextcloud1-cache:
+    image: "valkey/valkey:${IMAGE_VALKEY:-9.0-alpine}"
+    container_name: nextcloud1-cache.docker
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     networks:
-      traefik-net:
-        ipv4_address: 172.16.86.3
-    volumes:
-      - "/etc/timezone:/etc/timezone:ro"
-      - "/etc/localtime:/etc/localtime:ro"
-      - "${PWD}/volumes/data/valkey:/data"
+      nextcloud-net:
+        aliases:
+          - nextcloud1-cache.docker
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 2s
@@ -45,61 +92,122 @@ services:
       retries: 30
       start_period: 10s
 
-  nextcloud-1-test:
-    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD}"
-    container_name: nextcloud-1-test
+  nextcloud1:
+    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS}"
+    container_name: nextcloud1.docker
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     networks:
-      traefik-net:
-        ipv4_address: 172.16.86.4
+      nextcloud-net:
+        aliases:
+          - nextcloud1.docker
     environment:
-      APACHE_SERVER_NAME: "${NEXTCLOUD_DOMAIN}"
-      NEXTCLOUD_HTTPS_MODE: "${NEXTCLOUD_HTTPS_MODE:-off}"
-      NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD_ADMIN_USER}"
-      NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD_ADMIN_PASSWORD}"
-      NEXTCLOUD_TRUSTED_DOMAINS: "${NEXTCLOUD_TRUSTED_DOMAINS}"
-      NEXTCLOUD_DATA_DIR: "${NEXTCLOUD_DATA_DIR:-/var/www/html/data}"
-      CONTACTS_ENABLE_OCM_INVITES: "${CONTACTS_ENABLE_OCM_INVITES:-false}"
-      CONTACTS_MESH_PROVIDERS_SERVICE: ${CONTACTS_MESH_PROVIDERS_SERVICE:-""}
-      CONTACTS_OCM_INVITES_MODE: "${CONTACTS_OCM_INVITES_MODE:-}"
-      CONTACTS_OCM_INVITES_OPTIONAL_MAIL: "${CONTACTS_OCM_INVITES_OPTIONAL_MAIL:-}"
-      CONTACTS_OCM_INVITES_CC_SENDER: "${CONTACTS_OCM_INVITES_CC_SENDER:-}"
-      CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON: "${CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON:-}"
-      MYSQL_HOST: "${MYSQL_HOST:-nextcloud-1-test-db}"
-      MYSQL_DATABASE: "${MYSQL_DATABASE}"
-      MYSQL_USER: "${MYSQL_USER}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
-      REDIS_HOST: "${REDIS_HOST:-nextcloud-1-test-redis}"
-      REDIS_HOST_PORT: "${REDIS_HOST_PORT:-6379}"
-      REDIS_HOST_PASSWORD: "${REDIS_HOST_PASSWORD:-}"
-      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
-      OVERWRITEPROTOCOL: "${OVERWRITEPROTOCOL:-}"
-      OVERWRITECLIURL: "${OVERWRITECLIURL:-}"
-      OVERWRITEHOST: "${OVERWRITEHOST:-}"
-    volumes:
-      - "/etc/timezone:/etc/timezone:ro"
-      - "/etc/localtime:/etc/localtime:ro"
-      - "${PWD}/volumes/data/nextcloud:/var/www/html"
+      APACHE_SERVER_NAME: "${NEXTCLOUD1_APACHE_SERVER_NAME:-nextcloud1.docker}"
+      NEXTCLOUD_HTTPS_MODE: "${NEXTCLOUD_HTTPS_MODE:-https-only}"
+      NEXTCLOUD_APACHE_LOGLEVEL: "${NEXTCLOUD_APACHE_LOGLEVEL:-warn}"
+      NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD1_NEXTCLOUD_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD1_NEXTCLOUD_ADMIN_PASSWORD:-admin}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "${NEXTCLOUD1_NEXTCLOUD_TRUSTED_DOMAINS:-nextcloud1.docker}"
+      NEXTCLOUD_DATA_DIR: "${NEXTCLOUD1_NEXTCLOUD_DATA_DIR:-/var/www/html/data}"
+      CONTACTS_ENABLE_OCM_INVITES: "${CONTACTS_ENABLE_OCM_INVITES:-true}"
+      CONTACTS_OCM_INVITES_MODE: "${CONTACTS_OCM_INVITES_MODE:-advanced}"
+      MYSQL_HOST: "${NEXTCLOUD1_MYSQL_HOST:-nextcloud1-db}"
+      MYSQL_DATABASE: "${NEXTCLOUD1_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD1_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD1_MYSQL_PASSWORD:-nextcloudpassword}"
+      REDIS_HOST: "${NEXTCLOUD1_REDIS_HOST:-nextcloud1-cache}"
+      REDIS_HOST_PORT: "${NEXTCLOUD1_REDIS_HOST_PORT:-6379}"
+      REDIS_HOST_PASSWORD: "${NEXTCLOUD1_REDIS_HOST_PASSWORD:-}"
+      HTTP_PROXY: "${NEXTCLOUD_HTTP_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
+      HTTPS_PROXY: "${NEXTCLOUD_HTTPS_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
+      NO_PROXY: "${NEXTCLOUD1_NO_PROXY:-localhost,127.0.0.1,nextcloud-mitmproxy.docker,nextcloud1-db,nextcloud1-cache}"
     depends_on:
-      nextcloud-1-test-db:
+      nextcloud1-db:
         condition: service_started
-      nextcloud-1-test-redis:
+      nextcloud1-cache:
         condition: service_started
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.nextcloud-redirect.entrypoints=http"
-      - "traefik.http.routers.nextcloud-redirect.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
-      - "traefik.http.routers.nextcloud-redirect.middlewares=force-https@file"
-      - "traefik.http.routers.nextcloud-redirect.service=noop@internal"
-      - "traefik.http.routers.nextcloud.entrypoints=https"
-      - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
-      - "traefik.http.routers.nextcloud.tls.certResolver=letsencrypt-cloudflare-global"
-      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
-    # Ports: When using Traefik (default), ports are not exposed externally.
-    # For direct HTTPS access without reverse proxy, uncomment and expose:
-    # ports:
-    #   - "80:80"   # HTTP (or redirect to HTTPS if NEXTCLOUD_HTTPS_MODE=https-only)
-    #   - "443:443" # HTTPS (if NEXTCLOUD_HTTPS_MODE=https-only or http-and-https)
+
+  nextcloud2-db:
+    image: "mariadb:${IMAGE_MARIADB:-11.8}"
+    container_name: nextcloud2-db.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-net:
+        aliases:
+          - nextcloud2-db.docker
+    environment:
+      MYSQL_ROOT_PASSWORD: "${NEXTCLOUD2_MYSQL_ROOT_PASSWORD:-rootpassword}"
+      MYSQL_DATABASE: "${NEXTCLOUD2_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD2_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD2_MYSQL_PASSWORD:-nextcloudpassword}"
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW --innodb-file-per-table=1 --skip-innodb-read-only-compressed
+
+  nextcloud2-cache:
+    image: "valkey/valkey:${IMAGE_VALKEY:-9.0-alpine}"
+    container_name: nextcloud2-cache.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-net:
+        aliases:
+          - nextcloud2-cache.docker
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  nextcloud2:
+    image: "nextcloud-contacts:${IMAGE_NEXTCLOUD_CONTACTS}"
+    container_name: nextcloud2.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      nextcloud-net:
+        aliases:
+          - nextcloud2.docker
+    environment:
+      APACHE_SERVER_NAME: "${NEXTCLOUD2_APACHE_SERVER_NAME:-nextcloud2.docker}"
+      NEXTCLOUD_HTTPS_MODE: "${NEXTCLOUD_HTTPS_MODE:-https-only}"
+      NEXTCLOUD_APACHE_LOGLEVEL: "${NEXTCLOUD_APACHE_LOGLEVEL:-warn}"
+      NEXTCLOUD_ADMIN_USER: "${NEXTCLOUD2_NEXTCLOUD_ADMIN_USER:-admin}"
+      NEXTCLOUD_ADMIN_PASSWORD: "${NEXTCLOUD2_NEXTCLOUD_ADMIN_PASSWORD:-admin}"
+      NEXTCLOUD_TRUSTED_DOMAINS: "${NEXTCLOUD2_NEXTCLOUD_TRUSTED_DOMAINS:-nextcloud2.docker}"
+      NEXTCLOUD_DATA_DIR: "${NEXTCLOUD2_NEXTCLOUD_DATA_DIR:-/var/www/html/data}"
+      CONTACTS_ENABLE_OCM_INVITES: "${CONTACTS_ENABLE_OCM_INVITES:-true}"
+      CONTACTS_OCM_INVITES_MODE: "${CONTACTS_OCM_INVITES_MODE:-advanced}"
+      MYSQL_HOST: "${NEXTCLOUD2_MYSQL_HOST:-nextcloud2-db}"
+      MYSQL_DATABASE: "${NEXTCLOUD2_MYSQL_DATABASE:-nextcloud}"
+      MYSQL_USER: "${NEXTCLOUD2_MYSQL_USER:-nextcloud}"
+      MYSQL_PASSWORD: "${NEXTCLOUD2_MYSQL_PASSWORD:-nextcloudpassword}"
+      REDIS_HOST: "${NEXTCLOUD2_REDIS_HOST:-nextcloud2-cache}"
+      REDIS_HOST_PORT: "${NEXTCLOUD2_REDIS_HOST_PORT:-6379}"
+      REDIS_HOST_PASSWORD: "${NEXTCLOUD2_REDIS_HOST_PASSWORD:-}"
+      HTTP_PROXY: "${NEXTCLOUD_HTTP_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
+      HTTPS_PROXY: "${NEXTCLOUD_HTTPS_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
+      NO_PROXY: "${NEXTCLOUD2_NO_PROXY:-localhost,127.0.0.1,nextcloud-mitmproxy.docker,nextcloud2-db,nextcloud2-cache}"
+    depends_on:
+      nextcloud2-db:
+        condition: service_started
+      nextcloud2-cache:
+        condition: service_started
