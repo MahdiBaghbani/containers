@@ -261,6 +261,7 @@ ENV DOCKYPODY_TLS_CERT_NAME="${TLS_CERT_NAME}"
 COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
 COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 COPY --chmod=755 ./scripts/lib/sshd.nu /usr/bin/lib/sshd.nu
+COPY --chmod=755 ./scripts/lib/ocmproviders.nu /usr/bin/lib/ocmproviders.nu
 
 EXPOSE 9200
 
