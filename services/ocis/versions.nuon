@@ -40,37 +40,6 @@
       }
     },
     {
-      "name": "master-local-web-reva",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "ocis": {
-            "ref": "master"
-          },
-          "ocis_web": {
-            "path": "../ocis-web"
-          },
-          "ocis_reva": {
-            "path": "../ocis-reva"
-          }
-        }
-      }
-    },
-    {
-      "name": "v8.0.1-local-web-reva",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "ocis_web": {
-            "path": "../ocis-web"
-          },
-          "ocis_reva": {
-            "path": "../ocis-reva"
-          }
-        }
-      }
-    },
-    {
       "name": "v8.0.1",
       "latest": true
     }
