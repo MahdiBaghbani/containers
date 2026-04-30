@@ -265,6 +265,13 @@ For local sources, the build system automatically:
 
 **Note:** Copied sources are left in `.build-sources/` after build for debugging (consistent with TLS helper pattern).
 
+Service-specific runtime helpers are not part of global build context
+preparation. Put helpers used by one service under that service's context, for
+example `services/<name>/scripts/lib/`, copy them directly in the Dockerfile,
+and test them under `services/<name>/tests/`. Reserve repo-wide staging for
+cross-service build mechanisms such as TLS, SSH, source overrides, and
+dependency build plumbing.
+
 ### SHA and Label Generation
 
 Local sources have different behavior for metadata generation:
@@ -894,6 +901,10 @@ scripts/
   - core/                     # Cross-cutting utilities
     - records.nu            # Record manipulation (deep-merge)
     - repo.nu               # Repository root detection
+services/
+- <name>/
+  - scripts/lib/              # service-specific runtime helpers
+  - tests/                    # service-local runtime and helper tests
 ```
 
 ## Error Handling

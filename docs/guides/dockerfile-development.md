@@ -530,6 +530,10 @@ Rules:
 - The wrapper MUST treat missing `nu`, missing `entrypoint-init.nu`, and
   nonzero init exits as fatal. Warnings belong inside the Nushell orchestrator
   and must exit 0.
+- Service-specific init helpers belong in `services/<name>/scripts/lib/` and
+  should be copied directly from the service build context. Do not add
+  service-only runtime helpers to repo-wide `scripts/lib/**` or global build
+  context staging to avoid duplication.
 
 ### Exceptions
 
@@ -689,6 +693,9 @@ paths to repo-root SSH material or assume it is always present.
 - [ ] Multi-stage boundaries enforced (no stray build tools in runtime image).
 - [ ] `COPY` instructions reference files produced in previous stages, not host paths.
 - [ ] Optional TLS helper scripts (`./scripts/tls/copy-tls.nu`) only copied when TLS is enabled.
+- [ ] `EXPOSE` reflects the normal image service contract. Direct examples and
+      OTS runs may override the service listen address to `443` when
+      deliberately running without nginx or another reverse proxy.
 - [ ] If `tls.enabled=true`, the service declares a direct `common-tools`
       dependency for the platform being built (transitive deps do not satisfy TLS
       validation).
@@ -697,6 +704,8 @@ paths to repo-root SSH material or assume it is always present.
 - [ ] ENTRYPOINT uses JSON form with tini as PID 1.
 - [ ] SSH args (`SSH_ENABLED`, `SSH_MODE`, etc.) declared when service has `ssh.enabled=true`.
 - [ ] SSH packages (`openssh-client` or `openssh-server`) installed per-service, not in common-tools.
+- [ ] Service-specific runtime helpers stay under `services/<name>/scripts/lib/`
+      and have service-local tests under `services/<name>/tests/`.
 
 ## References
 
