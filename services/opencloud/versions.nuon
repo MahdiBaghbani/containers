@@ -44,40 +44,6 @@
       }
     },
     {
-      "name": "main-local-web-reva",
-      "latest": false,
-      "overrides": {
-        "build_args": {
-          "EDITION": "rolling"
-        },
-        "sources": {
-          "opencloud": {
-            "ref": "main"
-          },
-          "opencloud_web": {
-            "path": "../opencloud-web"
-          },
-          "opencloud_reva": {
-            "path": "../opencloud-reva"
-          }
-        }
-      }
-    },
-    {
-      "name": "v6.1.0-local-web-reva",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "opencloud_web": {
-            "path": "../opencloud-web"
-          },
-          "opencloud_reva": {
-            "path": "../opencloud-reva"
-          }
-        }
-      }
-    },
-    {
       "name": "v6.1.0",
       "latest": true
     }
