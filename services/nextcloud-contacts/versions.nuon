@@ -32,6 +32,11 @@
             "url": "https://github.com/MahdiBaghbani/nextcloud-contacts",
             "ref": "mahdi/fix/ui-optional-email"
           }
+        },
+        "external_images": {
+          "build": {
+            "tag": "24-trixie-slim"
+          }
         }
       }
     },
