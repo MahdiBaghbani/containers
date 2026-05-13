@@ -130,6 +130,8 @@ ENV/
 build/
 !scripts/lib/build/
 !services/kasm-base/scripts/build/
+!services/opencloud/scripts/build/
+!services/ocis/scripts/build/
 develop-eggs/
 dist/
 downloads/
