@@ -65,8 +65,9 @@ def local-build-dep-mapping [svc: string] {
 }
 
 # Compute expected direct dependency service names by walking a service's
-# versions.nuon at exactly three locations:
+# versions.nuon at exactly four locations:
 #   defaults.dependencies
+#   defaults.platforms.<platform>.dependencies
 #   each version overrides.dependencies
 #   each version overrides.platforms.<platform>.dependencies
 # Resolves dep_ids to service names using infra manifests (independent reimplementation).
@@ -88,6 +89,15 @@ def compute-expected-deps [svc: string] {
 
   let default_names = (do $resolve_ids (try { $manifest.defaults.dependencies } catch { {} }))
 
+  let dp = (try { $manifest.defaults.platforms } catch { {} })
+  let default_plat_names = (if ($dp | is-empty) {
+    []
+  } else {
+    $dp | columns | each {|pname|
+      do $resolve_ids (try { ($dp | get $pname).dependencies } catch { {} })
+    } | flatten
+  })
+
   let version_names = ((try { $manifest.versions } catch { [] }) | each {|version|
     let ver_names = (do $resolve_ids (try { $version.overrides.dependencies } catch { {} }))
     let platforms = (try { $version.overrides.platforms } catch { {} })
@@ -101,7 +111,7 @@ def compute-expected-deps [svc: string] {
     $ver_names | append $plat_names
   } | flatten)
 
-  ($default_names | append $version_names) | uniq
+  ($default_names | append $default_plat_names | append $version_names) | uniq
 }
 
 def main [--verbose] {
@@ -173,6 +183,34 @@ def main [--verbose] {
     true
   } $verbose)
   $results = ($results | append $test4)
+
+  # Test 5: kasm-base must declare common-tools as a direct dependency.
+  # Regression for defaults.platforms.*.dependencies being missed.
+  let test5 = (run-test "kasm-base direct deps include common-tools" {
+    let deps = (get-direct-dependency-services "kasm-base")
+    if ($deps | is-empty) {
+      error make {msg: "kasm-base has no direct deps (expected common-tools)"}
+    }
+    if not ("common-tools" in $deps) {
+      error make {msg: $"kasm-base deps missing common-tools: ($deps | str join ',')"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test5)
+
+  # Test 6: cypress must declare common-tools and kasm-base as direct dependencies.
+  # Regression for defaults.platforms.*.dependencies being missed.
+  let test6 = (run-test "cypress direct deps include common-tools and kasm-base" {
+    let deps = (get-direct-dependency-services "cypress")
+    if not ("common-tools" in $deps) {
+      error make {msg: $"cypress deps missing common-tools: ($deps | str join ',')"}
+    }
+    if not ("kasm-base" in $deps) {
+      error make {msg: $"cypress deps missing kasm-base: ($deps | str join ',')"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test6)
 
   print-test-summary $results
 
