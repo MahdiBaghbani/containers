@@ -12,7 +12,7 @@ volumes:
 
 services:
   ocis-mitmproxy:
-    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v12.2.2}"
     container_name: ocis-mitmproxy.docker
     restart: "unless-stopped"
     security_opt:
@@ -193,7 +193,7 @@ services:
       - "ocis2-data:/var/lib/ocis"
 
   ocis-firefox:
-    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    image: "${FIREFOX_IMAGE:-firefox:v150.0.0}"
     container_name: ocis-firefox.docker
     restart: "unless-stopped"
     security_opt:

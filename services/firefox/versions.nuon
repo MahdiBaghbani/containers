@@ -1,5 +1,5 @@
 {
-  "default": "v1.0.0",
+  "default": "v150.0.0",
   "defaults": {
     "build_args": {
       "FIREFOX_VERSION": "150.0",
@@ -7,13 +7,13 @@
     },
     "dependencies": {
       "kasm-base": {
-        "version": "v1.0.0-debian"
+        "version": "v1.4.1-debian"
       }
     }
   },
   "versions": [
     {
-      "name": "v1.0.0",
+      "name": "v150.0.0",
       "latest": true
     }
   ]

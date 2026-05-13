@@ -18,7 +18,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
-ARG KASM_BASE_IMAGE="kasm-base:v1.0.0-debian"
+ARG KASM_BASE_IMAGE="kasm-base:v1.4.1-debian"
 
 FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 
