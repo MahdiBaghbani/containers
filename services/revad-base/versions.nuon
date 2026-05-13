@@ -41,18 +41,6 @@
 
   "versions": [
     {
-      "name": "mahdi_fix_localhome",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "revad": {
-            "url": "https://github.com/MahdiBaghbani/reva-opencloud",
-            "ref": "feature/multi-reva-setup-with-localhome"
-          }
-        }
-      }
-    },
-    {
       "name": "master",
       "latest": false,
       "overrides": {
@@ -70,18 +58,6 @@
         "sources": {
           "revad": {
             "ref": "v3.3.3"
-          }
-        }
-      }
-    },
-    {
-      "name": "sta-ocm-m6",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "revad": {
-            "url": "https://github.com/MahdiBaghbani/reva-opencloud.git",
-            "ref": "sta-milestone-6/ocm-code-flow"
           }
         }
       }
