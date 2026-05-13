@@ -99,8 +99,8 @@ def merge-services [acc: list, services: list] {
 # Resolves dep_ids from versions.nuon to actual service names via infra manifests:
 # - single-platform: services/<service>.nuon dependencies
 # - multi-platform:  services/<service>/platforms.nuon defaults + per-platform deps
-# Scans versions.nuon at defaults.dependencies, each version overrides.dependencies,
-# and each version overrides.platforms.{platform}.dependencies.
+# Scans versions.nuon at defaults.dependencies, defaults.platforms.{platform}.dependencies,
+# each version overrides.dependencies, and each version overrides.platforms.{platform}.dependencies.
 # Returns deduplicated list preserving discovery order.
 export def get-direct-dependency-services [service: string] {
     if not (check-versions-manifest-exists $service) {
@@ -115,6 +115,17 @@ export def get-direct-dependency-services [service: string] {
     let default_deps = (try { $manifest.defaults.dependencies } catch { {} })
     let default_services = (map-dep-ids-to-services $default_deps $mapping $service)
     $all_deps = (merge-services $all_deps $default_services)
+
+    # 1b. Extract from defaults.platforms.{platform}.dependencies
+    let default_platforms = (try { $manifest.defaults.platforms } catch { {} })
+    if not ($default_platforms | is-empty) {
+        for platform_name in ($default_platforms | columns) {
+            let platform_cfg = ($default_platforms | get $platform_name)
+            let platform_deps = (try { $platform_cfg.dependencies } catch { {} })
+            let platform_services = (map-dep-ids-to-services $platform_deps $mapping $service)
+            $all_deps = (merge-services $all_deps $platform_services)
+        }
+    }
 
     # 2. Extract from each version's overrides
     let versions = (try { $manifest.versions } catch { [] })
