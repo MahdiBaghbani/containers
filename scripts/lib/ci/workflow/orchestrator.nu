@@ -152,10 +152,38 @@ export def generate-orchestrator [] {
     let complete_job = (gen-build-complete-job $all_job_ids)
     $jobs_yaml = $jobs_yaml + $complete_job
 
-    let purge_job = (gen-ghcr-purge-job $all_job_ids 200)
-    $jobs_yaml = $jobs_yaml + "\n" + $purge_job
-
     $header + $graph_comment + "\n" + $jobs_yaml
+}
+
+def gen-build-push-purge-job [max_deletes: int] {
+    let needs_yaml = (format-needs-list ["run_build_push_all"])
+
+    $"  ghcr_purge:
+    name: GHCR Purge Stale Versions
+($needs_yaml)    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Nushell
+        env:
+          NU_VERSION: 0.108.0
+        run: |
+          curl -fsSL -o /tmp/nu.tar.gz \"https://github.com/nushell/nushell/releases/download/0.108.0/nu-0.108.0-x86_64-unknown-linux-gnu.tar.gz\"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+      - name: Purge stale GHCR versions
+        env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: \${{ github.repository }}
+        run: nu scripts/dockypody.nu ci ghcr-purge --dry-run=false --max-deletes=($max_deletes)
+        # --max-deletes is a global budget across ALL services in this run.
+        # Increase it or set to 0 to mean unlimited when many stale versions exist.
+"
 }
 
 export def generate-build-push [] {
@@ -164,7 +192,9 @@ export def generate-build-push [] {
         "nu scripts/dockypody.nu ci workflow --target build-push"
         "Build and Push All"
         "on:\n  workflow_dispatch:")
-    
+
+    let purge_job = (gen-build-push-purge-job 200)
+
     $header + '
 jobs:
   run_build_push_all:
@@ -175,7 +205,8 @@ jobs:
     uses: ./.github/workflows/build-orchestrator.yml
     with:
       push: true
-'
+
+' + $purge_job
 }
 
 export def generate-build [] {
