@@ -12,7 +12,7 @@ volumes:
 
 services:
   opencloud-mitmproxy:
-    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v12.2.2}"
     container_name: opencloud-mitmproxy.docker
     restart: "unless-stopped"
     security_opt:
@@ -193,7 +193,7 @@ services:
       - "opencloud2-data:/var/lib/opencloud"
 
   opencloud-firefox:
-    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    image: "${FIREFOX_IMAGE:-firefox:v150.0.0}"
     container_name: opencloud-firefox.docker
     restart: "unless-stopped"
     security_opt:

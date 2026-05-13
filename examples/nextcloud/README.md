@@ -21,8 +21,8 @@ Hostnames (inside the compose network):
 
 - Docker with Compose v2
 - DockyPody images built locally:
-  - `mitmproxy:v1.0.0`
-  - `firefox:v1.0.0`
+  - `mitmproxy:v12.2.2`
+  - `firefox:v150.0.0`
   - `nextcloud-contacts:<tag>` (set by `IMAGE_NEXTCLOUD_CONTACTS`)
 
 ### Quick start

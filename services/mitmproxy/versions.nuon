@@ -1,5 +1,5 @@
 {
-  "default": "v1.0.0",
+  "default": "v12.2.2",
   "defaults": {
     "dependencies": {
       "common-tools": {
@@ -9,7 +9,7 @@
   },
   "versions": [
     {
-      "name": "v1.0.0",
+      "name": "v12.2.2",
       "latest": true
     }
   ]

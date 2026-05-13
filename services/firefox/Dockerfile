@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-ARG KASM_BASE_IMAGE="kasm-base:v1.0.0-debian"
+ARG KASM_BASE_IMAGE="kasm-base:v1.4.1-debian"
 ARG FIREFOX_VERSION="150.0"
 ARG FIREFOX_LOCALE="en-US"
 

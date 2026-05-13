@@ -46,12 +46,18 @@ export def verify-image-exists-locally [image_ref: string] {
   $exists
 }
 
+# Normalize Docker label output to empty string for missing or sentinel values.
+# Docker returns the literal string "<no value>" when a label does not exist.
+export def normalize-docker-label []: string -> string {
+  let s = ($in | str trim)
+  if $s == "<no value>" { "" } else { $s }
+}
+
 # Get a specific label from a local Docker image
 # Returns empty string if image or label is missing
 export def get-image-label [image_ref: string, label_key: string] {
   try {
-    let result = (^docker image inspect $image_ref --format $"{{index .Config.Labels \"($label_key)\"}}" | str trim)
-    $result
+    ^docker image inspect $image_ref --format $"{{index .Config.Labels \"($label_key)\"}}" | str trim | normalize-docker-label
   } catch {
     ""
   }

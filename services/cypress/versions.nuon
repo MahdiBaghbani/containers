@@ -1,5 +1,5 @@
 {
-  "default": "v1.0.0",
+  "default": "v15.14.1",
   "defaults": {
     "build_args": {
       "NODE_VERSION": "24.15.0",
@@ -25,7 +25,7 @@
             "version": "v1.0.0-debian"
           },
           "kasm-base": {
-            "version": "v1.0.0-debian"
+            "version": "v1.4.1-debian"
           }
         }
       }
@@ -33,7 +33,7 @@
   },
   "versions": [
     {
-      "name": "v1.0.0",
+      "name": "v15.14.1",
       "latest": true
     }
   ]

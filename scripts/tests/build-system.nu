@@ -21,6 +21,7 @@
 
 use ../lib/build/args.nu [generate-build-args]
 use ../lib/build/order.nu [topological-sort-dfs]
+use ../lib/build/docker.nu [normalize-docker-label]
 use ../lib/manifest/core.nu [get-default-version get-version-or-null]
 use ./mocks.nu [detect-build get-mock-service-config build-mock-version-manifest build-mock-platform-manifest check-platforms-manifest-exists check-versions-manifest-exists build-dependency-graph-with-mocks get-default-platform set-mock-platform-behavior]
 use ./helpers.nu [setup-test-environment setup-test-service-with-deps cleanup-test-environment with-test-cleanup create-test-dependency create-test-deps-resolved create-test-tls-meta create-test-registry-info assert-cache-bust-format assert-cache-bust-value assert-build-args-contain assert-build-order assert-graph-structure]
@@ -950,6 +951,81 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test30)
   
+  # Docker Sentinel Normalization Tests
+
+  # Test 31: Docker sentinel string treated as empty/missing label
+  # Validates that "<no value>" returned by Docker for absent labels is
+  # normalized to empty string, preventing it from being treated as a real hash.
+  let test31 = (run-test "Test 31: Docker sentinel <no value> normalizes to empty string" {
+    let sentinel = ("<no value>" | normalize-docker-label)
+    if ($sentinel | str length) != 0 {
+      error make {msg: $"Expected empty string for sentinel, got: '($sentinel)'"}
+    }
+
+    let normal_label = ("abc12345deadbeef" | normalize-docker-label)
+    if $normal_label != "abc12345deadbeef" {
+      error make {msg: $"Normal label should pass through unchanged, got: '($normal_label)'"}
+    }
+
+    let padded_sentinel = ("  <no value>  " | normalize-docker-label)
+    if ($padded_sentinel | str length) != 0 {
+      error make {msg: $"Whitespace-padded sentinel should normalize to empty, got: '($padded_sentinel)'"}
+    }
+
+    let empty_label = ("" | normalize-docker-label)
+    if ($empty_label | str length) != 0 {
+      error make {msg: $"Empty string should pass through as empty, got: '($empty_label)'"}
+    }
+
+    if $verbose_flag {
+      print "    Sentinel '<no value>' -> ''"
+      print "    Normal label passes through unchanged"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test31)
+
+  # Test 32: Hash shortening is safe for odd strings including Docker sentinel
+  # Validates that the short-hash diagnostic logic does not crash on strings
+  # like "<no value>" and that short strings are returned as-is.
+  let test32 = (run-test "Test 32: Hash shortening is safe for odd strings including sentinel" {
+    # Inline the same logic used by the private short-hash helper in version.nu
+    let shorten = {|s: string|
+      if ($s | str length) <= 8 { $s } else { $s | str substring 0..7 }
+    }
+
+    let cases = [
+      {input: "<no value>", expected_max: 8},
+      {input: "", expected_max: 8},
+      {input: "abc", expected_max: 8},
+      {input: "abcdefgh", expected_max: 8},
+      {input: "abcdefghi", expected_max: 8},
+      {input: "abc123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd", expected_max: 8},
+    ]
+
+    for case in $cases {
+      let result = (do $shorten $case.input)
+      if ($result | str length) > $case.expected_max {
+        error make {msg: $"Shortening produced ($result | str length) chars for '($case.input)', max is ($case.expected_max)"}
+      }
+    }
+
+    # Confirm sentinel "<no value>" (10 chars) shortens without crashing
+    let sentinel_short = (do $shorten "<no value>")
+    if ($sentinel_short | str length) > 8 {
+      error make {msg: $"Sentinel short result too long: '($sentinel_short)'"}
+    }
+
+    if $verbose_flag {
+      let sentinel_short = (do $shorten "<no value>")
+      print $"    '<no value>' shortens to: '($sentinel_short)'"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test32)
+
   print-test-summary $results
   
   let failed = ($results | where {|r| not $r} | length)

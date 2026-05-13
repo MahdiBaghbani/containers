@@ -6,7 +6,7 @@ networks:
 
 services:
   nextcloud-mitmproxy:
-    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v12.2.2}"
     container_name: nextcloud-mitmproxy.docker
     restart: "unless-stopped"
     security_opt:
@@ -27,7 +27,7 @@ services:
       MITM_CA_NAME: "${MITM_CA_NAME:-dockypody}"
 
   nextcloud-firefox:
-    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    image: "${FIREFOX_IMAGE:-firefox:v150.0.0}"
     container_name: nextcloud-firefox.docker
     restart: "unless-stopped"
     security_opt:

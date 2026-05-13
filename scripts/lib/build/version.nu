@@ -39,6 +39,13 @@ use ./order.nu [build-dependency-graph topological-sort-dfs]
 use ./pull.nu [compute-canonical-image-ref]
 use ./hash.nu [compute-service-def-hash-graph]
 
+# Shorten a hash to at most 8 chars for diagnostic display.
+# Safe for any input including Docker sentinel strings like "<no value>".
+def short-hash []: string -> string {
+  let s = $in
+  if ($s | str length) <= 8 { $s } else { $s | str substring 0..7 }
+}
+
 # Filter build order to exclude target service (dependencies only)
 export def filter-to-dependencies-only [
   build_order: list,
@@ -346,7 +353,9 @@ export def build-single-version [
               print $"CI: Dependency '($dep_label)' - found fresh image with matching hash, skipping build"
               true
             } else {
-              print $"CI: Dependency '($dep_label)' - hash mismatch (expected: ($expected_hash | str substring 0..8)..., actual: ($actual_hash | str substring 0..8)...), will auto-build($cache_hint)"
+              let exp_short = ($expected_hash | short-hash)
+              let act_short = ($actual_hash | short-hash)
+              print $"CI: Dependency '($dep_label)' - hash mismatch [exp: ($exp_short)... act: ($act_short)...], will auto-build($cache_hint)"
               false
             }
           }
@@ -412,7 +421,9 @@ export def build-single-version [
       if ($actual_hash | str length) == 0 {
         $stale_deps = ($stale_deps | append {node: $dep_node, reason: "missing or unlabeled"})
       } else if $actual_hash != $expected_hash {
-        $stale_deps = ($stale_deps | append {node: $dep_node, reason: $"hash mismatch (expected: ($expected_hash | str substring 0..8)..., actual: ($actual_hash | str substring 0..8)...)"})
+        let exp_short = ($expected_hash | short-hash)
+        let act_short = ($actual_hash | short-hash)
+        $stale_deps = ($stale_deps | append {node: $dep_node, reason: $"hash mismatch [exp: ($exp_short)... act: ($act_short)...]"})
       }
     }
     

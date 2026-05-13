@@ -6,7 +6,7 @@ networks:
 
 services:
   cypress-mitmproxy:
-    image: "${MITMPROXY_IMAGE:-mitmproxy:v1.0.0}"
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v12.2.2}"
     container_name: cypress-mitmproxy.docker
     restart: "unless-stopped"
     security_opt:
@@ -32,7 +32,7 @@ services:
     #   - "8443:443"
 
   cypress-firefox:
-    image: "${FIREFOX_IMAGE:-firefox:v1.0.0}"
+    image: "${FIREFOX_IMAGE:-firefox:v150.0.0}"
     container_name: cypress-firefox.docker
     restart: "unless-stopped"
     security_opt:
@@ -54,7 +54,7 @@ services:
         condition: service_started
 
   cypress-runner:
-    image: "${CYPRESS_IMAGE:-cypress:v1.0.0-dev}"
+    image: "${CYPRESS_IMAGE:-cypress:v15.14.1-dev}"
     container_name: cypress-runner.docker
     restart: "unless-stopped"
     security_opt:
