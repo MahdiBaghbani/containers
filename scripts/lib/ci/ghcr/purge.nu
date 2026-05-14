@@ -174,7 +174,7 @@ export def purge-service [
     let counted = ($to_delete | length)
     let n_untagged = ($to_delete | where reason == "untagged" | length)
     let n_stale = ($to_delete | where reason == "no desired tags" | length)
-    print --stderr $"($service): ($counted) version(s) to delete - untagged=($n_untagged) stale=($n_stale)"
+    print --stderr $"($service): ($counted) versions to delete - untagged=($n_untagged) stale=($n_stale)"
 
     if $dry_run {
         for v in $to_delete {
