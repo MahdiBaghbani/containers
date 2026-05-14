@@ -46,6 +46,19 @@ def parse_optional_bool_env [var_name: string] {
   $value_str in ["true", "1", "yes"]
 }
 
+# Normalize a truthy/falsy string to bool.
+# Accepts on/1/true/yes -> true, off/0/false/no -> false, anything else -> null.
+def normalize_bool_str [s: string] {
+  let v = ($s | str trim | str downcase)
+  if $v in ["1", "on", "true", "yes"] {
+    true
+  } else if $v in ["0", "off", "false", "no"] {
+    false
+  } else {
+    null
+  }
+}
+
 # Read an OCM invites bool toggle via the unified contacts command.
 # Returns "1" or "0" on success, empty string on failure.
 def get_ocm_invites_option [user: string, option: string] {
@@ -63,11 +76,12 @@ def get_ocm_invites_option [user: string, option: string] {
 
 # Persist an OCM invites bool toggle if it differs from the current value.
 # Uses occ contacts:ocm-invites-config so admins and the hook share one entry point.
+# Idempotence check normalizes on/off and 1/0 to the same canonical bool.
 def set_ocm_invites_option_if_changed [user: string, option: string, enabled: bool] {
-  let desired_str = if $enabled { "1" } else { "0" }
-  let current = (get_ocm_invites_option $user $option)
+  let current_raw = (get_ocm_invites_option $user $option)
+  let current_bool = (normalize_bool_str $current_raw)
   
-  if $current == $desired_str {
+  if $current_bool == $enabled {
     return false
   }
   
@@ -76,6 +90,28 @@ def set_ocm_invites_option_if_changed [user: string, option: string, enabled: bo
     let result = (run_as $user $"php /var/www/html/occ contacts:ocm-invites-config ($option) ($value_arg)" | complete)
     if $result.exit_code == 0 {
       print $"Set ($option) = ($value_arg)"
+      true
+    } else {
+      print $"Warning: Failed to set ($option): exit code ($result.exit_code)"
+      false
+    }
+  } catch {
+    print $"Warning: Failed to set ($option): ($in)"
+    false
+  }
+}
+
+# Persist an OCM invites string option via the unified command if it differs from current.
+# Used for non-bool options such as mesh_providers_service.
+def set_ocm_invites_string_if_changed [user: string, option: string, value: string] {
+  let current = (get_ocm_invites_option $user $option)
+  if $current == $value {
+    return false
+  }
+  try {
+    let result = (run_as $user $"php /var/www/html/occ contacts:ocm-invites-config ($option) ($value)" | complete)
+    if $result.exit_code == 0 {
+      print $"Set ($option) = ($value)"
       true
     } else {
       print $"Warning: Failed to set ($option): exit code ($result.exit_code)"
@@ -131,10 +167,19 @@ def is_mesh_providers_configured [user: string, expected_url: string] {
   }
 }
 
-# Enable OCM invites feature (idempotent)
+# Enable OCM invites feature (idempotent).
+# Prefers the unified contacts:ocm-invites-config command; falls back to the
+# older contacts:enable-ocm-invites for app versions that do not have it yet.
 def enable_ocm_invites [user: string] {
   print "Checking OCM Invites feature availability..."
   
+  # Unified command path (newer app versions)
+  if (command_exists $user "contacts:ocm-invites-config") {
+    set_ocm_invites_option_if_changed $user "ocm_invites_enabled" true
+    return
+  }
+  
+  # Fallback: older app versions that only expose contacts:enable-ocm-invites
   if not (command_exists $user "contacts:enable-ocm-invites") {
     print "Warning: contacts:enable-ocm-invites command not available, skipping OCM Invites enablement"
     return
@@ -160,10 +205,23 @@ def enable_ocm_invites [user: string] {
   }
 }
 
-# Configure mesh providers service URL (idempotent)
+# Configure mesh providers service URL (idempotent).
+# Prefers the unified contacts:ocm-invites-config command; falls back to the
+# older contacts:set-mesh-providers-service for app versions that do not have it.
 def configure_mesh_providers [user: string, url: string] {
   print $"Checking mesh providers service configuration..."
   
+  if not (($url | str starts-with "http://") or ($url | str starts-with "https://")) {
+    print $"Warning: Mesh providers service URL does not start with http:// or https://: ($url)"
+  }
+  
+  # Unified command path (newer app versions)
+  if (command_exists $user "contacts:ocm-invites-config") {
+    set_ocm_invites_string_if_changed $user "mesh_providers_service" $url
+    return
+  }
+  
+  # Fallback: older app versions that only expose contacts:set-mesh-providers-service
   if not (command_exists $user "contacts:set-mesh-providers-service") {
     print "Warning: contacts:set-mesh-providers-service command not available, skipping mesh providers configuration"
     return
@@ -172,10 +230,6 @@ def configure_mesh_providers [user: string, url: string] {
   if (is_mesh_providers_configured $user $url) {
     print $"Mesh providers service already configured with URL: ($url)"
     return
-  }
-  
-  if not (($url | str starts-with "http://") or ($url | str starts-with "https://")) {
-    print $"Warning: Mesh providers service URL does not start with http:// or https://: ($url)"
   }
   
   print $"Configuring mesh providers service: ($url)"

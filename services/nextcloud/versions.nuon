@@ -63,8 +63,8 @@
       "overrides": {
         "sources": {
           "nextcloud": {
-            "url": "https://github.com/MahdiBaghbani/server.git",
-            "ref": "sta-milestone-6/ocm-code-flow"
+            "url": "https://github.com/redblom/nextcloud-server.git",
+            "ref": "move-ocm-invite-accepted-route-impl-to-contacts-app"
           }
         }
       }
