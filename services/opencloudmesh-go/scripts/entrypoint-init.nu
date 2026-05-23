@@ -176,7 +176,7 @@ def setup_ssrf_runtime_route [config_dir: string, partial_dir: string] {
     let host_count = ($peer_hosts | length)
     let cidr_count = ($cidrs | length)
     let suffix_count = ($suffixes | length)
-    print $"[ocmgo-init] SSRF runtime route policy: ($host_count) peer host(s) -> ($cidr_count) CIDR(s), ($suffix_count) suffix(es)"
+    print $"[ocmgo-init] SSRF runtime route policy: ($host_count) peer hosts -> ($cidr_count) CIDRs, ($suffix_count) suffixes"
 }
 
 def --wrapped main [...args] {

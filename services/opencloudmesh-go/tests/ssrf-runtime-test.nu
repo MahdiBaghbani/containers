@@ -276,7 +276,7 @@ def test_inject_ssrf_route_policy_idempotent [] {
     let occurrences = ($content | split row "route_policy" | length) - 1
     if $occurrences != 1 {
         error make {
-            msg: $"FAIL [inject idempotent]: route_policy appears ($occurrences) time(s), expected 1"
+            msg: $"FAIL [inject idempotent]: route_policy appears ($occurrences) times, expected 1"
         }
     }
 
@@ -423,6 +423,27 @@ def test_merged_runtime_contract [] {
     ^rm -rf $tmp
 }
 
+# --- interpolation footgun regression (entrypoint-init.nu summary log) ---
+#
+# Guards against bare (s)/(es) command-substitution footguns inside $"..."
+# strings. Nushell treats any (...) in a string interpolation as a sub-
+# expression, so "host(s)" silently tries to run a command named "s".
+#
+# This test re-asserts the fixed format from setup_ssrf_runtime_route so that
+# any future regression on that exact string is caught before runtime.
+
+def test_summary_log_format [] {
+    let host_count = 2
+    let cidr_count = 3
+    let suffix_count = 1
+    let msg = $"[ocmgo-init] SSRF runtime route policy: ($host_count) peer hosts -> ($cidr_count) CIDRs, ($suffix_count) suffixes"
+    assert_contains "summary log contains host count" $msg "2 peer hosts"
+    assert_contains "summary log contains cidr count" $msg "3 CIDRs"
+    assert_contains "summary log contains suffix count" $msg "1 suffixes"
+    assert_not_contains "summary log no bare (s) footgun" $msg "(s)"
+    assert_not_contains "summary log no bare (es) footgun" $msg "(es)"
+}
+
 def main [] {
     test_parse_peer_hosts_empty
     test_parse_peer_hosts_single
@@ -447,6 +468,8 @@ def main [] {
     test_cleanup_ssrf_runtime_state_is_idempotent
 
     test_merged_runtime_contract
+
+    test_summary_log_format
 
     print "PASS: all ssrf-runtime tests"
 }
