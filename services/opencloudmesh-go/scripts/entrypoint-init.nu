@@ -19,6 +19,14 @@
 
 use ./lib/utils.nu [get_env_or_default]
 use ./lib/merge-partials-ocmgo.nu [merge_partial_configs]
+use ./lib/ssrf-runtime.nu [
+    parse_peer_hosts
+    parse_suffixes
+    resolve_cidrs_for_host
+    write_ssrf_runtime_partial
+    inject_ssrf_route_policy
+    cleanup_ssrf_runtime_state
+]
 
 def write_nsswitch [] {
   "hosts: files dns\n" | save -f /etc/nsswitch.conf
@@ -96,49 +104,79 @@ def validate_mode [] {
   $mode
 }
 
-def validate_ssrf_mode [] {
-  let raw = (get_env_or_default "OCM_GO_SSRF_MODE" "" | str trim)
-  if ($raw | str length) == 0 {
-    return ""
-  }
-
-  let valid = ["strict" "off"]
-  if not ($raw in $valid) {
-    error make { msg: $"OCM_GO_SSRF_MODE must be strict or off; got: ($raw)" }
-  }
-
-  let help_result = (^/app/bin/opencloudmesh-go -h | complete)
-  let help_text = $"($help_result.stdout)($help_result.stderr)"
-  if not ($help_text | str contains "-ssrf-mode") {
-    error make {
-      msg: (
-        [
-          "OCM_GO_SSRF_MODE is set but the installed binary does not support"
-          " -ssrf-mode; bump the image tag to a version that includes this flag"
-        ] | str join
-      )
-    }
-  }
-
-  $raw
-}
-
 def ensure_logfile [] {
   ^touch /var/log/opencloudmesh-go.log
 }
 
-def start_ocm_go [origin: string, mode: string, ssrf_mode: string, admin_user: string, admin_pass: string] {
+def start_ocm_go [origin: string, mode: string, admin_user: string, admin_pass: string] {
   mut command = $"/app/bin/opencloudmesh-go --config /configs/config.toml --public-origin \"($origin)\""
   $command = $command + $" --admin-username \"($admin_user)\" --admin-password \"($admin_pass)\""
   if ($mode | str length) > 0 {
     $command = $command + $" --mode \"($mode)\""
   }
-  if ($ssrf_mode | str length) > 0 {
-    $command = $command + $" -ssrf-mode \"($ssrf_mode)\""
-  }
   $command = $command + " >> /var/log/opencloudmesh-go.log 2>&1 &"
 
   ^sh -c $command
+}
+
+# Resolve route intent envs and, if present, write the runtime SSRF partial
+# and inject the route_policy key into config.toml before merge runs.
+#
+# If neither env is set, the container boots with the strict nested SSRF base
+# config and no active route policy - this is valid and expected.
+#
+# If either env is set, both must yield non-empty lists; otherwise the
+# container fails early rather than writing an invalid partial config.
+def setup_ssrf_runtime_route [config_dir: string, partial_dir: string] {
+    let partial_path = $"($partial_dir)/99-runtime-ssrf.toml"
+    let config_path = $"($config_dir)/config.toml"
+
+    cleanup_ssrf_runtime_state $config_path $partial_path
+
+    let peers_raw = (get_env_or_default "OCM_GO_ROUTE_PEER_HOSTS" "" | str trim)
+    let suffixes_raw = (get_env_or_default "OCM_GO_ROUTE_SUFFIXES" "" | str trim)
+
+    let has_peers = ($peers_raw | str length) > 0
+    let has_suffixes = ($suffixes_raw | str length) > 0
+
+    if (not $has_peers) and (not $has_suffixes) {
+        return
+    }
+
+    let peer_hosts = (parse_peer_hosts $peers_raw)
+    let suffixes = (parse_suffixes $suffixes_raw)
+
+    if ($peer_hosts | is-empty) {
+        error make {
+            msg: "OCM_GO_ROUTE_PEER_HOSTS must be set (non-empty) when OCM_GO_ROUTE_SUFFIXES is provided"
+        }
+    }
+    if ($suffixes | is-empty) {
+        error make {
+            msg: "OCM_GO_ROUTE_SUFFIXES must be set (non-empty) when OCM_GO_ROUTE_PEER_HOSTS is provided"
+        }
+    }
+
+    # Resolve all peer hosts to exact-host CIDRs; fail if any host resolves empty.
+    let cidrs = ($peer_hosts
+        | each {|h| resolve_cidrs_for_host $h}
+        | flatten
+        | uniq
+    )
+
+    if ($cidrs | is-empty) {
+        error make {
+            msg: "DNS resolution yielded no addresses for the provided peer hosts; cannot activate route policy"
+        }
+    }
+
+    write_ssrf_runtime_partial $partial_path $suffixes $cidrs
+    inject_ssrf_route_policy $config_path
+
+    let host_count = ($peer_hosts | length)
+    let cidr_count = ($cidrs | length)
+    let suffix_count = ($suffixes | length)
+    print $"[ocmgo-init] SSRF runtime route policy: ($host_count) peer host(s) -> ($cidr_count) CIDR(s), ($suffix_count) suffix(es)"
 }
 
 def --wrapped main [...args] {
@@ -152,6 +190,8 @@ def --wrapped main [...args] {
   }
 
   ensure_hosts $validated_host
+
+  setup_ssrf_runtime_route "/configs" "/configs/partial"
 
   merge_partial_configs "/configs" "/configs/partial"
 
@@ -169,11 +209,6 @@ def --wrapped main [...args] {
 
   let origin = (resolve_public_origin $validated_host)
   let mode = (validate_mode)
-  let ssrf_mode = (validate_ssrf_mode)
 
-  let ssrf_display = if ($ssrf_mode | str length) > 0 { $ssrf_mode } else { "default" }
-  let ssrf_flag_status = if ($ssrf_mode | str length) > 0 { "applied" } else { "not applied" }
-  print $"[ocmgo-init] ssrf-mode=($ssrf_display) -ssrf-mode flag: ($ssrf_flag_status)"
-
-  start_ocm_go $origin $mode $ssrf_mode $admin_user $admin_pass
+  start_ocm_go $origin $mode $admin_user $admin_pass
 }

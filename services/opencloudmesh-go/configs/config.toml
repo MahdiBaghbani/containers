@@ -1,8 +1,11 @@
 mode = "strict"
+compatibility_scope = "none"
 listen_addr = ":443"
 
-[outbound_http]
-ssrf_mode = "strict"
+[outbound_http.ssrf]
+mode = "strict"
+redirect_mode = "same-host"
+dns_resolution = "all-records"
 
 [tls]
 mode = "static"
