@@ -177,7 +177,7 @@ def main [--verbose] {
         }
       }
       if $svc in $all_deps {
-        error make {msg: $"($svc): service appears in its own transitive deps (cycle)"}
+        error make {msg: $"($svc): service appears in its own transitive deps \(cycle\)"}
       }
     }
     true

@@ -128,7 +128,7 @@ def main [--verbose] {
     
       if $cache_bust == "local" {
         if $verbose_flag {
-          print $"    Using 'local' fallback (no Git)"
+          print $"    Using 'local' fallback \(no Git\)"
         }
       } else {
         if $verbose_flag {
@@ -423,7 +423,7 @@ def main [--verbose] {
       }
     
       if $verbose_flag {
-        print $"    Graph construction successful (would check Docker for existing images in actual build)"
+        print $"    Graph construction successful \(would check Docker for existing images in actual build\)"
       }
     
       true
@@ -538,7 +538,7 @@ def main [--verbose] {
       }
     
       if $verbose_flag {
-        print $"    Graph construction works (flag propagation is handled in build.nu)"
+        print $"    Graph construction works \(flag propagation is handled in build.nu\)"
       }
     
       true
@@ -560,7 +560,7 @@ def main [--verbose] {
       }
     
       if $verbose_flag {
-        print $"    Graph construction works (flag propagation is handled in build.nu)"
+        print $"    Graph construction works \(flag propagation is handled in build.nu\)"
       }
     
       true
@@ -608,7 +608,7 @@ def main [--verbose] {
       }
     
       if $verbose_flag {
-        print $"    Graph construction works (fail-fast is handled in build.nu)"
+        print $"    Graph construction works \(fail-fast is handled in build.nu\)"
       }
     
       true
@@ -630,7 +630,7 @@ def main [--verbose] {
       }
     
       if $verbose_flag {
-        print $"    Graph construction works (continue-on-failure is handled in build.nu)"
+        print $"    Graph construction works \(continue-on-failure is handled in build.nu\)"
       }
     
       true
@@ -675,7 +675,7 @@ def main [--verbose] {
       assert-build-order $build_order $expected_order
     
       if $verbose_flag {
-        print $"    Build order computed (summary format is handled in build.nu)"
+        print $"    Build order computed \(summary format is handled in build.nu\)"
       }
     
       true
@@ -719,7 +719,7 @@ def main [--verbose] {
       }
     
       if $verbose_flag {
-        print $"    Graph construction works (dependency failure handling is in build.nu)"
+        print $"    Graph construction works \(dependency failure handling is in build.nu\)"
       }
     
       true

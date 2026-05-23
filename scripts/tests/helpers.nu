@@ -235,12 +235,12 @@ export def assert-cache-bust-format [
   } else if $expected_format == "hash" {
     # Hash format: alphanumeric, no dashes
     if ($cache_bust | str contains "-") {
-      error make { msg: $"Cache bust format mismatch: expected hash format (no dashes), got: ($cache_bust)" }
+      error make { msg: $"Cache bust format mismatch: expected hash format \(no dashes\), got: ($cache_bust)" }
     }
   } else if $expected_format == "sha" {
     # SHA format: alphanumeric, variable length
     if ($cache_bust | str contains "-") {
-      error make { msg: $"Cache bust format mismatch: expected SHA format (no dashes), got: ($cache_bust)" }
+      error make { msg: $"Cache bust format mismatch: expected SHA format \(no dashes\), got: ($cache_bust)" }
     }
   }
   # "any" format: no validation
