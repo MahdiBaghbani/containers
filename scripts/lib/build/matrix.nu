@@ -188,7 +188,7 @@ export def print-matrix [
     }
     
     if "latest" in ($entry | columns) and $entry.latest {
-      print $"    (marked as latest)"
+      print $"    \(marked as latest\)"
     }
     
     if "tags" in ($entry | columns) {

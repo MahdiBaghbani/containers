@@ -348,7 +348,7 @@ export def validate-version-manifest [
   let latest_versions = ($versions | where {|v| try { $v.latest } catch { false }} == true)
   if ($latest_versions | length) > 1 {
     let latest_names = ($latest_versions | each {|v| $v.name} | str join ", ")
-    $errors = ($errors | append $"Only one version can have 'latest: true' (found: ($latest_names))")
+    $errors = ($errors | append $"Only one version can have 'latest: true' \(found: ($latest_names)\)")
   }
   
   mut version_idx = 0

@@ -109,7 +109,7 @@ export def validate-ca [
         }
         let exp = (check-cert-expiration $service_cert_crt $"Service certificate '($cert_name)'")
         if not ($exp | is-empty) { print $exp }
-        print $"OK: Cert-only mode: Service certificate validated (using public CA)"
+        print "OK: Cert-only mode: Service certificate validated (using public CA)"
         return
     }
 

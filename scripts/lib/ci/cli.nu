@@ -103,7 +103,7 @@ export def ci-cleanup-cache-shards-internal [
 
   if $dry_run {
     if ($repo | str length) == 0 {
-      print --stderr $"DRY-RUN: Would delete caches with keys starting with '($prefix)' (GITHUB_REPOSITORY not set)"
+      print --stderr $"DRY-RUN: Would delete caches with keys starting with '($prefix)' \(GITHUB_REPOSITORY not set\)"
     } else {
       print --stderr $"DRY-RUN: Would delete caches with keys starting with '($prefix)' in repo ($repo)"
     }
@@ -179,7 +179,7 @@ export def ci-cleanup-cache-shards-internal [
     return true
   }
 
-  print --stderr $"Found ($shard_caches | length) shard cache(s) to delete (prefix: '($prefix)')"
+  print --stderr $"Found ($shard_caches | length) shard cache\(s\) to delete \(prefix: '($prefix)'\)"
 
   mut deleted = 0
   mut failed = 0
@@ -282,7 +282,7 @@ export def prepare-node-deps-internal [
   }
 
   if $debug {
-    print --stderr $"DEBUG: Found ($artifacts | length) artifact(s) in run"
+    print --stderr $"DEBUG: Found ($artifacts | length) artifact\(s\) in run"
   }
 
   # Get candidate shards to load based on dep services and target platform
@@ -296,7 +296,7 @@ export def prepare-node-deps-internal [
   }
 
   if $debug {
-    print --stderr $"DEBUG: Will attempt to load ($candidates | length) shard(s)"
+    print --stderr $"DEBUG: Will attempt to load ($candidates | length) shard\(s\)"
   }
 
   # Try to download and load each candidate shard
