@@ -39,11 +39,11 @@ def test_write_nsswitch [] {
       print "  [PASS] write_nsswitch: PASSED"
       return true
     } else {
-      print $"  [FAIL] write_nsswitch: FAILED (content: ($content))"
+      print $"  [FAIL] write_nsswitch: FAILED \(content: ($content)\)"
       return false
     }
   } catch {
-    print $"  [FAIL] write_nsswitch: FAILED (error: ($in))"
+      print $"  [FAIL] write_nsswitch: FAILED \(error: ($in)\)"
     return false
   }
 }
@@ -201,7 +201,7 @@ def test_ensure_logfile [] {
     print "  [PASS] ensure_logfile: PASSED (function executed)"
     return true
   } catch {
-    print $"  [FAIL] ensure_logfile: FAILED (error: ($in))"
+    print $"  [FAIL] ensure_logfile: FAILED \(error: ($in)\)"
     return false
   }
 }

@@ -40,7 +40,7 @@ def test_replace_in_file [] {
     rm -f $test_file
     return true
   } else {
-    print $"  [FAIL] replace_in_file: FAILED (expected: ($expected), got: ($content))"
+    print $"  [FAIL] replace_in_file: FAILED \(expected: ($expected), got: ($content)\)"
     rm -f $test_file
     return false
   }
@@ -59,7 +59,7 @@ def test_validate_placeholder [] {
     print "  [PASS] Simple placeholder: PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Simple placeholder: FAILED (got: " + ($result1 | to json) + ")"
+    print ("  [FAIL] Simple placeholder: FAILED (got: " + ($result1 | to json) + ")")
     $failed = ($failed + 1)
   }
   
@@ -69,7 +69,7 @@ def test_validate_placeholder [] {
     print "  [PASS] Placeholder with subname: PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Placeholder with subname: FAILED (got: " + ($result2 | to json) + ")"
+    print ("  [FAIL] Placeholder with subname: FAILED (got: " + ($result2 | to json) + ")")
     $failed = ($failed + 1)
   }
   
@@ -79,7 +79,7 @@ def test_validate_placeholder [] {
     print "  [PASS] Placeholder with default: PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Placeholder with default: FAILED (got: " + ($result3 | to json) + ")"
+    print ("  [FAIL] Placeholder with default: FAILED (got: " + ($result3 | to json) + ")")
     $failed = ($failed + 1)
   }
   
@@ -89,7 +89,7 @@ def test_validate_placeholder [] {
     print "  [PASS] Placeholder with subname and default: PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Placeholder with subname and default: FAILED (got: " + ($result4 | to json) + ")"
+    print ("  [FAIL] Placeholder with subname and default: FAILED (got: " + ($result4 | to json) + ")")
     $failed = ($failed + 1)
   }
   
@@ -99,7 +99,7 @@ def test_validate_placeholder [] {
     print "  [PASS] Invalid placeholder (no prefix): PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Invalid placeholder (no prefix): FAILED (should be null, got: " + ($result5 | to json) + ")"
+    print $"  [FAIL] Invalid placeholder \(no prefix\): FAILED \(should be null, got: ($result5 | to json)\)"
     $failed = ($failed + 1)
   }
   
@@ -120,7 +120,7 @@ def test_get_env_or_default [] {
     print "  [PASS] Existing env var: PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Existing env var: FAILED (expected: test-value, got: ($result1))"
+    print $"  [FAIL] Existing env var: FAILED \(expected: test-value, got: ($result1)\)"
     $failed = ($failed + 1)
   }
   
@@ -130,7 +130,7 @@ def test_get_env_or_default [] {
     print "  [PASS] Non-existing env var: PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Non-existing env var: FAILED (expected: default-value, got: ($result2))"
+    print $"  [FAIL] Non-existing env var: FAILED \(expected: default-value, got: ($result2)\)"
     $failed = ($failed + 1)
   }
   
@@ -140,7 +140,7 @@ def test_get_env_or_default [] {
     print "  [PASS] Empty default: PASSED"
     $passed = ($passed + 1)
   } else {
-    print $"  [FAIL] Empty default: FAILED (expected: empty, got: ($result3))"
+    print $"  [FAIL] Empty default: FAILED \(expected: empty, got: ($result3)\)"
     $failed = ($failed + 1)
   }
   
