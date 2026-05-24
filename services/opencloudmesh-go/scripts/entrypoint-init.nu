@@ -20,9 +20,8 @@
 use ./lib/utils.nu [get_env_or_default]
 use ./lib/merge-partials-ocmgo.nu [merge_partial_configs]
 use ./lib/ssrf-runtime.nu [
-    parse_peer_hosts
+    parse_private_cidrs
     parse_suffixes
-    resolve_cidrs_for_host
     write_ssrf_runtime_partial
     inject_ssrf_route_policy
     cleanup_ssrf_runtime_state
@@ -127,56 +126,52 @@ def start_ocm_go [origin: string, mode: string, admin_user: string, admin_pass: 
 #
 # If either env is set, both must yield non-empty lists; otherwise the
 # container fails early rather than writing an invalid partial config.
+# CIDRs are taken directly from OCM_GO_ROUTE_PRIVATE_CIDRS (topology-owned,
+# deterministic /24 per run); no DNS resolution is performed at boot.
 def setup_ssrf_runtime_route [config_dir: string, partial_dir: string] {
     let partial_path = $"($partial_dir)/99-runtime-ssrf.toml"
     let config_path = $"($config_dir)/config.toml"
 
     cleanup_ssrf_runtime_state $config_path $partial_path
 
-    let peers_raw = (get_env_or_default "OCM_GO_ROUTE_PEER_HOSTS" "" | str trim)
+    let cidrs_raw = (get_env_or_default "OCM_GO_ROUTE_PRIVATE_CIDRS" "" | str trim)
     let suffixes_raw = (get_env_or_default "OCM_GO_ROUTE_SUFFIXES" "" | str trim)
 
-    let has_peers = ($peers_raw | str length) > 0
+    let has_cidrs = ($cidrs_raw | str length) > 0
     let has_suffixes = ($suffixes_raw | str length) > 0
 
-    if (not $has_peers) and (not $has_suffixes) {
+    if (not $has_cidrs) and (not $has_suffixes) {
         return
     }
 
-    let peer_hosts = (parse_peer_hosts $peers_raw)
+    let cidrs = (parse_private_cidrs $cidrs_raw)
     let suffixes = (parse_suffixes $suffixes_raw)
 
-    if ($peer_hosts | is-empty) {
+    if ($cidrs | is-empty) {
         error make {
-            msg: "OCM_GO_ROUTE_PEER_HOSTS must be set (non-empty) when OCM_GO_ROUTE_SUFFIXES is provided"
+            msg: (if $has_cidrs {
+                "OCM_GO_ROUTE_PRIVATE_CIDRS is set but produced no valid entries (value parsed to an empty list)"
+            } else {
+                "OCM_GO_ROUTE_PRIVATE_CIDRS must be set (non-empty) when OCM_GO_ROUTE_SUFFIXES is provided"
+            })
         }
     }
     if ($suffixes | is-empty) {
         error make {
-            msg: "OCM_GO_ROUTE_SUFFIXES must be set (non-empty) when OCM_GO_ROUTE_PEER_HOSTS is provided"
-        }
-    }
-
-    # Resolve all peer hosts to exact-host CIDRs; fail if any host resolves empty.
-    let cidrs = ($peer_hosts
-        | each {|h| resolve_cidrs_for_host $h}
-        | flatten
-        | uniq
-    )
-
-    if ($cidrs | is-empty) {
-        error make {
-            msg: "DNS resolution yielded no addresses for the provided peer hosts; cannot activate route policy"
+            msg: (if $has_suffixes {
+                "OCM_GO_ROUTE_SUFFIXES is set but produced no valid entries (value parsed to an empty list)"
+            } else {
+                "OCM_GO_ROUTE_SUFFIXES must be set (non-empty) when OCM_GO_ROUTE_PRIVATE_CIDRS is provided"
+            })
         }
     }
 
     write_ssrf_runtime_partial $partial_path $suffixes $cidrs
     inject_ssrf_route_policy $config_path
 
-    let host_count = ($peer_hosts | length)
     let cidr_count = ($cidrs | length)
     let suffix_count = ($suffixes | length)
-    print $"[ocmgo-init] SSRF runtime route policy: ($host_count) peer hosts -> ($cidr_count) CIDRs, ($suffix_count) suffixes"
+    print $"[ocmgo-init] SSRF runtime route policy: ($cidr_count) CIDRs, ($suffix_count) suffixes"
 }
 
 def --wrapped main [...args] {

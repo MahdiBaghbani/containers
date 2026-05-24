@@ -28,113 +28,140 @@
 #     [outbound_http.ssrf.route_policies.runtime] sub-table to the partial
 #     file, which is appended cleanly by merge_partial_configs.
 
-# Parse one peer host entry from OCM_GO_ROUTE_PEER_HOSTS.
-# Locked contract: accept only "host" or "host:443".
-def parse_peer_host_entry [entry: string] {
-    let trimmed = ($entry | str trim)
-    let parts = ($trimmed | split row ":")
-
-    if ($trimmed | str length) == 0 {
-        return ""
-    }
-
-    if ($parts | length) == 1 {
-        return $trimmed
-    }
-
-    if ($parts | length) == 2 {
-        let host = ($parts | first | str trim)
-        let port = ($parts | last | str trim)
-
-        if ($host | str length) == 0 {
-            error make {
-                msg: $"Invalid peer host entry '($trimmed)': expected host or host:443"
-            }
-        }
-
-        if $port != "443" {
-            error make {
-                msg: $"Invalid peer host entry '($trimmed)': only host or host:443 is allowed"
-            }
-        }
-
-        return $host
-    }
-
-    error make {
-        msg: $"Invalid peer host entry '($trimmed)': expected host or host:443"
-    }
-}
-
-# Parse OCM_GO_ROUTE_PEER_HOSTS value into a list of hostnames.
-# Input is comma-separated; each entry may be only "host" or "host:443".
-export def parse_peer_hosts [env_val: string]: nothing -> list<string> {
+# Parse OCM_GO_ROUTE_PRIVATE_CIDRS into a validated list of CIDR strings.
+# Input is comma-separated; each entry must be a well-formed CIDR range.
+# Bare IP literals (no "/") are rejected to keep allow_ip_literals = false
+# semantics consistent between the env and the generated partial.
+# Rejects malformed address/prefix, out-of-range prefix, invalid IPv4 octets,
+# and characters unsafe for TOML inline string quoting (", \, newlines).
+export def parse_private_cidrs [env_val: string]: nothing -> list<string> {
     if ($env_val | str trim | str length) == 0 {
         return []
     }
 
-    let entries = ($env_val | split row ",")
-    mut hosts = []
+    let entries = ($env_val
+        | split row ","
+        | each {|s| $s | str trim}
+        | where {|s| ($s | str length) > 0}
+    )
 
-    for entry in $entries {
-        let host = (parse_peer_host_entry $entry)
-        if ($host | str length) > 0 {
-            $hosts = ($hosts | append $host)
+    mut result = []
+    for s in $entries {
+        # Reject chars that would break TOML inline string quoting
+        let has_dquote = ($s | str contains "\"")
+        let has_bslash = ($s | str contains "\\")
+        let has_nl = (($s | str contains "\n") or ($s | str contains "\r"))
+        if ($has_dquote or $has_bslash or $has_nl) {
+            error make {
+                msg: $"Invalid CIDR entry '($s)': contains unsafe characters"
+            }
         }
-    }
 
-    $hosts
+        if not ($s | str contains "/") {
+            error make {
+                msg: $"Invalid CIDR entry '($s)': must be a CIDR range such as 10.1.2.0/24, not a bare IP literal"
+            }
+        }
+
+        let slash_parts = ($s | split row "/")
+        if ($slash_parts | length) != 2 {
+            error make {
+                msg: $"Invalid CIDR entry '($s)': malformed CIDR, expected address/prefix"
+            }
+        }
+
+        let addr = ($slash_parts | get 0)
+        let prefix_str = ($slash_parts | get 1)
+
+        if ($addr | str length) == 0 {
+            error make {
+                msg: $"Invalid CIDR entry '($s)': missing address before '/'"
+            }
+        }
+
+        if ($prefix_str | str length) == 0 {
+            error make {
+                msg: $"Invalid CIDR entry '($s)': missing prefix length after '/'"
+            }
+        }
+
+        let prefix = (try {
+            $prefix_str | into int
+        } catch {
+            error make {
+                msg: $"Invalid CIDR entry '($s)': prefix '($prefix_str)' is not a number"
+            }
+        })
+
+        let is_ipv6 = ($addr | str contains ":")
+        if $is_ipv6 {
+            if ($prefix < 0 or $prefix > 128) {
+                error make {
+                    msg: $"Invalid CIDR entry '($s)': IPv6 prefix ($prefix) out of range 0..128"
+                }
+            }
+        } else {
+            if ($prefix < 0 or $prefix > 32) {
+                error make {
+                    msg: $"Invalid CIDR entry '($s)': IPv4 prefix ($prefix) out of range 0..32"
+                }
+            }
+            let octets = ($addr | split row ".")
+            if ($octets | length) != 4 {
+                error make {
+                    msg: $"Invalid CIDR entry '($s)': IPv4 address requires exactly 4 octets, got ($octets | length)"
+                }
+            }
+            for octet in $octets {
+                let n = (try {
+                    $octet | into int
+                } catch {
+                    error make {
+                        msg: $"Invalid CIDR entry '($s)': IPv4 octet '($octet)' is not a number"
+                    }
+                })
+                if ($n < 0 or $n > 255) {
+                    error make {
+                        msg: $"Invalid CIDR entry '($s)': IPv4 octet ($n) out of range 0..255"
+                    }
+                }
+            }
+        }
+
+        $result = ($result | append $s)
+    }
+    $result
 }
 
-# Parse OCM_GO_ROUTE_SUFFIXES value into a list of domain suffixes.
-# Input is comma-separated plain strings.
+# Parse OCM_GO_ROUTE_SUFFIXES value into a list of domain suffix strings.
+# Input is comma-separated; rejects characters unsafe for TOML inline string
+# quoting (", \, newlines) so entries can be embedded safely in the partial.
 export def parse_suffixes [env_val: string]: nothing -> list<string> {
     if ($env_val | str trim | str length) == 0 {
         return []
     }
 
-    $env_val
+    let entries = ($env_val
         | split row ","
         | each {|s| $s | str trim}
         | where {|s| ($s | str length) > 0}
-}
-
-# Resolve a single hostname to exact-host CIDRs via getent ahosts.
-# Returns /32 for IPv4 addresses and /128 for IPv6 addresses.
-# Fails clearly if resolution yields no addresses.
-export def resolve_cidrs_for_host [hostname: string]: nothing -> list<string> {
-    let result = (try {
-        ^getent ahosts $hostname | complete
-    } catch {
-        {exit_code: 1, stdout: "", stderr: "getent not available"}
-    })
-
-    if $result.exit_code != 0 {
-        error make {
-            msg: $"DNS resolution failed for '($hostname)': ($result.stderr | str trim)"
-        }
-    }
-
-    let ips = ($result.stdout
-        | lines
-        | where {|line| ($line | str trim | str length) > 0}
-        | each {|line|
-            $line | str trim | split row --regex '\s+' | first
-        }
-        | uniq
     )
 
-    if ($ips | is-empty) {
-        error make {msg: $"DNS resolution yielded no addresses for '($hostname)'"}
-    }
-
-    $ips | each {|ip|
-        if ($ip | str contains ":") {
-            $"($ip)/128"
-        } else {
-            $"($ip)/32"
+    mut result = []
+    for s in $entries {
+        # Reject chars that would break TOML inline string quoting
+        let has_dquote = ($s | str contains "\"")
+        let has_bslash = ($s | str contains "\\")
+        let has_nl = (($s | str contains "\n") or ($s | str contains "\r"))
+        if ($has_dquote or $has_bslash or $has_nl) {
+            error make {
+                msg: $"Invalid suffix entry '($s)': contains unsafe characters"
+            }
         }
+
+        $result = ($result | append $s)
     }
+    $result
 }
 
 # Build the TOML text for the runtime SSRF partial (internal helper).
@@ -175,7 +202,7 @@ export def write_ssrf_runtime_partial [
     }
     if ($cidrs | is-empty) {
         error make {
-            msg: "SSRF route policy requires non-empty allow_private_cidrs (peer host DNS yielded nothing)"
+            msg: "SSRF route policy requires non-empty allow_private_cidrs (set OCM_GO_ROUTE_PRIVATE_CIDRS)"
         }
     }
 
