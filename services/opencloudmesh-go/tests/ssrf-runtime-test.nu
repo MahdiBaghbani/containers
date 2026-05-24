@@ -22,7 +22,7 @@
 # All tests pass silently; any failure prints a message and exits non-zero.
 
 use ../scripts/lib/ssrf-runtime.nu [
-    parse_peer_hosts
+    parse_private_cidrs
     parse_suffixes
     write_ssrf_runtime_partial
     inject_ssrf_route_policy
@@ -76,43 +76,155 @@ def assert_throws_contains [label: string, thunk: closure, needle: string] {
     }
 }
 
-# --- parse_peer_hosts ---
+# --- parse_private_cidrs ---
 
-def test_parse_peer_hosts_empty [] {
-    let r = (parse_peer_hosts "")
-    assert_eq "parse_peer_hosts empty" ($r | length) 0
+def test_parse_private_cidrs_empty [] {
+    let r = (parse_private_cidrs "")
+    assert_eq "parse_private_cidrs empty" ($r | length) 0
 }
 
-def test_parse_peer_hosts_single [] {
-    let r = (parse_peer_hosts "nextcloud.docker")
-    assert_eq "parse_peer_hosts single length" ($r | length) 1
-    assert_eq "parse_peer_hosts single value" ($r | get 0) "nextcloud.docker"
+def test_parse_private_cidrs_single [] {
+    let r = (parse_private_cidrs "10.1.2.0/24")
+    assert_eq "parse_private_cidrs single length" ($r | length) 1
+    assert_eq "parse_private_cidrs single value" ($r | get 0) "10.1.2.0/24"
 }
 
-def test_parse_peer_hosts_with_port [] {
-    let r = (parse_peer_hosts "nextcloud.docker:443")
-    assert_eq "parse_peer_hosts port-strip length" ($r | length) 1
-    assert_eq "parse_peer_hosts port stripped" ($r | get 0) "nextcloud.docker"
+def test_parse_private_cidrs_multi [] {
+    let r = (parse_private_cidrs "10.1.2.0/24, 10.3.4.0/24 ,192.168.0.0/16")
+    assert_eq "parse_private_cidrs multi length" ($r | length) 3
+    assert_eq "parse_private_cidrs multi[0]" ($r | get 0) "10.1.2.0/24"
+    assert_eq "parse_private_cidrs multi[1]" ($r | get 1) "10.3.4.0/24"
+    assert_eq "parse_private_cidrs multi[2]" ($r | get 2) "192.168.0.0/16"
 }
 
-def test_parse_peer_hosts_rejects_non_443_port [] {
+def test_parse_private_cidrs_whitespace_only [] {
+    let r = (parse_private_cidrs "   ")
+    assert_eq "parse_private_cidrs whitespace-only" ($r | length) 0
+}
+
+def test_parse_private_cidrs_rejects_bare_ip [] {
     (assert_throws_contains
-        "parse_peer_hosts rejects non-443 port"
-        {|| parse_peer_hosts "nextcloud.docker:8443" }
-        "only host or host:443 is allowed")
+        "parse_private_cidrs rejects bare IP"
+        {|| parse_private_cidrs "10.1.2.3" }
+        "must be a CIDR range")
 }
 
-def test_parse_peer_hosts_multi [] {
-    let r = (parse_peer_hosts "host1.docker,host2.docker:443, host3.docker ")
-    assert_eq "parse_peer_hosts multi length" ($r | length) 3
-    assert_eq "parse_peer_hosts multi[0]" ($r | get 0) "host1.docker"
-    assert_eq "parse_peer_hosts multi[1]" ($r | get 1) "host2.docker"
-    assert_eq "parse_peer_hosts multi[2] trimmed" ($r | get 2) "host3.docker"
+def test_parse_private_cidrs_rejects_bare_ip_in_list [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects bare IP in list"
+        {|| parse_private_cidrs "10.1.2.0/24,192.168.1.1" }
+        "must be a CIDR range")
 }
 
-def test_parse_peer_hosts_whitespace_only [] {
-    let r = (parse_peer_hosts "   ")
-    assert_eq "parse_peer_hosts whitespace-only" ($r | length) 0
+def test_parse_private_cidrs_rejects_missing_address [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects missing address"
+        {|| parse_private_cidrs "/24" }
+        "missing address before")
+}
+
+def test_parse_private_cidrs_rejects_missing_prefix [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects missing prefix"
+        {|| parse_private_cidrs "10.0.0.0/" }
+        "missing prefix length after")
+}
+
+def test_parse_private_cidrs_rejects_non_numeric_prefix [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects non-numeric prefix"
+        {|| parse_private_cidrs "10.0.0.0/abc" }
+        "not a number")
+}
+
+def test_parse_private_cidrs_rejects_ipv4_prefix_too_high [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects IPv4 prefix > 32"
+        {|| parse_private_cidrs "10.0.0.0/33" }
+        "out of range")
+}
+
+def test_parse_private_cidrs_rejects_ipv4_prefix_negative [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects IPv4 prefix negative"
+        {|| parse_private_cidrs "10.0.0.0/-1" }
+        "out of range")
+}
+
+def test_parse_private_cidrs_rejects_ipv6_prefix_too_high [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects IPv6 prefix > 128"
+        {|| parse_private_cidrs "::1/129" }
+        "out of range")
+}
+
+def test_parse_private_cidrs_rejects_invalid_ipv4_octet [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects IPv4 octet > 255"
+        {|| parse_private_cidrs "10.0.300.0/24" }
+        "out of range")
+}
+
+def test_parse_private_cidrs_rejects_non_numeric_octet [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects non-numeric IPv4 octet"
+        {|| parse_private_cidrs "10.0.abc.0/24" }
+        "not a number")
+}
+
+def test_parse_private_cidrs_rejects_too_few_octets [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects IPv4 with 3 octets"
+        {|| parse_private_cidrs "10.0.0/24" }
+        "4 octets")
+}
+
+def test_parse_private_cidrs_rejects_unsafe_double_quote [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects double-quote in entry"
+        {|| parse_private_cidrs '10.0.0.0"/24' }
+        "unsafe characters")
+}
+
+def test_parse_private_cidrs_rejects_backslash [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects backslash in entry"
+        {|| parse_private_cidrs "10.0.0.0\\/24" }
+        "unsafe characters")
+}
+
+def test_parse_private_cidrs_rejects_newline [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects newline in entry"
+        {|| parse_private_cidrs "10.0.0.0\n/24" }
+        "unsafe characters")
+}
+
+def test_parse_private_cidrs_rejects_carriage_return [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects carriage-return in entry"
+        {|| parse_private_cidrs "10.0.0.0\r/24" }
+        "unsafe characters")
+}
+
+# Commas-only input parses to empty (no error); this is the precondition that
+# triggers the "set but produced no valid entries" message in entrypoint-init.nu.
+def test_parse_private_cidrs_commas_only_parses_empty [] {
+    let r = (parse_private_cidrs ",,,")
+    assert_eq "parse_private_cidrs commas-only parses to empty" ($r | length) 0
+}
+
+def test_parse_private_cidrs_rejects_multiple_slashes [] {
+    (assert_throws_contains
+        "parse_private_cidrs rejects entry with multiple slashes"
+        {|| parse_private_cidrs "10.0.0.0/24/extra" }
+        "malformed CIDR")
+}
+
+def test_parse_private_cidrs_accepts_ipv6 [] {
+    let r = (parse_private_cidrs "2001:db8::/32")
+    assert_eq "parse_private_cidrs accepts IPv6 length" ($r | length) 1
+    assert_eq "parse_private_cidrs accepts IPv6 value" ($r | get 0) "2001:db8::/32"
 }
 
 # --- parse_suffixes ---
@@ -134,6 +246,34 @@ def test_parse_suffixes_multi [] {
     assert_eq "parse_suffixes multi[0]" ($r | get 0) ".docker"
     assert_eq "parse_suffixes multi[1]" ($r | get 1) ".local"
     assert_eq "parse_suffixes multi[2]" ($r | get 2) "example.com"
+}
+
+def test_parse_suffixes_rejects_double_quote [] {
+    (assert_throws_contains
+        "parse_suffixes rejects double-quote in entry"
+        {|| parse_suffixes '.docker"evil' }
+        "unsafe characters")
+}
+
+def test_parse_suffixes_rejects_backslash [] {
+    (assert_throws_contains
+        "parse_suffixes rejects backslash in entry"
+        {|| parse_suffixes ".docker\\evil" }
+        "unsafe characters")
+}
+
+def test_parse_suffixes_rejects_newline [] {
+    (assert_throws_contains
+        "parse_suffixes rejects newline in entry"
+        {|| parse_suffixes ".docker\nevil" }
+        "unsafe characters")
+}
+
+def test_parse_suffixes_rejects_carriage_return [] {
+    (assert_throws_contains
+        "parse_suffixes rejects carriage-return in entry"
+        {|| parse_suffixes ".docker\revil" }
+        "unsafe characters")
 }
 
 # --- write_ssrf_runtime_partial ---
@@ -210,6 +350,18 @@ def test_write_ssrf_runtime_partial_rejects_empty_cidrs [] {
     if not $caught {
         error make {msg: "FAIL [write empty cidrs]: expected error, got none"}
     }
+
+    ^rm -rf $tmp
+}
+
+def test_write_ssrf_runtime_partial_empty_cidrs_error_text [] {
+    let tmp = (^mktemp -d)
+    let path = $"($tmp)/99-runtime-ssrf.toml"
+
+    (assert_throws_contains
+        "write empty cidrs error mentions OCM_GO_ROUTE_PRIVATE_CIDRS"
+        {|| write_ssrf_runtime_partial $path [".docker"] [] }
+        "OCM_GO_ROUTE_PRIVATE_CIDRS")
 
     ^rm -rf $tmp
 }
@@ -429,15 +581,13 @@ def test_merged_runtime_contract [] {
 # strings. Nushell treats any (...) in a string interpolation as a sub-
 # expression, so "host(s)" silently tries to run a command named "s".
 #
-# This test re-asserts the fixed format from setup_ssrf_runtime_route so that
-# any future regression on that exact string is caught before runtime.
+# The CIDR-based setup no longer has a "peer hosts" count in the message;
+# this test re-asserts the format so regressions are caught before runtime.
 
 def test_summary_log_format [] {
-    let host_count = 2
     let cidr_count = 3
     let suffix_count = 1
-    let msg = $"[ocmgo-init] SSRF runtime route policy: ($host_count) peer hosts -> ($cidr_count) CIDRs, ($suffix_count) suffixes"
-    assert_contains "summary log contains host count" $msg "2 peer hosts"
+    let msg = $"[ocmgo-init] SSRF runtime route policy: ($cidr_count) CIDRs, ($suffix_count) suffixes"
     assert_contains "summary log contains cidr count" $msg "3 CIDRs"
     assert_contains "summary log contains suffix count" $msg "1 suffixes"
     assert_not_contains "summary log no bare (s) footgun" $msg "(s)"
@@ -445,21 +595,42 @@ def test_summary_log_format [] {
 }
 
 def main [] {
-    test_parse_peer_hosts_empty
-    test_parse_peer_hosts_single
-    test_parse_peer_hosts_with_port
-    test_parse_peer_hosts_rejects_non_443_port
-    test_parse_peer_hosts_multi
-    test_parse_peer_hosts_whitespace_only
+    test_parse_private_cidrs_empty
+    test_parse_private_cidrs_single
+    test_parse_private_cidrs_multi
+    test_parse_private_cidrs_whitespace_only
+    test_parse_private_cidrs_rejects_bare_ip
+    test_parse_private_cidrs_rejects_bare_ip_in_list
+    test_parse_private_cidrs_rejects_missing_address
+    test_parse_private_cidrs_rejects_missing_prefix
+    test_parse_private_cidrs_rejects_non_numeric_prefix
+    test_parse_private_cidrs_rejects_ipv4_prefix_too_high
+    test_parse_private_cidrs_rejects_ipv4_prefix_negative
+    test_parse_private_cidrs_rejects_ipv6_prefix_too_high
+    test_parse_private_cidrs_rejects_invalid_ipv4_octet
+    test_parse_private_cidrs_rejects_non_numeric_octet
+    test_parse_private_cidrs_rejects_too_few_octets
+    test_parse_private_cidrs_rejects_unsafe_double_quote
+    test_parse_private_cidrs_rejects_backslash
+    test_parse_private_cidrs_rejects_newline
+    test_parse_private_cidrs_rejects_carriage_return
+    test_parse_private_cidrs_commas_only_parses_empty
+    test_parse_private_cidrs_rejects_multiple_slashes
+    test_parse_private_cidrs_accepts_ipv6
 
     test_parse_suffixes_empty
     test_parse_suffixes_single
     test_parse_suffixes_multi
+    test_parse_suffixes_rejects_double_quote
+    test_parse_suffixes_rejects_backslash
+    test_parse_suffixes_rejects_newline
+    test_parse_suffixes_rejects_carriage_return
 
     test_write_ssrf_runtime_partial_content
     test_write_ssrf_runtime_partial_creates_dir
     test_write_ssrf_runtime_partial_rejects_empty_suffixes
     test_write_ssrf_runtime_partial_rejects_empty_cidrs
+    test_write_ssrf_runtime_partial_empty_cidrs_error_text
 
     test_inject_ssrf_route_policy_adds_key
     test_inject_ssrf_route_policy_idempotent
