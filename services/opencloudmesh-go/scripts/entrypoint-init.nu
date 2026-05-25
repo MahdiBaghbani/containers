@@ -128,7 +128,7 @@ def start_ocm_go [origin: string, mode: string, admin_user: string, admin_pass: 
 # container fails early rather than writing an invalid partial config.
 # CIDRs are taken directly from OCM_GO_ROUTE_PRIVATE_CIDRS (topology-owned,
 # deterministic /24 per run); no DNS resolution is performed at boot.
-def setup_ssrf_runtime_route [config_dir: string, partial_dir: string] {
+export def setup_ssrf_runtime_route [config_dir: string, partial_dir: string] {
     let partial_path = $"($partial_dir)/99-runtime-ssrf.toml"
     let config_path = $"($config_dir)/config.toml"
 

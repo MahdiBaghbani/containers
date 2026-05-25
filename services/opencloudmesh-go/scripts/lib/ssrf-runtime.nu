@@ -28,12 +28,27 @@
 #     [outbound_http.ssrf.route_policies.runtime] sub-table to the partial
 #     file, which is appended cleanly by merge_partial_configs.
 
+# Reject characters that break TOML inline string quoting: double-quote,
+# backslash, and line endings (\n, \r).
+def reject_toml_unsafe [s: string, label: string]: nothing -> nothing {
+    let has_dquote = ($s | str contains "\"")
+    let has_bslash = ($s | str contains "\\")
+    let has_nl = (($s | str contains "\n") or ($s | str contains "\r"))
+    if ($has_dquote or $has_bslash or $has_nl) {
+        error make {
+            msg: $"Invalid ($label) entry '($s)': contains unsafe characters"
+        }
+    }
+}
+
 # Parse OCM_GO_ROUTE_PRIVATE_CIDRS into a validated list of CIDR strings.
-# Input is comma-separated; each entry must be a well-formed CIDR range.
+# Input is comma-separated; each entry must be a CIDR range with "/".
 # Bare IP literals (no "/") are rejected to keep allow_ip_literals = false
 # semantics consistent between the env and the generated partial.
-# Rejects malformed address/prefix, out-of-range prefix, invalid IPv4 octets,
-# and characters unsafe for TOML inline string quoting (", \, newlines).
+# IPv4: validates octet count, numeric octets in 0..255, prefix in 0..32.
+# IPv6: detected by ":" presence; only the prefix range (0..128) is checked;
+# the address format is not further validated.
+# Also rejects characters unsafe for TOML inline string quoting (", \, newlines).
 export def parse_private_cidrs [env_val: string]: nothing -> list<string> {
     if ($env_val | str trim | str length) == 0 {
         return []
@@ -47,15 +62,7 @@ export def parse_private_cidrs [env_val: string]: nothing -> list<string> {
 
     mut result = []
     for s in $entries {
-        # Reject chars that would break TOML inline string quoting
-        let has_dquote = ($s | str contains "\"")
-        let has_bslash = ($s | str contains "\\")
-        let has_nl = (($s | str contains "\n") or ($s | str contains "\r"))
-        if ($has_dquote or $has_bslash or $has_nl) {
-            error make {
-                msg: $"Invalid CIDR entry '($s)': contains unsafe characters"
-            }
-        }
+        reject_toml_unsafe $s "CIDR"
 
         if not ($s | str contains "/") {
             error make {
@@ -136,6 +143,7 @@ export def parse_private_cidrs [env_val: string]: nothing -> list<string> {
 # Parse OCM_GO_ROUTE_SUFFIXES value into a list of domain suffix strings.
 # Input is comma-separated; rejects characters unsafe for TOML inline string
 # quoting (", \, newlines) so entries can be embedded safely in the partial.
+# No structural validation beyond unsafe-character rejection.
 export def parse_suffixes [env_val: string]: nothing -> list<string> {
     if ($env_val | str trim | str length) == 0 {
         return []
@@ -149,16 +157,7 @@ export def parse_suffixes [env_val: string]: nothing -> list<string> {
 
     mut result = []
     for s in $entries {
-        # Reject chars that would break TOML inline string quoting
-        let has_dquote = ($s | str contains "\"")
-        let has_bslash = ($s | str contains "\\")
-        let has_nl = (($s | str contains "\n") or ($s | str contains "\r"))
-        if ($has_dquote or $has_bslash or $has_nl) {
-            error make {
-                msg: $"Invalid suffix entry '($s)': contains unsafe characters"
-            }
-        }
-
+        reject_toml_unsafe $s "suffix"
         $result = ($result | append $s)
     }
     $result
