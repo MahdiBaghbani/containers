@@ -4,10 +4,14 @@ listen_addr = ":443"
 
 [outbound_http.ssrf]
 mode = "strict"
-redirect_mode = "same-host"
-dns_resolution = "all-records"
 
 [tls]
 mode = "static"
 cert_file = "/tls/ocmgo.crt"
 key_file = "/tls/ocmgo.key"
+
+[http.services.api]
+allowed_paths = ["/tmp", "/data"]
+
+[http.services.ui.wayf]
+enabled = true
