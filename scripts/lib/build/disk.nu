@@ -25,6 +25,80 @@ const TOP_N_LIMIT = 20
 const DU_DEPTH = 2
 const LOW_DISK_THRESHOLD_GB = 1.0
 
+# Parse a single `df -h` data line into typed columns.
+# Returns null for the header row or any line that is not a 6-column data row.
+# Mount is taken as the explicit "Mounted on" column, never matched by substring.
+def parse-df-line [line: string] {
+  let parts = ($line | split row -r '\s+' | where {|p| ($p | str length) > 0})
+  # Data rows have exactly: Filesystem Size Used Avail Use% Mounted
+  if ($parts | length) < 6 {
+    return null
+  }
+  # Skip the header row (first column literally "Filesystem")
+  if ($parts | get 0) == "Filesystem" {
+    return null
+  }
+  {
+    filesystem: ($parts | get 0),
+    size: ($parts | get 1),
+    used: ($parts | get 2),
+    avail: ($parts | get 3),
+    use_pct: ($parts | get 4),
+    mount: ($parts | get 5)
+  }
+}
+
+# Parse all `df -h` data lines into a table of typed columns (header excluded).
+export def parse-df-lines [lines: list] {
+  $lines | reduce --fold [] {|line, acc|
+    let row = (parse-df-line $line)
+    if $row == null { $acc } else { $acc | append $row }
+  }
+}
+
+# Extract the root filesystem row by matching the mount column exactly as "/".
+# Returns null when no root mount is present.
+export def extract-root-mount [lines: list] {
+  let rows = (parse-df-lines $lines)
+  let root = ($rows | where mount == "/")
+  if ($root | is-empty) { null } else { $root | first }
+}
+
+# Extract available space (GB) for the root filesystem from `df -h` lines.
+export def extract-root-avail-gb [lines: list] {
+  let root = (extract-root-mount $lines)
+  if $root == null {
+    0.0
+  } else {
+    parse-size-to-gb $root.avail
+  }
+}
+
+# Whether available space is below the low-disk threshold.
+# Treats 0.0 (unknown/unparsed) as "not low" to avoid false alarms.
+export def is-low-disk [avail_gb: float, threshold: float] {
+  ($avail_gb < $threshold) and ($avail_gb > 0.0)
+}
+
+# Filter `df -h` lines to the root filesystem, the header, and the mounts that
+# matter for build diagnostics. Mounts are matched on the parsed mount column,
+# not on substring patterns of the whole line.
+export def filter-df-summary-lines [lines: list] {
+  $lines | where {|line|
+    if ($line | str starts-with "Filesystem") {
+      true
+    } else {
+      let row = (parse-df-line $line)
+      if $row == null {
+        false
+      } else {
+        let mount = $row.mount
+        ($mount == "/") or ($mount | str starts-with "/home") or ($mount | str starts-with "/var/lib/docker") or ($mount | str starts-with "/tmp")
+      }
+    }
+  }
+}
+
 # Run df and extract filesystem summary
 # Returns {lines: list, root_avail_gb: float}
 def run-df-summary [] {
@@ -41,18 +115,12 @@ def run-df-summary [] {
   
   let lines = ($result.stdout | lines)
   
-  # Filter to show root filesystem and Docker-related mounts
-  let patterns = ["Filesystem", " /$", " /home", "/var/lib/docker", "/tmp"]
-  let filtered = ($lines | where {|line|
-    $patterns | any {|pat| $line | str contains $pat}
-  })
+  # Filter to show root filesystem and Docker-related mounts (parsed mount column)
+  let filtered = (filter-df-summary-lines $lines)
   
   # Extract available space from root filesystem for low-disk check
   let root_avail_gb = (try {
-    let root_line = ($lines | where {|line| $line | str contains " /$"} | first)
-    let parts = ($root_line | split row -r '\s+')
-    let avail_str = ($parts | get 3)  # Available column
-    parse-size-to-gb $avail_str
+    extract-root-avail-gb $lines
   } catch {
     0.0
   })
@@ -61,7 +129,7 @@ def run-df-summary [] {
 }
 
 # Parse size string (e.g., "5.2G", "500M", "100K") to GB
-def parse-size-to-gb [size_str: string] {
+export def parse-size-to-gb [size_str: string] {
   let size_str = ($size_str | str trim)
   let last_char = ($size_str | str substring (-1..-1) | str upcase)
   let num_str = ($size_str | str substring 0..-2)
@@ -294,7 +362,7 @@ export def record-disk-usage [service: string, phase: string, mode: string] {
     print $">> Root filesystem available: ($avail_str)GB"
     
     # Low disk warning - prominent banner
-    if $df_result.root_avail_gb < $LOW_DISK_THRESHOLD_GB and $df_result.root_avail_gb > 0.0 {
+    if (is-low-disk $df_result.root_avail_gb $LOW_DISK_THRESHOLD_GB) {
       print ""
       print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
       print $"!!    WARNING: LOW DISK SPACE - ONLY ($avail_str)GB FREE    !!"

@@ -21,7 +21,7 @@
 # These tests verify that hash computation is deterministic and stable
 # Used to validate the current service-def-hash.nu implementation
 
-use ../lib/build/hash.nu [compute-service-def-hash]
+use ../lib/build/hash.nu [compute-service-def-hash collect-dep-hashes]
 use ./helpers.nu [setup-test-environment cleanup-test-environment with-test-cleanup]
 use ./lib.nu [run-test print-test-summary]
 
@@ -195,7 +195,70 @@ def main [--verbose] {
     }
   } $verbose_flag)
   $results = ($results | append $test6)
-  
+
+  # Test 7: Hash graph - hard failure on an in-order missing dependency hash
+  # The hash graph must be computed in topological order. If a dependency node
+  # is part of the build order but has no computed hash when its dependent is
+  # processed, that is an ordering/scope bug and must hard-fail rather than
+  # silently drop the dependency from the hash inputs.
+  let test7 = (run-test "Test 7: Hash graph - hard failure on in-order missing dependency hash" {
+    let build_order = ["dep-service:v1.0.0", "test-service:v1.0.0"]
+    let dep_node_keys = ["dep-service:v1.0.0"]
+    let computed_hashes = {}
+
+    let errored = (try {
+      collect-dep-hashes "test-service:v1.0.0" $dep_node_keys $computed_hashes $build_order
+      false
+    } catch {|err|
+      if not ($err.msg | str contains "invariant violated") {
+        error make { msg: $"Expected invariant violation error, got: ($err.msg)" }
+      }
+      true
+    })
+
+    if not $errored {
+      error make { msg: "Expected collect-dep-hashes to hard-fail on an in-order missing dependency hash" }
+    }
+
+    if $verbose_flag {
+      print "    in-order missing dependency hash correctly hard-failed"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test7)
+
+  # Test 8: Hash graph - out-of-scope dependency is warned and omitted
+  # A dependency that is not part of the current build scope cannot be hashed
+  # here. It must be omitted (with a warning), not cause a hard failure. In-scope
+  # dependencies that were already hashed must still be collected.
+  let test8 = (run-test "Test 8: Hash graph - out-of-scope dependency warned and omitted" {
+    let build_order = ["test-service:v1.0.0"]
+    let dep_node_keys = ["dep-out:v1.0.0"]
+    let computed_hashes = {}
+
+    let result = (collect-dep-hashes "test-service:v1.0.0" $dep_node_keys $computed_hashes $build_order)
+    if not ($result | is-empty) {
+      error make { msg: $"Out-of-scope dependency should be omitted, got: ($result | to nuon)" }
+    }
+
+    # In-scope dependency that was already hashed is collected into the inputs.
+    let build_order2 = ["dep-in:v1.0.0", "test-service:v1.0.0"]
+    let dep_node_keys2 = ["dep-in:v1.0.0"]
+    let computed_hashes2 = {"dep-in:v1.0.0": "abc123"}
+    let result2 = (collect-dep-hashes "test-service:v1.0.0" $dep_node_keys2 $computed_hashes2 $build_order2)
+    if ($result2 | get "dep-in:v1.0.0") != "abc123" {
+      error make { msg: $"Expected in-scope dependency hash to be collected, got: ($result2 | to nuon)" }
+    }
+
+    if $verbose_flag {
+      print "    out-of-scope dependency omitted; in-scope dependency collected"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test8)
+
   print-test-summary $results
   
   let failed = ($results | where {|r| not $r} | length)
