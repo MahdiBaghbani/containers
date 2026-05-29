@@ -445,6 +445,27 @@ def main [--verbose] {
   $results = ($results | append $t_override_platform_ssh_bad)
 
   # ------------------------------------------------------------------
+  # TLS forbidden in overrides.platforms.<platform> (base-config only).
+  # Existing tests cover TLS rejection in defaults and SSH in platform
+  # overrides; this guards the platform-override TLS path specifically so
+  # overrides.platforms.*.tls cannot survive into the merged config.
+  # ------------------------------------------------------------------
+
+  let t_override_platform_tls_bad = (run-test "validate-version-overrides-structure: rejects platforms.*.tls override" {
+    let overrides = {platforms: {alpine: {tls: {enabled: true, mode: "ca-only"}}}}
+    let result = (validate-version-overrides-structure $overrides "v1")
+    if $result.valid {
+      error make {msg: "Expected TLS in overrides.platforms.* to be rejected"}
+    }
+    let has_tls_err = ($result.errors | any {|e| $e | str contains "tls: Section forbidden"})
+    if not $has_tls_err {
+      error make {msg: $"Expected 'tls: Section forbidden' message, got: ($result.errors | str join ', ')"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $t_override_platform_tls_bad)
+
+  # ------------------------------------------------------------------
   # Infrastructure fields still forbidden in version overrides
   # (regression guard after removing the dead --allow-infrastructure flag)
   # ------------------------------------------------------------------

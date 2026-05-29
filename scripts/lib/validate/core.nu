@@ -858,6 +858,13 @@ export def validate-version-overrides-structure [
                     }
                 }
 
+                # TLS is forbidden in platform-specific overrides (base-config
+                # only); reject it here so nested
+                # overrides.platforms.<platform>.tls cannot survive the merge.
+                if "tls" in ($platform_override | columns) {
+                    $errors = ($errors | append $"Version '($version_name)': platforms.($platform_name): tls: Section forbidden. Configure TLS in base service config only.")
+                }
+
                 # SSH is allowed in platform-specific overrides (unlike TLS);
                 # validate when present so invalid nested SSH cannot bypass the
                 # version-overrides path.
