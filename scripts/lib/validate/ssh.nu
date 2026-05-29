@@ -19,9 +19,13 @@
 # SSH configures dev and E2E SSH shell access to running containers.
 # Does NOT describe Git transport, Git signing, or OCM share protocol behavior.
 
+# `context` is a full diagnostic label, not a bare service name. SSH is valid in
+# service, version-override, platform, and defaults contexts, so callers pass the
+# accurate label (for example "Service 'svc'", "Version 'v1'", "Platform 'dev'")
+# and this validator prefixes messages with it verbatim.
 export def validate-ssh-config [
     ssh_config: any,
-    service_name: string
+    context: string
 ] {
     mut errors = []
     mut warnings = []
@@ -32,28 +36,28 @@ export def validate-ssh-config [
 
     let ssh_type = ($ssh_config | describe)
     if not ($ssh_type | str starts-with "record") {
-        $errors = ($errors | append $"Service '($service_name)': ssh must be a record")
+        $errors = ($errors | append $"($context): ssh must be a record")
         return {valid: false, errors: $errors, warnings: $warnings}
     }
 
     if not ("enabled" in ($ssh_config | columns)) {
-        $errors = ($errors | append $"Service '($service_name)': ssh.enabled is required")
+        $errors = ($errors | append $"($context): ssh.enabled is required")
     } else {
         let enabled_type = ($ssh_config.enabled | describe)
         if not ($enabled_type | str starts-with "bool") {
-            $errors = ($errors | append $"Service '($service_name)': ssh.enabled must be a boolean")
+            $errors = ($errors | append $"($context): ssh.enabled must be a boolean")
         }
     }
 
     let enabled = (try { $ssh_config.enabled | default false } catch { false })
     if $enabled {
         if not ("mode" in ($ssh_config | columns)) {
-            $errors = ($errors | append $"Service '($service_name)': ssh.mode is required when ssh.enabled=true")
+            $errors = ($errors | append $"($context): ssh.mode is required when ssh.enabled=true")
         } else {
             let mode = $ssh_config.mode
             let valid_modes = ["client" "server" "client-and-server"]
             if not ($mode in $valid_modes) {
-                $errors = ($errors | append $"Service '($service_name)': ssh.mode='($mode)' is invalid. Must be one of: ($valid_modes | str join ', ')")
+                $errors = ($errors | append $"($context): ssh.mode='($mode)' is invalid. Must be one of: ($valid_modes | str join ', ')")
             }
         }
 
@@ -62,9 +66,9 @@ export def validate-ssh-config [
             let port = $ssh_config.port
             let port_type = ($port | describe)
             if not ($port_type | str starts-with "int") {
-                $errors = ($errors | append $"Service '($service_name)': ssh.port must be an integer")
+                $errors = ($errors | append $"($context): ssh.port must be an integer")
             } else if $port < 1 or $port > 65535 {
-                $errors = ($errors | append $"Service '($service_name)': ssh.port='($port)' is invalid. Must be between 1 and 65535")
+                $errors = ($errors | append $"($context): ssh.port='($port)' is invalid. Must be between 1 and 65535")
             }
         }
     }
@@ -89,7 +93,7 @@ export def validate-version-overrides-ssh [
         $warnings = ($warnings | append $"Version '($version_name)': ssh: Version-level SSH overrides are allowed but should be rare and documented.")
         let ssh_config = (try { $overrides.ssh } catch { null })
         if $ssh_config != null {
-            let ssh_validation = (validate-ssh-config $ssh_config $version_name)
+            let ssh_validation = (validate-ssh-config $ssh_config $"Version '($version_name)'")
             if not $ssh_validation.valid {
                 $errors = ($errors | append $ssh_validation.errors)
             }
@@ -117,7 +121,7 @@ export def validate-platform-ssh [
     if "ssh" in ($platform_config | columns) {
         let ssh_config = (try { $platform_config.ssh } catch { null })
         if $ssh_config != null {
-            let ssh_validation = (validate-ssh-config $ssh_config $platform_name)
+            let ssh_validation = (validate-ssh-config $ssh_config $"Platform '($platform_name)'")
             if not $ssh_validation.valid {
                 $errors = ($errors | append $ssh_validation.errors)
             }
@@ -144,7 +148,7 @@ export def validate-ssh-config-merged [
     if "ssh" in ($merged_config | columns) {
         let ssh_config = (try { $merged_config.ssh } catch { null })
         if $ssh_config != null {
-            let ssh_validation = (validate-ssh-config $ssh_config $service_name)
+            let ssh_validation = (validate-ssh-config $ssh_config $"Service '($service_name)'")
             if not $ssh_validation.valid {
                 $errors = ($errors | append $ssh_validation.errors)
             }

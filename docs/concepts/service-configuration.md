@@ -76,8 +76,11 @@ Source repositories are defined in the `sources` section and auto-generate build
 
 **CRITICAL**: Source location depends on service type:
 
-- **Single-platform**: Sources are **REQUIRED** in base config (versions.nuon can override, but base must have as fallback)
-- **Multi-platform**: Sources are **FORBIDDEN** in base config (must be in versions.nuon overrides only)
+- **Single-platform**: Sources are allowed in base config, but they are not
+  required there. They may live entirely in `versions.nuon` defaults or
+  overrides if the merged config is still complete.
+- **Multi-platform**: Sources are **FORBIDDEN** in base config and must live
+  in `versions.nuon` defaults or overrides.
 
 **Single-platform example:**
 
@@ -103,7 +106,7 @@ Source repositories are defined in the `sources` section and auto-generate build
   "context": "services/my-service"
 }
 
-// services/my-service/versions.nuon (sources REQUIRED here)
+// services/my-service/versions.nuon (sources defined here)
 {
   "overrides": {
     "sources": {
@@ -124,7 +127,9 @@ For local development, you can use local filesystem directories as sources inste
 
 - **Development only** - Local sources are **REJECTED** in CI/production builds
 - **Mutually exclusive** - A source cannot have both `path` and `url`/`ref` fields
-- **Path validation** - Paths must exist, be directories, and be within the repository root
+- **Path validation** - Paths must exist, be directories, and stay within the
+  repository root or a sibling `repos/` workspace parent when this repo itself
+  lives under `repos/`
 
 **Configuration:**
 
@@ -144,8 +149,11 @@ Local sources use the `path` field instead of `url`/`ref`:
 **Path Resolution:**
 
 - **Relative paths** - Resolved relative to repository root
-- **Absolute paths** - Must be within repository root (path traversal prevention)
-- **Validation** - Paths are validated to ensure they exist, are directories, and are within the repository
+- **Absolute paths** - Allowed when they still resolve inside the repository
+  root or a sibling `repos/` workspace parent when this repo itself lives under
+  `repos/`
+- **Validation** - Paths are validated to ensure they exist, are directories,
+  and stay within one of those allowed roots
 
 **Example - Local Development:**
 
@@ -737,7 +745,8 @@ For complete details, see [Dependency Management](dependency-management.md).
 
 ## Base Config Restrictions
 
-**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY** contain: `name`, `context`, `tls`, `labels` (all metadata).
+**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY**
+contain: `name`, `context`, `tls`, `ssh`, `labels` (all metadata).
 
 All other fields (`dockerfile`, `external_images`, `sources`, `dependencies`, `build_args`) are **FORBIDDEN** in base config when `platforms.nuon` exists. These fields must be moved to:
 

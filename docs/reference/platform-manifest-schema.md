@@ -210,7 +210,8 @@ Platform configs take precedence over defaults:
 
 Defaults are validated using the same rules as platform configs:
 
-- Forbids `sources` section (version control - define in versions.nuon overrides only)
+- Forbids `sources` section (version control - define in versions.nuon
+  defaults or overrides)
 - Forbids `tag` field in `external_images` (version control - define in versions.nuon overrides)
 - Forbids `version` field in `dependencies` (version control - define in versions.nuon overrides)
 - Requires `name` and `build_arg` in `external_images` (if present)
@@ -329,7 +330,8 @@ For complete details on configuration merging, see [Build System](../concepts/bu
 
 **CRITICAL**: The following fields are **FORBIDDEN** in `platforms.nuon`:
 
-- `sources` section - Version control, must be in `versions.nuon` overrides only
+- `sources` section - Version control, must be in `versions.nuon` defaults
+  or overrides
 - `external_images.{stage}.tag` - Version control, must be in `versions.nuon` overrides
 - `external_images.{stage}.image` - Legacy field, use `name` instead
 - `dependencies.{name}.version` - Version control, must be in `versions.nuon` overrides
@@ -341,7 +343,7 @@ For complete details on configuration merging, see [Build System](../concepts/bu
 **Error examples:**
 
 ```text
-Platform 'debian': sources: Section forbidden. Define in versions.nuon overrides only.
+Platform 'debian': sources: Section forbidden. Define in versions.nuon defaults or overrides.
 Platform 'debian': external_images.build.tag: Field forbidden. Define in versions.nuon overrides.
 Platform 'debian': dependencies.revad-base.version: Field forbidden. Define in versions.nuon overrides.
 ```

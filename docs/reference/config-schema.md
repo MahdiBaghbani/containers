@@ -48,8 +48,11 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
 
 **CRITICAL**: Source location depends on service type:
 
-- **Single-platform**: Sources are **REQUIRED** in base config (versions.nuon can override, but base must have as fallback)
-- **Multi-platform**: Sources are **FORBIDDEN** in base config (must be in versions.nuon overrides only)
+- **Single-platform**: Sources are allowed in base config, but they are not
+  required there. They may live entirely in `versions.nuon` defaults or
+  overrides if the merged config is still complete.
+- **Multi-platform**: Sources are **FORBIDDEN** in base config and must live
+  in `versions.nuon` defaults or overrides.
 
 ### Single-Platform Example
 
@@ -85,7 +88,7 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
   "context": "services/my-service"
 }
 
-// services/my-service/versions.nuon (sources REQUIRED here)
+// services/my-service/versions.nuon (sources defined here)
 {
   "overrides": {
     "sources": {
@@ -139,14 +142,19 @@ Local sources use `path` field (mutually exclusive with `url`/`ref`):
 
 - **Development only** - Local sources are **REJECTED** in CI/production builds
 - **Mutually exclusive** - Cannot have both `path` and `url`/`ref` fields
-- **Path validation** - Paths must exist, be directories, and be within repository root
-- **No SHA generation** - Local sources do not generate `{SOURCE_KEY}_SHA` build args
+- **Path validation** - Paths must exist, be directories, and stay within the
+  repository root, or within a sibling `repos/` workspace parent when this repo
+  itself lives under `repos/`
+- **No SHA generation** - Local sources do not generate `{SOURCE_KEY}_SHA`
+  build args
 
 **Path Resolution:**
 
 - **Relative paths** - Resolved relative to repository root
-- **Absolute paths** - Must be within repository root (path traversal prevention)
-- **Environment variable override** - Can override using `{SOURCE_KEY}_PATH` env var
+- **Absolute paths** - Allowed when they still resolve inside the repository
+  root or the sibling `repos/` workspace parent described above
+- **Environment variable override** - Can override using `{SOURCE_KEY}_PATH`
+  env var
 
 For complete details, see [Source Build Arguments Convention](../concepts/service-configuration.md#source-build-arguments-convention).
 

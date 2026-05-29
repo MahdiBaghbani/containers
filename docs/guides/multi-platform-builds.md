@@ -128,23 +128,15 @@ For complete schema documentation, see [Platform Manifest Schema Reference](../r
       // Optional: Platform-specific external images
       "external_images": {
         "base": {
-          "image": "debian:12-slim",
+          "name": "debian:12-slim",
           "build_arg": "BASE_IMAGE"
-        }
-      },
-
-      // Optional: Platform-specific source repositories
-      "sources": {
-        "custom_lib": {
-          "url": "https://github.com/example/lib",
-          "ref": "v2.0.0"
         }
       },
 
       // Optional: Platform-specific dependencies
       "dependencies": {
         "other_service": {
-          "version": "v1.0.0",
+          "service": "other-service",
           "build_arg": "OTHER_SERVICE_IMAGE"
         }
       },
@@ -405,7 +397,9 @@ When multiple platforms share the same configuration values, you can use the opt
 2. **Platform configs** take precedence over defaults
 3. Each platform must still define its own `name` and `dockerfile` (these cannot be in defaults)
 
-**Note:** Platform defaults cannot include `sources` (version control - define in versions.nuon overrides only) or `tag` in external_images (version control - define in versions.nuon overrides).
+**Note:** Platform defaults cannot include `sources` (version control - define
+in `versions.nuon` defaults or overrides) or `tag` in external_images (version
+control - define in versions.nuon overrides).
 
 **See Also:** [Platform Manifest Schema Reference](../reference/platform-manifest-schema.md#top-level-defaults) for complete defaults documentation.
 

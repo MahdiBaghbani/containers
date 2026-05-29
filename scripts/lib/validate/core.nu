@@ -30,6 +30,12 @@ use ./tls.nu [
   validate-version-overrides-tls
   validate-tls-config-merged
 ]
+use ./ssh.nu [
+  validate-ssh-config
+  validate-version-overrides-ssh
+  validate-platform-ssh
+  validate-ssh-config-merged
+]
 
 # Re-export for backwards compatibility
 export use ./paths.nu [validate-local-path]
@@ -38,6 +44,76 @@ export use ./tls.nu [
   validate-version-overrides-tls
   validate-tls-config-merged
 ]
+
+# Centralized source-entry validation shared by base, version override/defaults,
+# and merged validation paths. Enforces key regex, forbidden build_arg,
+# path/url/ref mutual exclusivity, and local path checks. When require_complete
+# is true (base single-platform and merged configs), git sources must declare
+# both url and ref; when false (version overrides/defaults), partial fragments
+# are allowed because the missing fields are inherited during merge.
+def validate-source-entries [
+  sources: any,
+  context: string,
+  require_complete: bool
+] {
+  mut errors = []
+
+  if not (($sources | describe) | str starts-with "record") {
+    return {valid: false, errors: [$"($context): sources: Must be a record."]}
+  }
+
+  let repo_root = (get-repo-root)
+
+  for source_key in ($sources | columns) {
+    let source = ($sources | get $source_key)
+
+    if not ($source_key =~ '^[a-z0-9_]+$') {
+      $errors = ($errors | append $"($context): sources.($source_key): key must be lowercase alphanumeric with underscores only \(pattern: ^[a-z0-9_]+$\)")
+    }
+
+    let source_type = ($source | describe)
+    if not ($source_type | str starts-with "record") {
+      $errors = ($errors | append $"($context): sources.($source_key): Must be a record.")
+      continue
+    }
+
+    let has_path = ("path" in ($source | columns))
+    let has_url = ("url" in ($source | columns))
+    let has_ref = ("ref" in ($source | columns))
+
+    if "build_arg" in ($source | columns) {
+      $errors = ($errors | append $"($context): sources.($source_key): 'build_arg' field is forbidden. Build args are auto-generated as <KEY>_REF and <KEY>_URL.")
+    }
+
+    # Mutual exclusivity: cannot have both path and url/ref
+    if $has_path and ($has_url or $has_ref) {
+      $errors = ($errors | append $"($context): sources.($source_key): Cannot have both 'path' and 'url'/'ref' fields. They are mutually exclusive.")
+      continue
+    }
+
+    if $has_path {
+      let path_value = (try { $source.path } catch { "" })
+      if ($path_value | str length) == 0 {
+        $errors = ($errors | append $"($context): sources.($source_key): 'path' field is empty")
+      } else {
+        let path_validation = (validate-local-path $path_value $repo_root)
+        if not $path_validation.valid {
+          let formatted_errors = ($path_validation.errors | each {|err| $"($context): sources.($source_key): ($err)"})
+          $errors = ($errors | append $formatted_errors)
+        }
+      }
+    } else if $require_complete {
+      if not $has_url {
+        $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'url'.")
+      }
+      if not $has_ref {
+        $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'ref'.")
+      }
+    }
+  }
+
+  {valid: ($errors | is-empty), errors: $errors}
+}
 
 # Validate platform config structure (infrastructure only - no version control fields)
 export def validate-platform-config [
@@ -82,7 +158,7 @@ export def validate-platform-config [
   }
   
   if "sources" in ($platform_config | columns) {
-    $errors = ($errors | append $"Platform '($platform_name)': sources: Section forbidden. Define in versions.nuon overrides only.")
+    $errors = ($errors | append $"Platform '($platform_name)': sources: Section forbidden. Define in versions.nuon defaults or overrides.")
   }
   
   if "dependencies" in ($platform_config | columns) {
@@ -119,7 +195,13 @@ export def validate-platform-config [
   if "tls" in ($platform_config | columns) {
     $errors = ($errors | append $"Platform '($platform_name)': TLS configuration in platform configs is FORBIDDEN. Configure TLS in base service config only.")
   }
-  
+
+  # SSH is allowed in platform configs (unlike TLS); validate when present.
+  let ssh_validation = (validate-platform-ssh $platform_config $platform_name)
+  if not $ssh_validation.valid {
+    $errors = ($errors | append $ssh_validation.errors)
+  }
+
   {
     valid: ($errors | is-empty),
     errors: $errors
@@ -141,12 +223,31 @@ export def validate-version-defaults [
   
   # Validate global defaults structure (infrastructure fields always forbidden in version defaults)
   let global_errors = (if not ($global_defaults | is-empty) {
+    mut errs = []
+
     let structure_validation = (validate-version-overrides-structure $global_defaults "defaults")
     if not $structure_validation.valid {
-      $structure_validation.errors
-    } else {
-      []
+      $errs = ($errs | append $structure_validation.errors)
     }
+
+    # TLS is forbidden in version defaults (same rule as version overrides).
+    let tls_validation = (validate-version-overrides-tls $global_defaults "defaults")
+    if not $tls_validation.valid {
+      $errs = ($errs | append $tls_validation.errors)
+    }
+
+    # SSH is allowed in version defaults; validate when present.
+    if "ssh" in ($global_defaults | columns) {
+      let ssh_config = (try { $global_defaults.ssh } catch { null })
+      if $ssh_config != null {
+        let ssh_validation = (validate-ssh-config $ssh_config "defaults")
+        if not $ssh_validation.valid {
+          $errs = ($errs | append $ssh_validation.errors)
+        }
+      }
+    }
+
+    $errs
   } else {
     []
   })
@@ -182,12 +283,32 @@ export def validate-version-defaults [
         if not ($platform_type | str starts-with "record") {
           $acc | append $"defaults.platforms.($platform_name) must be a record"
         } else {
-          let platform_structure_validation = (validate-version-overrides-structure $platform_defaults $"defaults.platforms.($platform_name)")
+          let ctx = $"defaults.platforms.($platform_name)"
+          mut platform_errs = $acc
+
+          let platform_structure_validation = (validate-version-overrides-structure $platform_defaults $ctx)
           if not $platform_structure_validation.valid {
-            $acc | append $platform_structure_validation.errors
-          } else {
-            $acc
+            $platform_errs = ($platform_errs | append $platform_structure_validation.errors)
           }
+
+          # TLS is forbidden in defaults.platforms.* (same rule as base platform configs).
+          let platform_tls_validation = (validate-version-overrides-tls $platform_defaults $ctx)
+          if not $platform_tls_validation.valid {
+            $platform_errs = ($platform_errs | append $platform_tls_validation.errors)
+          }
+
+          # SSH is allowed in defaults.platforms.*; validate when present.
+          if "ssh" in ($platform_defaults | columns) {
+            let ssh_config = (try { $platform_defaults.ssh } catch { null })
+            if $ssh_config != null {
+              let ssh_validation = (validate-ssh-config $ssh_config $ctx)
+              if not $ssh_validation.valid {
+                $platform_errs = ($platform_errs | append $ssh_validation.errors)
+              }
+            }
+          }
+
+          $platform_errs
         }
       })
       
@@ -301,6 +422,7 @@ export def validate-version-manifest [
   platforms: any = null
 ] {
   mut errors = []
+  mut warnings = []
   
   if not ("default" in ($manifest | columns)) {
     $errors = ($errors | append "Missing required field: 'default'")
@@ -345,7 +467,7 @@ export def validate-version-manifest [
     $errors = ($errors | append $"Duplicate version name: '($dup)' appears multiple times")
   }
   
-  let latest_versions = ($versions | where {|v| try { $v.latest } catch { false }} == true)
+  let latest_versions = ($versions | where {|v| (try { $v.latest } catch { false }) == true})
   if ($latest_versions | length) > 1 {
     let latest_names = ($latest_versions | each {|v| $v.name} | str join ", ")
     $errors = ($errors | append $"Only one version can have 'latest: true' \(found: ($latest_names)\)")
@@ -390,7 +512,18 @@ export def validate-version-manifest [
       if not $tls_validation.valid {
         $errors = ($errors | append $tls_validation.errors)
       }
-      
+
+      # SSH is allowed in version overrides (unlike TLS); validate when present.
+      # Thread its advisory warnings through so they reach validate-manifest-file
+      # and validate-service-complete instead of being dropped here.
+      let ssh_validation = (validate-version-overrides-ssh $version_spec.overrides $version_name)
+      if not $ssh_validation.valid {
+        $errors = ($errors | append $ssh_validation.errors)
+      }
+      if "warnings" in ($ssh_validation | columns) {
+        $warnings = ($warnings | append $ssh_validation.warnings)
+      }
+
       let structure_validation = (validate-version-overrides-structure $version_spec.overrides $version_name)
       if not $structure_validation.valid {
         $errors = ($errors | append $structure_validation.errors)
@@ -417,7 +550,7 @@ export def validate-version-manifest [
   }
   
   if not ($errors | is-empty) {
-    return {valid: false, errors: $errors}
+    return {valid: false, errors: $errors, warnings: $warnings}
   }
   
   # pass 2: validate expanded tags (only if platforms exist and pass 1 passed)
@@ -539,15 +672,15 @@ export def validate-version-manifest [
   
   {
     valid: ($errors | is-empty),
-    errors: $errors
+    errors: $errors,
+    warnings: $warnings
   }
 }
 
 
 export def validate-version-overrides-structure [
     overrides: record,
-    version_name: string,
-    --allow-infrastructure  # Allow infrastructure fields (name, build_arg, service) in defaults for single-platform services
+    version_name: string
 ] {
     mut errors = []
     
@@ -567,11 +700,11 @@ export def validate-version-overrides-structure [
                     continue
                 }
                 
-                if not $allow_infrastructure and ("name" in ($img | columns)) {
+                if "name" in ($img | columns) {
                     $errors = ($errors | append $"Version '($version_name)': external_images.($img_key).name: Field forbidden. Define in base config \(single-platform\) or platforms.nuon \(multi-platform\).")
                 }
                 
-                if not $allow_infrastructure and ("build_arg" in ($img | columns)) {
+                if "build_arg" in ($img | columns) {
                     $errors = ($errors | append $"Version '($version_name)': external_images.($img_key).build_arg: Field forbidden. Define in base config \(single-platform\) or platforms.nuon \(multi-platform\).")
                 }
                 
@@ -610,18 +743,27 @@ export def validate-version-overrides-structure [
                     # Note: Conflicting single_platform + platform suffix handled at runtime, not here
                 }
                 
-                # Validate forbidden fields (unless allow_infrastructure for single-platform defaults)
-                if not $allow_infrastructure and ("service" in ($dep | columns)) {
+                # Validate forbidden fields (define infrastructure in base or platforms.nuon)
+                if "service" in ($dep | columns) {
                     $errors = ($errors | append $"Version '($version_name)': dependencies.($dep_key).service: Field forbidden. Define in base config \(single-platform\) or platforms.nuon \(multi-platform\).")
                 }
                 
-                if not $allow_infrastructure and ("build_arg" in ($dep | columns)) {
+                if "build_arg" in ($dep | columns) {
                     $errors = ($errors | append $"Version '($version_name)': dependencies.($dep_key).build_arg: Field forbidden. Define in base config \(single-platform\) or platforms.nuon \(multi-platform\).")
                 }
             }
         }
     }
     
+    # Validate sources in global overrides (partial fragments allowed; full
+    # url/ref completeness is enforced during merged validation)
+    if "sources" in ($overrides | columns) {
+        let src_validation = (validate-source-entries $overrides.sources $"Version '($version_name)'" false)
+        if not $src_validation.valid {
+            $errors = ($errors | append $src_validation.errors)
+        }
+    }
+
     # Validate platform-specific overrides
     if "platforms" in ($overrides | columns) {
         let platforms_overrides = $overrides.platforms
@@ -707,6 +849,27 @@ export def validate-version-overrides-structure [
                         }
                     }
                 }
+
+                # Validate sources in platform-specific overrides (partial fragments allowed)
+                if "sources" in ($platform_override | columns) {
+                    let src_validation = (validate-source-entries $platform_override.sources $"Version '($version_name)': platforms.($platform_name)" false)
+                    if not $src_validation.valid {
+                        $errors = ($errors | append $src_validation.errors)
+                    }
+                }
+
+                # SSH is allowed in platform-specific overrides (unlike TLS);
+                # validate when present so invalid nested SSH cannot bypass the
+                # version-overrides path.
+                if "ssh" in ($platform_override | columns) {
+                    let ssh_config = (try { $platform_override.ssh } catch { null })
+                    if $ssh_config != null {
+                        let ssh_validation = (validate-ssh-config $ssh_config $"Version '($version_name)': platforms.($platform_name)")
+                        if not $ssh_validation.valid {
+                            $errors = ($errors | append $ssh_validation.errors)
+                        }
+                    }
+                }
             }
         }
     }
@@ -763,57 +926,12 @@ export def validate-merged-config [
         }
     }
     
-    # Validate sources have either path (local) or url/ref (git) - mutually exclusive
+    # Validate sources via centralized validator (merged configs must be complete:
+    # git sources need both url and ref)
     if "sources" in ($merged_config | columns) {
-        let sources = $merged_config.sources
-        
-        let sources_type = ($sources | describe)
-        if not ($sources_type | str starts-with "record") {
-            $errors = ($errors | append $"($context): sources: Must be a record.")
-        } else {
-            let repo_root = (get-repo-root)
-            for source_key in ($sources | columns) {
-                let source = ($sources | get $source_key)
-                
-                let source_type = ($source | describe)
-                if not ($source_type | str starts-with "record") {
-                    $errors = ($errors | append $"($context): sources.($source_key): Must be a record.")
-                    continue
-                }
-                
-                let has_path = ("path" in ($source | columns))
-                let has_url = ("url" in ($source | columns))
-                let has_ref = ("ref" in ($source | columns))
-                
-                # Mutual exclusivity: cannot have both path and url/ref
-                if $has_path and ($has_url or $has_ref) {
-                    $errors = ($errors | append $"($context): sources.($source_key): Cannot have both 'path' and 'url'/'ref' fields. They are mutually exclusive.")
-                    continue
-                }
-                
-                # Must have either path OR (url AND ref)
-                if $has_path {
-                    # Local source - validate path
-                    let path_value = (try { $source.path } catch { "" })
-                    if ($path_value | str length) == 0 {
-                        $errors = ($errors | append $"($context): sources.($source_key): 'path' field is empty")
-                    } else {
-                        let path_validation = (validate-local-path $path_value $repo_root)
-                        if not $path_validation.valid {
-                            let formatted_errors = ($path_validation.errors | each {|err| $"($context): sources.($source_key): ($err)"})
-                            $errors = ($errors | append $formatted_errors)
-                        }
-                    }
-                } else {
-                    # Git source - must have both url and ref
-                    if not $has_url {
-                        $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'url'. Define in base config \(single-platform\) or versions.nuon overrides \(multi-platform\).")
-                    }
-                    if not $has_ref {
-                        $errors = ($errors | append $"($context): sources.($source_key): Missing required field 'ref'. Define in base config \(single-platform\) or versions.nuon overrides \(multi-platform\).")
-                    }
-                }
-            }
+        let src_validation = (validate-source-entries $merged_config.sources $context true)
+        if not $src_validation.valid {
+            $errors = ($errors | append $src_validation.errors)
         }
     }
     
@@ -836,9 +954,9 @@ export def validate-service-config [
   let service_ctx = (if ($service_name | str length) > 0 { $"Service '($service_name)'" } else { "Service config" })
   
   if $has_platforms {
-    # When platforms.nuon exists, base config can ONLY contain: name, context, tls, labels (all metadata)
-    # Labels are metadata like TLS (Docker image labels), not infrastructure or version control
-    let allowed_fields = ["name", "context", "tls", "labels"]
+    # When platforms.nuon exists, base config can ONLY contain metadata fields:
+    # name, context, tls, ssh, and labels. Labels are metadata like TLS/SSH
+    # (Docker image labels), not infrastructure or version control.
     let forbidden_fields = ["dockerfile", "external_images", "sources", "dependencies", "build_args"]
     
     for field in $forbidden_fields {
@@ -875,53 +993,11 @@ export def validate-service-config [
   
   if "sources" in ($config | columns) {
     if $has_platforms {
-      $errors = ($errors | append $"($service_ctx): sources: Section forbidden when platforms.nuon exists. Define in versions.nuon overrides only.")
+      $errors = ($errors | append $"($service_ctx): sources: Section forbidden when platforms.nuon exists. Define in versions.nuon defaults or overrides.")
     } else {
-      let sources = $config.sources
-      let repo_root = (get-repo-root)
-      for source_key in ($sources | columns) {
-        let source = ($sources | get $source_key)
-        
-        if not ($source_key =~ '^[a-z0-9_]+$') {
-          $errors = ($errors | append $"Source key '($source_key)' must be lowercase alphanumeric with underscores only \(pattern: ^[a-z0-9_]+$\)")
-        }
-        
-        let has_path = ("path" in ($source | columns))
-        let has_url = ("url" in ($source | columns))
-        let has_ref = ("ref" in ($source | columns))
-        
-        # Mutual exclusivity: cannot have both path and url/ref
-        if $has_path and ($has_url or $has_ref) {
-          $errors = ($errors | append $"Source '($source_key)' cannot have both 'path' and 'url'/'ref' fields. They are mutually exclusive.")
-          continue
-        }
-        
-        # Must have either path OR (url AND ref)
-        if $has_path {
-          # Local source - validate path
-          let path_value = (try { $source.path } catch { "" })
-          if ($path_value | str length) == 0 {
-            $errors = ($errors | append $"Source '($source_key)': 'path' field is empty")
-          } else {
-            let path_validation = (validate-local-path $path_value $repo_root)
-            if not $path_validation.valid {
-              let formatted_errors = ($path_validation.errors | each {|err| $"Source '($source_key)': ($err)"})
-              $errors = ($errors | append $formatted_errors)
-            }
-          }
-        } else {
-          # Git source - must have both url and ref
-          if not $has_url {
-            $errors = ($errors | append $"Source '($source_key)' missing required field: 'url'")
-          }
-          if not $has_ref {
-            $errors = ($errors | append $"Source '($source_key)' missing required field: 'ref'")
-          }
-        }
-        
-        if "build_arg" in ($source | columns) {
-          $errors = ($errors | append $"Source '($source_key)' has FORBIDDEN 'build_arg' field. Build args are auto-generated as ($source_key | str upcase)_REF and ($source_key | str upcase)_URL")
-        }
+      let src_validation = (validate-source-entries $config.sources $service_ctx true)
+      if not $src_validation.valid {
+        $errors = ($errors | append $src_validation.errors)
       }
     }
   }
@@ -989,7 +1065,22 @@ export def validate-service-config [
       }
     }
   }
-  
+
+  # SSH is allowed in base service config (unlike TLS, it may vary per platform
+  # and per version, but base placement is valid); validate when present.
+  if "ssh" in ($config | columns) {
+    let ssh_config = (try { $config.ssh } catch { null })
+    if $ssh_config != null {
+      let ssh_validation = (validate-ssh-config $ssh_config $"Service '($config.name? | default "")'")
+      if not $ssh_validation.valid {
+        $errors = ($errors | append $ssh_validation.errors)
+      }
+      if "warnings" in ($ssh_validation | columns) {
+        $warnings = ($warnings | append $ssh_validation.warnings)
+      }
+    }
+  }
+
   {
     valid: ($errors | is-empty),
     errors: $errors,
@@ -1115,6 +1206,121 @@ export def validate-dockerfile-paths [
   }
 }
 
+# Validate one fully-merged config: structure (external_images, sources),
+# merge-aware TLS dependency rules, and SSH placement. Used by merged validation
+# so errors that only surface after version/platform merge are caught by
+# `validate --all-services`.
+def validate-merged-bundle [
+  merged: record,
+  service: string,
+  has_platforms: bool,
+  platform_name: string,
+  ctx: string
+] {
+  mut errors = []
+  mut warnings = []
+
+  let struct_result = (validate-merged-config $merged $service $has_platforms $platform_name)
+  if not $struct_result.valid {
+    $errors = ($errors | append ($struct_result.errors | each {|e| $"($ctx): ($e)"}))
+  }
+
+  # Merge-aware TLS dependency check: validates the merged config so services
+  # whose common-tools dependency lives in versions/platforms do not false-fail.
+  let tls_result = (validate-tls-config-merged $merged $service)
+  if not $tls_result.valid {
+    $errors = ($errors | append ($tls_result.errors | each {|e| $"($ctx): ($e)"}))
+  }
+  if "warnings" in ($tls_result | columns) {
+    $warnings = ($warnings | append $tls_result.warnings)
+  }
+
+  let ssh_result = (validate-ssh-config-merged $merged $service)
+  if not $ssh_result.valid {
+    $errors = ($errors | append ($ssh_result.errors | each {|e| $"($ctx): ($e)"}))
+  }
+  if "warnings" in ($ssh_result | columns) {
+    $warnings = ($warnings | append $ssh_result.warnings)
+  }
+
+  {valid: ($errors | is-empty), errors: $errors, warnings: $warnings}
+}
+
+# Build and validate the merged config for every version (and per-platform
+# expansion) of a service, mirroring the build-time merge order
+# (apply-version-defaults -> merge-platform-config -> merge-version-overrides).
+def validate-service-merged-configs [
+  service: string,
+  has_platforms: bool
+] {
+  use ../manifest/core.nu [load-versions-manifest apply-version-defaults]
+  use ../platforms/core.nu [load-platforms-manifest get-platform-names get-platform-spec merge-platform-config merge-version-overrides]
+
+  mut errors = []
+  mut warnings = []
+
+  let cfg_path = $"services/($service).nuon"
+  let base_config = (try { open $cfg_path } catch { null })
+  if $base_config == null {
+    return {valid: true, errors: [], warnings: []}
+  }
+
+  let manifest = (try { load-versions-manifest $service } catch { null })
+  if $manifest == null {
+    return {valid: true, errors: [], warnings: []}
+  }
+
+  let versions = (try { $manifest.versions } catch { [] })
+
+  let platforms = (if $has_platforms {
+    try { load-platforms-manifest $service } catch { null }
+  } else {
+    null
+  })
+
+  for version_spec in $versions {
+    let version_name = (try { $version_spec.name } catch { "" })
+    let version_with_defaults = (apply-version-defaults $manifest $version_spec)
+
+    if $has_platforms and $platforms != null {
+      let platform_names = (get-platform-names $platforms)
+      for platform in $platform_names {
+        let ctx = $"Service '($service)' version '($version_name)' platform '($platform)'"
+        let merge_result = (try {
+          let platform_spec = (get-platform-spec $platforms $platform)
+          let with_platform = (merge-platform-config $base_config $platform_spec)
+          {ok: true, merged: (merge-version-overrides $with_platform $version_with_defaults $platform $platforms)}
+        } catch {|err|
+          {ok: false, msg: $err.msg}
+        })
+        if $merge_result.ok {
+          let bundle = (validate-merged-bundle $merge_result.merged $service $has_platforms $platform $ctx)
+          $errors = ($errors | append $bundle.errors)
+          $warnings = ($warnings | append $bundle.warnings)
+        } else {
+          $errors = ($errors | append $"($ctx): Failed to build merged config: ($merge_result.msg)")
+        }
+      }
+    } else {
+      let ctx = $"Service '($service)' version '($version_name)'"
+      let merge_result = (try {
+        {ok: true, merged: (merge-version-overrides $base_config $version_with_defaults "" null)}
+      } catch {|err|
+        {ok: false, msg: $err.msg}
+      })
+      if $merge_result.ok {
+        let bundle = (validate-merged-bundle $merge_result.merged $service $has_platforms "" $ctx)
+        $errors = ($errors | append $bundle.errors)
+        $warnings = ($warnings | append $bundle.warnings)
+      } else {
+        $errors = ($errors | append $"($ctx): Failed to build merged config: ($merge_result.msg)")
+      }
+    }
+  }
+
+  {valid: ($errors | is-empty), errors: $errors, warnings: $warnings}
+}
+
 # Validate that a service has both config AND manifest (complete validation)
 export def validate-service-complete [
   service: string
@@ -1162,7 +1368,22 @@ export def validate-service-complete [
   if not $manifest_result.valid {
     $all_errors = ($all_errors | append $manifest_result.errors)
   }
-  
+  if "warnings" in ($manifest_result | columns) {
+    $all_warnings = ($all_warnings | append $manifest_result.warnings)
+  }
+
+  # Validate merged configs across versions/platforms only when the base layers
+  # are sound; otherwise merged errors would just echo upstream failures.
+  if ($all_errors | is-empty) {
+    let merged_result = (validate-service-merged-configs $service $has_platforms)
+    if not $merged_result.valid {
+      $all_errors = ($all_errors | append $merged_result.errors)
+    }
+    if "warnings" in ($merged_result | columns) {
+      $all_warnings = ($all_warnings | append $merged_result.warnings)
+    }
+  }
+
   {
     valid: ($all_errors | is-empty),
     errors: $all_errors,

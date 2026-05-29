@@ -58,13 +58,21 @@ The optional `defaults` field allows you to define common configuration values t
 
 ### Defaults Structure
 
-The `defaults` field has the same structure as the `overrides` field in version specifications:
+The `defaults` field has the same structure as the `overrides` field in
+version specifications:
 
 - `sources` - Default source repository refs/URLs
 - `external_images` - Default external image tags
 - `build_args` - Default build arguments
 - `dependencies` - Default dependency versions
 - `platforms` - Platform-specific defaults (for multi-platform services)
+
+Validation-specific notes:
+
+- `tls` is forbidden in `defaults` and in `defaults.platforms.*`
+- `ssh` is allowed in `defaults` and in `defaults.platforms.*`
+- Source fragments in defaults may set `path`, `url`, or `ref`; merged
+  validation later checks that the final source config is complete
 
 ### How Defaults Work
 
@@ -234,12 +242,15 @@ Version overrides take precedence over defaults:
 
 ### Validation Rules
 
-Defaults are validated using the same rules as version overrides:
+Defaults are validated using the same rules as version overrides, plus the
+placement rules below:
 
 - Allows `sources` section
 - Allows `tag` field in `external_images`
 - Forbids `name` and `build_arg` in `external_images` (infrastructure - defined in base config or platforms.nuon)
 - Platform names in `defaults.platforms` must match platforms in `platforms.nuon`
+- Forbids `tls` in `defaults` and `defaults.platforms.*`
+- Allows `ssh` in `defaults` and `defaults.platforms.*`
 
 ## Version Specification
 
@@ -286,7 +297,7 @@ The `overrides` section can override any field from the base service config:
 ### Common Overrides
 
 - `sources.{name}.ref` - Change source repository ref/branch/tag
-- `sources.{name}.url` - Change source repository URL (required for multi-platform)
+- `sources.{name}.url` - Change source repository URL
 - `external_images.{stage}.tag` - Change external image tag (version control)
 - `build_args.{name}` - Override build arguments
 - `dependencies.{name}.version` - Pin dependency to specific version
@@ -418,7 +429,8 @@ Platform-specific overrides win over global overrides for the same field. All fi
 - `external_images.{stage}.name` - Infrastructure, must be in base config (single-platform) or platforms.nuon (multi-platform)
 - `external_images.{stage}.build_arg` - Infrastructure, must be in base config (single-platform) or platforms.nuon (multi-platform)
 - `external_images.{stage}.image` - Legacy field, use `tag` instead
-- `tls` section - Metadata, must be in base config only
+- `tls` section - Metadata, must be in base config only, including version
+  defaults
 
 **Note:** Unlike TLS, `ssh` configuration is allowed in `versions.nuon` overrides,
 but it should be rare and documented.

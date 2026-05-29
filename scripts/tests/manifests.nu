@@ -22,7 +22,7 @@
 use ../lib/manifest/core.nu [check-versions-manifest-exists load-versions-manifest filter-versions]
 use ../lib/platforms/core.nu [merge-version-overrides]
 use ../lib/build/matrix.nu [generate-service-matrix]
-use ../lib/validate/core.nu [validate-service-file validate-manifest-file validate-version-manifest validate-dockerfile-paths print-validation-results]
+use ../lib/validate/core.nu [validate-service-file validate-manifest-file validate-version-manifest validate-platforms-manifest validate-dockerfile-paths print-validation-results]
 use ../lib/services/core.nu [list-service-names]
 use ./lib.nu [run-test print-test-summary]
 
@@ -194,6 +194,12 @@ def main [--verbose] {
     let result = (validate-version-manifest $bad_manifest null)
     if $result.valid {
       error make {msg: "Failed to detect multiple latest versions"}
+    }
+    # Assert the explicit multiple-latest message is emitted (not only masked by
+    # the downstream 'latest' tag collision)
+    let has_latest_msg = ($result.errors | any {|e| $e | str contains "Only one version can have 'latest: true'"})
+    if not $has_latest_msg {
+      error make {msg: $"Expected explicit multiple-latest message, got: ($result.errors | str join ', ')"}
     }
     true
   } $verbose_flag)
@@ -517,6 +523,129 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test22)
+
+  # Test 23: Example manifests validate against the live validators, not just
+  # Nushell parsing. This surfaces schema/example drift without patching the
+  # examples here.
+  let test23 = (run-test "Schema examples validate against live validators" {
+    let example_paths = (glob schemas/examples/*.nuon)
+    if ($example_paths | is-empty) {
+      error make {msg: "No schema example files found under schemas/examples/"}
+    }
+
+    mut invalid_examples = []
+    mut unhandled_examples = []
+
+    for example_path in $example_paths {
+      let example_name = ($example_path | path basename)
+      let example_text = (open --raw $example_path)
+      let parse_result = (try {
+        let parsed = ($example_text
+          | lines
+          | where {|line| not ($line =~ '^\s*//')}
+          | str join "\n"
+          | from nuon)
+        {
+          ok: true,
+          value: $parsed,
+          errors: []
+        }
+      } catch {|err|
+        {
+          ok: false,
+          value: null,
+          errors: [$"Failed to parse as NUON: ($err.msg)"]
+        }
+      })
+
+      if not $parse_result.ok {
+        $invalid_examples = ($invalid_examples | append {
+          file: $example_name,
+          errors: $parse_result.errors
+        })
+        continue
+      }
+
+      let example = $parse_result.value
+
+      if (($example_name | str ends-with "-platforms.nuon")) {
+        let result = (validate-platforms-manifest $example)
+        if not $result.valid {
+          $invalid_examples = ($invalid_examples | append {
+            file: $example_name,
+            errors: $result.errors
+          })
+        }
+      } else if ("versions" in ($example | columns)) {
+        let base_key = (if ($example_name | str ends-with "-versions.nuon") {
+          $example_name | str replace --regex '-versions\.nuon$' ''
+        } else {
+          $example_name | str replace --regex '\.nuon$' ''
+        })
+        let companion_platform_path = ($example_paths | where {|p|
+          ($p | path basename) == $"($base_key)-platforms.nuon"
+        } | first)
+        let companion_platforms = (if $companion_platform_path == null {
+          null
+        } else {
+          let companion_text = (open --raw $companion_platform_path)
+          let companion_parse = (try {
+            let parsed = ($companion_text
+              | lines
+              | where {|line| not ($line =~ '^\s*//')}
+              | str join "\n"
+              | from nuon)
+            {
+              ok: true,
+              value: $parsed,
+              errors: []
+            }
+          } catch {|err|
+            {
+              ok: false,
+              value: null,
+              errors: [$"Failed to parse companion platforms example as NUON: ($err.msg)"]
+            }
+          })
+
+          if not $companion_parse.ok {
+            $invalid_examples = ($invalid_examples | append {
+              file: ($companion_platform_path | path basename),
+              errors: $companion_parse.errors
+            })
+            null
+          } else {
+            $companion_parse.value
+          }
+        })
+        let result = (validate-version-manifest $example $companion_platforms)
+        if not $result.valid {
+          $invalid_examples = ($invalid_examples | append {
+            file: $example_name,
+            errors: $result.errors
+          })
+        }
+      } else {
+        $unhandled_examples = ($unhandled_examples | append $example_name)
+      }
+    }
+
+    if not ($unhandled_examples | is-empty) {
+      let names = ($unhandled_examples | str join ", ")
+      error make {msg: $"No validator mapping for schema example(s): ($names)"}
+    }
+
+    if not ($invalid_examples | is-empty) {
+      let details = ($invalid_examples | each {|item|
+        let errs = ($item.errors | each {|e| $"    - ($e)"} | str join "\n")
+        $"  - ($item.file)\n($errs)"
+      } | str join "\n")
+      error make {msg: $"Schema examples failed live validation:\n($details)"}
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test23)
 
   print-test-summary $results
 
