@@ -639,6 +639,57 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_smoke_tls_help)
 
+    let test_smoke_ssh_help = (run-test "smoke: routed ssh help dispatches" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry ssh help | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"ssh help exited ($out.exit_code): ($out.stderr)"}
+        }
+        if not ($out.stdout | str contains "ssh <subcommand>") {
+            error make {msg: "ssh help missing routed usage line"}
+        }
+        if not ($out.stdout | str contains "Subcommands:") {
+            error make {msg: "ssh help missing Subcommands section"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_ssh_help)
+
+    let test_smoke_ci_help = (run-test "smoke: routed ci help dispatches" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry ci help | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"ci help exited ($out.exit_code): ($out.stderr)"}
+        }
+        if not ($out.stdout | str contains "ci <subcommand>") {
+            error make {msg: "ci help missing routed usage line"}
+        }
+        if not ($out.stdout | str contains "Subcommands:") {
+            error make {msg: "ci help missing Subcommands section"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_ci_help)
+
+    let test_smoke_docs_help = (run-test "smoke: routed docs help dispatches" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry docs help | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"docs help exited ($out.exit_code): ($out.stderr)"}
+        }
+        if not ($out.stdout | str contains "docs <subcommand>") {
+            error make {msg: "docs help missing routed usage line"}
+        }
+        if not ($out.stdout | str contains "Subcommands:") {
+            error make {msg: "docs help missing Subcommands section"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_docs_help)
+
     let test_smoke_make_certs_filter = (run-test "smoke: make -n certs forwards FILTER to tls certs --filter" {
         let make_ok = ((try { ^which make | complete | get exit_code } catch { 1 }) == 0)
         if not $make_ok {

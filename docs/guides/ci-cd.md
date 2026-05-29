@@ -23,12 +23,21 @@ This section documents CI/CD workflows and automation for the DockyPody build sy
 
 ## GitHub Actions Workflows
 
-The build system uses reusable GitHub Actions workflows:
+The shipped build workflows are generated from the current service graph by
+`nu scripts/dockypody.nu ci workflow` and then committed to
+`.github/workflows/`.
 
-- **`.github/workflows/build.yml`**: Entry point for manual builds
-- **`.github/workflows/build-service.yml`**: Reusable workflow for building a single service
+- **`.github/workflows/build.yml`**: Generated manual entry point for
+  build-only verification
+- **`.github/workflows/build-push.yml`**: Generated manual entry point for
+  build-and-push runs plus post-push GHCR purge
+- **`.github/workflows/build-orchestrator.yml`**: Generated reusable
+  workflow that encodes service ordering and dependency fan-out
+- **`.github/workflows/build-service.yml`**: Generated reusable workflow for
+  one service's version/platform matrix
 
-Builds are triggered by workflow dispatch (manual), not inferred from commits.
+Builds are triggered by `workflow_dispatch`; the generator updates the
+committed workflow files when the service graph changes.
 
 ## GHCR package retention (SSOT purge)
 
@@ -41,7 +50,7 @@ are not referenced by the current `services/**/{versions,platforms}.nuon`
 state.
 
 - Manual workflow: `.github/workflows/image-purge.yml`
-- Auto purge: `ghcr_purge` job inside `.github/workflows/build-orchestrator.yml`
+- Auto purge: `ghcr_purge` job inside `.github/workflows/build-push.yml`
   (runs only when `push: true` and all builds succeeded)
 - CLI entrypoint: `nu scripts/dockypody.nu ci ghcr-purge`
 
@@ -53,60 +62,35 @@ Safety and fault tolerance:
 - If the token cannot delete package versions (permission denied), the purge
   step should warn and skip instead of failing the build.
 
-## Docker Image Caching
+## Dependency Reuse in CI
 
-CI workflows use `actions/cache` to store and restore Docker images between runs. This speeds up builds by reusing previously built dependency images.
+Current CI uses workflow-local shard artifacts, not `actions/cache`, to
+reuse dependency images between jobs.
 
-### Cache Key Strategy
+### Artifact Flow
 
-The cache uses a commit+branch key pattern:
+The generated `build-service.yml` workflow does this for each
+service/version/platform node:
 
-```yaml
-key: images-{service}-{branch}-{commit}
-restore-keys: |
-  images-{service}-{branch}-
-```
+1. **Prepare dependency shards**: Run
+   `nu scripts/dockypody.nu ci prepare-node-deps ...` for the dependency
+   closure passed in by `build-orchestrator.yml`
+2. **Load dependency images**: Download shard artifacts from earlier jobs in
+   the same run and load them into the Docker daemon
+3. **Build node**: Run `nu scripts/dockypody.nu build ...` with
+   `--dep-cache=soft` and the normal CI pull settings
+4. **Create shard**: Package the built node as a shard artifact
+5. **Upload shard artifact**: Publish it so downstream jobs can reuse it
 
-This strategy provides:
+Shard artifact names follow
+`shard-<service>-<version>-<platform|single>`. This keeps reuse scoped to
+the current workflow run and aligned with the generated service graph.
 
-- **Exact match**: Reuse cache from the same commit on the same branch
-- **Fallback match**: Reuse cache from an older commit on the same branch
-- **No cross-branch pollution**: Each branch has its own cache namespace
+### Legacy Cache Notes
 
-### Cache Match Kind
-
-The workflow determines how the cache was matched and passes a diagnostic label
-to the build script:
-
-| Match Kind | Meaning | Typical Cause |
-| ---------- | ------- | ------------- |
-| `exact` | Cache key matched exactly | Same commit rebuilt |
-| `fallback` | Restore key matched | New commit on existing branch |
-| `miss` | No cache found | First build on a new branch |
-
-The label is passed via the `--cache-match` flag:
-
-```bash
-nu scripts/dockypody.nu build --service my-service --cache-match=fallback
-```
-
-Generated workflows currently use `exact`, `fallback`, and `miss` by
-convention, but the DockyPody CLI accepts `--cache-match` as a free-form
-string and echoes it back in dependency cache diagnostics.
-
-This appears in log messages when dependencies are auto-built, helping
-diagnose cache behavior.
-
-### Cache Workflow Steps
-
-The `build-service.yml` workflow:
-
-1. **Restore cache**: Attempts to restore from exact key, then fallback keys
-2. **Load images**: Loads saved images into Docker daemon (if cache hit)
-3. **Determine match kind**: Computes `exact`, `fallback`, or `miss`
-4. **Build service**: Runs build with `--cache-match` flag
-5. **Save images**: Saves all images to cache directory
-6. **Save cache**: Stores cache for future runs
+The CLI still documents `--cache-match` for legacy or custom callers, but
+the generated workflows no longer compute `exact`/`fallback`/`miss` labels
+through `actions/cache`.
 
 ## Service Definition Hash
 

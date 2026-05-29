@@ -382,18 +382,30 @@ nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 - Local builds: `off` (always build, rely on Docker layer cache)
 - CI builds: `soft` (hash-based skip + auto-build)
 
-### CI Dependency Cache Restoration
+### CI Dependency Shard Preparation
 
-In CI, dependency caches are restored before building using the `dependencies` input to `build-service.yml`. This allows each service job to restore caches for its direct dependencies, not just `common-tools`.
+In the shipped CI flow, dependency reuse happens through generated
+workflow-local shard artifacts, not `actions/cache`. The generated
+`build-orchestrator.yml` passes a comma-separated `dependencies` input to
+the generated `build-service.yml`, and each matrix node prepares the
+matching dependency shards before it builds.
 
 **How it works:**
 
-1. The CI workflow (`build.yml`) calls the orchestrator workflow from the service dependency graph
-2. Each service job includes a `dependencies` input with comma-separated direct dependency service names
-3. `build-service.yml` parses this input into up to 8 slots (`dep1` through `dep8`)
-4. Each non-empty slot triggers a cache restore step for that dependency's image cache
-5. After artifacts are restored, `nu scripts/dockypody.nu ci load-deps` loads
-   the restored tarballs into Docker
+1. `nu scripts/dockypody.nu ci workflow` generates
+   `.github/workflows/build-orchestrator.yml` and
+   `.github/workflows/build-service.yml` from the current service graph.
+2. Each orchestrator job calls `build-service.yml` with the target
+   `service` plus a comma-separated list of dependency services from the
+   full transitive closure.
+3. Inside `build-service.yml`, the `Prepare dependency shards` step runs
+   `nu scripts/dockypody.nu ci prepare-node-deps ...`.
+4. `ci prepare-node-deps` downloads shard artifacts produced earlier in
+   the same workflow run and loads the matching dependency images into the
+   Docker daemon.
+5. After the node build completes, the workflow creates a shard artifact
+   for the current `service:version[:platform]` so downstream jobs can
+   reuse it.
 
 **Example:**
 
@@ -408,9 +420,10 @@ build_cernbox_revad:
     dependencies: "common-tools,gaia,revad-base"
 ```
 
-**Slot limit:** 8 direct dependencies per service. If a service has more than 8 dependencies, a warning is logged and only the first 8 are restored.
-
-**Cache directory cleanup:** When saving tarballs, the cache directory is cleared before writing new tarballs to prevent stale files from accumulating.
+Each shard upload uses an artifact name shaped like
+`shard-<service>-<version>-<platform|single>` with short retention. The
+generated workflow no longer expands `dependencies` into `dep1`..`dep8`
+slots and no longer restores Docker images through `actions/cache`.
 
 ### Flag Propagation
 
@@ -799,19 +812,27 @@ The CI workflows are generated from the service dependency graph using the Docky
 
 ### Workflow Topology
 
-The CI system uses a three-layer architecture:
+The CI system uses a generated three-layer architecture:
 
-1. **build-service.yml** (hand-written) - Reusable workflow for building a single service with all versions
-   - Handles dependency cache restoration, Docker setup, build execution, and cache saving
-   - Accepts `push` input to control whether images are pushed to the registry
-2. **build-orchestrator.yml** (generated) - Reusable workflow encoding the service dependency graph
+1. **build-service.yml** (generated) - Reusable per-service workflow owned
+   by `scripts/lib/ci/workflow/build-service.nu`
+   - Generates the version/platform matrix for one service
+   - Prepares shard artifacts for the dependency closure before each node
+     build
+   - Builds the node, then creates and uploads a shard artifact for
+     downstream reuse
+2. **build-orchestrator.yml** (generated) - Reusable workflow encoding the
+   service dependency graph
    - Generates one job per service with correct `needs` relationships
-   - Accepts `push` input and passes it to each `build-service.yml` call
-   - Called by entry workflows
-3. **Entry workflows** (generated) - Thin wrappers that trigger the orchestrator
+   - Passes `service`, `dependencies`, and shared inputs to
+     `build-service.yml`
+   - Adds aggregation and cleanup steps around the per-service jobs
+3. **Entry workflows** (generated) - Thin wrappers that trigger the
+   generated reusable workflows
    - **build.yml**: Build-only verification (passes `push: false`)
-   - **build-push.yml**: Build and push to ghcr.io (passes `push: true`, manual workflow_dispatch only)
-   - **image-purge.yml**: Purge stale GHCR package versions (SSOT-based, manual workflow_dispatch)
+   - **build-push.yml**: Build and push to ghcr.io (passes `push: true`,
+     then runs GHCR purge)
+   - **image-purge.yml**: Manual SSOT-based GHCR purge workflow
 
 ### Generator Commands
 
@@ -832,17 +853,21 @@ nu scripts/dockypody.nu ci workflow --target image-purge
 
 ### What Gets Generated
 
-The orchestrator workflow (`build-orchestrator.yml`) produces:
+The workflow generator writes the shipped GitHub Actions files:
 
-1. **Workflow header** - Name, `workflow_call` trigger with `push` boolean input
-2. **Service jobs** - One job per service with:
-   - `needs` clause based on direct dependencies (job IDs)
-   - `dependencies` input with comma-separated service names
-   - `push: ${{ inputs.push }}` passed to `build-service.yml`
-3. **Aggregation job** - `build_complete` job that depends on all service jobs
-4. **Dependency graph comment** - Human-readable graph for documentation
-
-Entry workflows (`build.yml`, `build-push.yml`) each contain a single job that calls the orchestrator with the appropriate `push` value.
+1. **`build-service.yml`** - The per-service reusable workflow with
+   `workflow_call` inputs, matrix setup, dependency shard preparation,
+   node build, and shard upload steps
+2. **`build-orchestrator.yml`** - One job per service with:
+   - `needs` clauses based on direct dependencies for job ordering
+   - `dependencies` inputs with comma-separated service names from the
+     full dependency closure
+   - shared build inputs forwarded to `build-service.yml`
+   - aggregation and cleanup jobs
+3. **`build.yml`** and **`build-push.yml`** - Entry wrappers that call the
+   orchestrator with the appropriate `push` value
+4. **`image-purge.yml`** - Manual GHCR purge workflow generated from the
+   same CLI surface
 
 ### When to Regenerate
 
@@ -854,13 +879,18 @@ Run the generator when:
 
 The generated workflows are committed to the repository. CI does not run the generator; it only consumes the committed workflows.
 
-### Direct Dependencies
+### Dependency Sets
 
-The generator computes direct dependencies for each service by parsing:
+The generator computes the full dependency closure for each service by
+parsing:
 
 - `defaults.dependencies` in `versions.nuon`
 - `versions[].overrides.dependencies` for version-level overrides
 - `versions[].overrides.platforms.{platform}.dependencies` for platform-specific overrides
+
+It uses that closure for the `dependencies` input passed to
+`build-service.yml`, while `needs` still tracks direct dependencies for job
+ordering.
 
 This logic is centralized in `scripts/lib/ci/deps.nu` and used by both the generator and dependency loading scripts.
 
@@ -1131,17 +1161,17 @@ The service definition hash enables different behaviors for local and CI builds:
 
 ### Cache Match Diagnostics
 
-In CI, the `--cache-match` flag carries a diagnostic label about cache
-restoration:
+The `--cache-match` flag is now a legacy/custom-caller diagnostic hook, not
+part of the generated shard-artifact workflows:
 
 ```bash
 nu scripts/dockypody.nu build --service my-service --cache-match=exact
 ```
 
-The build CLI currently accepts `--cache-match` as a free-form string and
-echoes it back in dependency cache diagnostics. Generated workflows currently
-populate labels such as `exact`, `fallback`, and `miss`, but those are workflow
-conventions rather than parser-enforced enum values.
+The build CLI accepts `--cache-match` as a free-form string and echoes it
+back in dependency cache diagnostics. Custom callers may still pass labels
+such as `exact`, `fallback`, or `miss`, but the generated workflows no
+longer populate those values.
 
 This label appears in auto-build warning messages to help diagnose cache
 behavior.
