@@ -58,7 +58,7 @@ export def build-help [] {
   print "  --fail-fast            Stop on first failure"
   print "  --progress <mode>      Docker progress output (auto, plain, tty)"
   print "  --pull <mode>          Pre-pull images (deps, externals, or deps,externals)"
-  print "  --disk-monitor <mode>  Disk usage monitoring (basic, off; default off)"
+  print "  --disk-monitor <mode>  Disk usage monitoring; off disables, any other value enables (e.g. basic; default off)"
   print "  --prune-cache-mounts   Prune BuildKit cache between versions"
 }
 

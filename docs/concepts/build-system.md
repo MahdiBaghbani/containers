@@ -1152,7 +1152,9 @@ The build system includes an optional disk monitoring feature for diagnosing dis
 
 ### Enabling Disk Monitoring
 
-Use the `--disk-monitor` flag:
+Use the `--disk-monitor` flag. `off` disables monitoring. Any other
+non-`off` value enables the same basic disk usage snapshots; generated
+workflows currently pass `basic`.
 
 ```bash
 # Enable basic disk monitoring
@@ -1162,12 +1164,12 @@ nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monito
 nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monitor=off
 ```
 
-### Monitoring Modes
+### Runtime Contract
 
-| Mode    | Behavior                                       |
-| ------- | ---------------------------------------------- |
-| `off`   | No monitoring (default)                        |
-| `basic` | Emit disk usage snapshots at build phases      |
+| Value         | Behavior                               |
+| ------------- | -------------------------------------- |
+| `off`         | No monitoring (default)                |
+| any non-`off` | Emit disk usage snapshots at build phases |
 
 ### Build Phases
 
@@ -1255,7 +1257,7 @@ nu scripts/dockypody.nu build --service cernbox-web --all-versions
 Cache pruning runs **after each version build** in multi-version builds:
 
 1. Build version A
-2. Record disk usage (if `--disk-monitor=basic`)
+2. Record disk usage (if `--disk-monitor` is not `off`)
 3. Prune build cache (if `--prune-cache-mounts`)
 4. Record disk usage after prune (confirms effect)
 5. Build version B

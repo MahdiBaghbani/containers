@@ -698,7 +698,9 @@ nu scripts/dockypody.nu build --service revad-base --version v1.28.0 --latest fa
 
 ### `--disk-monitor <string>`
 
-Control disk monitoring output during builds:
+Control disk monitoring output during builds. `off` disables monitoring.
+Any other non-`off` value enables the same basic disk usage snapshots.
+Generated workflows currently pass `basic`.
 
 ```bash
 # Enable basic disk monitoring
@@ -708,12 +710,12 @@ nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monito
 nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monitor=off
 ```
 
-**Modes:**
+**Runtime contract:**
 
-| Mode    | Behavior                                          |
-| ------- | ------------------------------------------------- |
-| `off`   | No monitoring (default for local builds)          |
-| `basic` | Emit disk usage snapshots at build phases         |
+| Value            | Behavior                                 |
+| ---------------- | ---------------------------------------- |
+| `off`            | No monitoring (default for local builds) |
+| any non-`off`    | Emit disk usage snapshots at build phases |
 
 **CI Default:** `basic` (enabled for all services in generated workflows)
 

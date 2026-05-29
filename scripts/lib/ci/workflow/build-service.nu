@@ -44,7 +44,7 @@ const BUILD_SERVICE_TRIGGER = 'on:
         type: string
         default: ""
       disk_monitor_mode:
-        description: "Disk monitoring mode: off, basic"
+        description: "Disk monitoring mode: off disables monitoring, any other value enables it"
         required: false
         type: string
         default: "off"
