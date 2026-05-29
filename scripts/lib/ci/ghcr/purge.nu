@@ -148,6 +148,9 @@ export def empty-purge-result [] {
 #   - live delete failures fail the service result (ok=false) UNLESS
 #     partial_success=true, in which case failures are tolerated (ok=true) and
 #     still counted in `failed`.
+#   - under the strict policy (partial_success=false) deletion stops at the
+#     first failed delete so a doomed service does not keep mutating GHCR;
+#     `attempted` then reflects the calls actually issued (< planned).
 #   - dry-run charges zero against the live-delete budget while reporting the
 #     planned candidate count.
 export def purge-service-core [
@@ -205,13 +208,18 @@ export def purge-service-core [
         return (empty-purge-result | merge {planned: $planned, skipped: $planned, charged: 0})
     }
 
-    # Live execution
+    # Live execution.  Under the strict policy (partial_success=false) we stop
+    # at the first failed delete so a service that is already going to fail the
+    # run does not keep issuing further deletions.  `attempted` counts the
+    # calls actually issued, which may be fewer than `planned` after a stop.
     mut deleted = 0
     mut failed = 0
+    mut attempted = 0
 
     for v in $to_delete {
         let tag_str = (if ($v.tags | is-empty) { "<untagged>" } else { $v.tags | str join ", " })
         let del_result = (do $delete_fn $base_path $v.id)
+        $attempted = $attempted + 1
 
         if $del_result.ok {
             $deleted = $deleted + 1
@@ -221,10 +229,13 @@ export def purge-service-core [
         } else {
             $failed = $failed + 1
             print --stderr $"WARNING: ($service): failed to delete id=($v.id) tags=[($tag_str)]: ($del_result.error)"
+            if not $partial_success {
+                print --stderr $"ERROR: ($service): strict policy - stopping after first delete failure"
+                break
+            }
         }
     }
 
-    let attempted = $planned
     let charged = $attempted
     let has_failures = ($failed > 0)
     let ok = (not ($has_failures and (not $partial_success)))

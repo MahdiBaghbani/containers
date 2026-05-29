@@ -44,6 +44,10 @@ export def validate-force-flags [service: string, dry_run: bool, force: bool] {
 # max_deletes is the GLOBAL planning budget (0 = unlimited).  It is threaded
 #   across services and shrunk by `planned` so --max-deletes stays a single
 #   run-wide cap; iteration stops once the budget is exhausted.
+# --strict-stop: when set, stop iterating services after the first failed
+#   service result (ok=false) so a run that is already doomed to exit 1 does
+#   not keep mutating later services.  Permission-denied soft skips (ok=true)
+#   do not trigger the stop.  Default (unset) preserves best-effort iteration.
 # Returns a record with the run-wide totals plus failed_services and
 #   permission_denied_services.  Emits only progress info to stderr, never the
 #   final summary (see format-purge-summary).
@@ -51,6 +55,7 @@ export def aggregate-purge-results [
     services: list<string>
     max_deletes: int
     run_service: closure
+    --strict-stop
 ] {
     mut total_planned = 0
     mut total_attempted = 0
@@ -79,11 +84,21 @@ export def aggregate-purge-results [
             $failed_services = ($failed_services | append $svc)
         }
 
+        # Under the strict policy, stop after the first failed service result so
+        # we do not keep mutating later services in a run that will exit 1.
+        # Permission-denied soft skips keep ok=true and do not stop iteration.
+        if $strict_stop and (not $result.ok) {
+            print --stderr $"ERROR: strict policy - stopping service iteration after failed service ($svc)"
+            break
+        }
+
         # Shrink the run-wide planning budget by `planned` so --max-deletes stays
-        # a single run-wide cap in dry-run too (where charged is 0). In live mode
-        # planned == charged, so the live delete budget is preserved: actual
-        # deletions stay bounded run-wide and dry-run still charges zero
-        # (total_charged stays 0).
+        # a single run-wide cap in dry-run too (where charged is 0). We charge the
+        # budget by `planned` intentionally, even in live mode: it bounds the
+        # work we commit to per service before deletes run. Strict live mode can
+        # stop a service early on a failed delete, leaving `charged < planned`
+        # for that service, but we still decrement by `planned` so the run-wide
+        # cap reflects what was planned, not just what succeeded.
         if $max_deletes > 0 {
             $plan_budget_remaining = $plan_budget_remaining - $result.planned
             if $plan_budget_remaining <= 0 {
@@ -204,7 +219,7 @@ export def ghcr-purge-cli [
         purge-service $svc $owner_final $repo_final $dry_run $budget_remaining $debug $force --partial-success=$partial_success
     }
 
-    let agg = (aggregate-purge-results $services $max_deletes $run_service)
+    let agg = (aggregate-purge-results $services $max_deletes $run_service --strict-stop=(not $partial_success))
 
     for line in (format-purge-summary $agg) {
         print --stderr $line

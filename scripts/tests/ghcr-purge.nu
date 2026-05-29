@@ -646,6 +646,85 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $t_agg_budget_stops_iteration)
 
+    # ------------------------------------------------------------------ #
+    # Strict-stop regression tests
+    # Strict policy (partial_success=false) must stop mutating as soon as a
+    # failure is observed: within a service (purge-service-core) and across
+    # services (aggregate-purge-results --strict-stop).
+    # ------------------------------------------------------------------ #
+
+    let t_core_strict_stop_first_failure = (run-test "core: strict policy stops deleting after the first failed delete" {
+        # Three untagged versions sort oldest-first as [1 2 3]; the first delete
+        # (id=1) fails under strict policy, so ids 2 and 3 must never be tried.
+        let versions = [(mock-version 1 []) (mock-version 2 []) (mock-version 3 [])]
+        let list_result = (mock-list-ok $versions)
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false false (delete-fn-fail-id 1))
+        if $r.ok { error make {msg: "expected ok=false on strict live-delete failure"} }
+        if $r.planned != 3 { error make {msg: $"expected planned=3, got ($r.planned)"} }
+        if $r.attempted != 1 { error make {msg: $"expected attempted=1 (stopped after first failure), got ($r.attempted)"} }
+        if $r.deleted != 0 { error make {msg: $"expected deleted=0, got ($r.deleted)"} }
+        if $r.failed != 1 { error make {msg: $"expected failed=1, got ($r.failed)"} }
+        if $r.charged != 1 { error make {msg: $"expected charged=1 (only the issued call), got ($r.charged)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_strict_stop_first_failure)
+
+    let t_core_partial_continues_after_failure = (run-test "core: partial-success keeps deleting after a mid-list failure" {
+        # Contrast with strict: the same id=1 failure under partial-success must
+        # not stop the loop; ids 2 and 3 are still deleted.
+        let versions = [(mock-version 1 []) (mock-version 2 []) (mock-version 3 [])]
+        let list_result = (mock-list-ok $versions)
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false true (delete-fn-fail-id 1))
+        if not $r.ok { error make {msg: "expected ok=true under partial-success policy"} }
+        if $r.attempted != 3 { error make {msg: $"expected attempted=3 (no early stop), got ($r.attempted)"} }
+        if $r.deleted != 2 { error make {msg: $"expected deleted=2, got ($r.deleted)"} }
+        if $r.failed != 1 { error make {msg: $"expected failed=1, got ($r.failed)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_partial_continues_after_failure)
+
+    let t_agg_strict_stop_halts_iteration = (run-test "aggregate: strict-stop halts service iteration after a failed service" {
+        # svc-fail hits a strict live-delete failure (ok=false); with --strict-stop
+        # set, svc-after must never run, so totals only reflect svc-fail.
+        let lists = {
+            "svc-fail": (mock-list-ok [(mock-version 1 []) (mock-version 2 [])])
+            "svc-after": (mock-list-ok [(mock-version 3 []) (mock-version 4 [])])
+        }
+        let runner = {|svc, budget_remaining|
+            let delete_fn = (if $svc == "svc-fail" { (delete-fn-fail-id 1) } else { (delete-fn-ok) })
+            purge-service-core $svc ($lists | get $svc) ["keep"] false $budget_remaining false false false $delete_fn
+        }
+        let agg = (aggregate-purge-results ["svc-fail" "svc-after"] 0 $runner --strict-stop)
+        if $agg.failed_services != ["svc-fail"] {
+            error make {msg: $"expected failed_services=[svc-fail], got ($agg.failed_services)"}
+        }
+        if $agg.planned != 2 { error make {msg: $"expected planned=2 (svc-after skipped), got ($agg.planned)"} }
+        if $agg.deleted != 0 { error make {msg: $"expected deleted=0 (svc-after skipped), got ($agg.deleted)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_agg_strict_stop_halts_iteration)
+
+    let t_agg_no_strict_stop_continues = (run-test "aggregate: without strict-stop, iteration continues past a failed service" {
+        # Same setup as above but with the default (flag unset): svc-after still
+        # runs, so totals roll up both services.
+        let lists = {
+            "svc-fail": (mock-list-ok [(mock-version 1 []) (mock-version 2 [])])
+            "svc-after": (mock-list-ok [(mock-version 3 []) (mock-version 4 [])])
+        }
+        let runner = {|svc, budget_remaining|
+            let delete_fn = (if $svc == "svc-fail" { (delete-fn-fail-id 1) } else { (delete-fn-ok) })
+            purge-service-core $svc ($lists | get $svc) ["keep"] false $budget_remaining false false false $delete_fn
+        }
+        let agg = (aggregate-purge-results ["svc-fail" "svc-after"] 0 $runner)
+        if $agg.failed_services != ["svc-fail"] {
+            error make {msg: $"expected failed_services=[svc-fail], got ($agg.failed_services)"}
+        }
+        if $agg.planned != 4 { error make {msg: $"expected planned=4 (both services run), got ($agg.planned)"} }
+        if $agg.deleted != 2 { error make {msg: $"expected deleted=2 (svc-after deleted both), got ($agg.deleted)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_agg_no_strict_stop_continues)
+
     let t_format_summary = (run-test "format-purge-summary: emits summary, permission-denied, and failed lines" {
         let agg = {
             planned: 5, attempted: 4, deleted: 3, failed: 1, skipped: 0, charged: 4,
