@@ -36,19 +36,112 @@ export def validate-force-flags [service: string, dry_run: bool, force: bool] {
     {ok: true, reason: ""}
 }
 
+# Aggregate per-service purge results into run-wide totals.
+# run_service: closure {|svc, budget_remaining| -> purge result contract} that
+#   purges one service.  Production binds it to purge-service; tests inject an
+#   API-free closure (for example one backed by purge-service-core) so the real
+#   aggregation logic is exercised without duplicating it.
+# max_deletes is the GLOBAL planning budget (0 = unlimited).  It is threaded
+#   across services and shrunk by `planned` so --max-deletes stays a single
+#   run-wide cap; iteration stops once the budget is exhausted.
+# Returns a record with the run-wide totals plus failed_services and
+#   permission_denied_services.  Emits only progress info to stderr, never the
+#   final summary (see format-purge-summary).
+export def aggregate-purge-results [
+    services: list<string>
+    max_deletes: int
+    run_service: closure
+] {
+    mut total_planned = 0
+    mut total_attempted = 0
+    mut total_deleted = 0
+    mut total_failed = 0
+    mut total_skipped = 0
+    mut total_charged = 0
+    mut failed_services = []
+    mut permission_denied_services = []
+    mut plan_budget_remaining = $max_deletes
+
+    for svc in $services {
+        let result = (do $run_service $svc $plan_budget_remaining)
+
+        $total_planned = $total_planned + $result.planned
+        $total_attempted = $total_attempted + $result.attempted
+        $total_deleted = $total_deleted + $result.deleted
+        $total_failed = $total_failed + $result.failed
+        $total_skipped = $total_skipped + $result.skipped
+        $total_charged = $total_charged + $result.charged
+
+        if $result.permission_denied {
+            $permission_denied_services = ($permission_denied_services | append $svc)
+        }
+        if not $result.ok {
+            $failed_services = ($failed_services | append $svc)
+        }
+
+        # Shrink the run-wide planning budget by `planned` so --max-deletes stays
+        # a single run-wide cap in dry-run too (where charged is 0). In live mode
+        # planned == charged, so the live delete budget is preserved: actual
+        # deletions stay bounded run-wide and dry-run still charges zero
+        # (total_charged stays 0).
+        if $max_deletes > 0 {
+            $plan_budget_remaining = $plan_budget_remaining - $result.planned
+            if $plan_budget_remaining <= 0 {
+                print --stderr "INFO: max_deletes budget exhausted; stopping service iteration"
+                break
+            }
+        }
+    }
+
+    {
+        planned: $total_planned
+        attempted: $total_attempted
+        deleted: $total_deleted
+        failed: $total_failed
+        skipped: $total_skipped
+        charged: $total_charged
+        failed_services: $failed_services
+        permission_denied_services: $permission_denied_services
+    }
+}
+
+# Format the run-wide purge summary as a list of stderr lines from an aggregate
+# record (see aggregate-purge-results).  Returns strings and prints nothing, so
+# the line shape can be unit-tested without capturing stderr.
+export def format-purge-summary [agg: record] {
+    mut lines = [
+        $"Purge complete: planned=($agg.planned) attempted=($agg.attempted) deleted=($agg.deleted) failed=($agg.failed) skipped=($agg.skipped) charged=($agg.charged) failed_services=($agg.failed_services | length)"
+    ]
+
+    if ($agg.permission_denied_services | length) > 0 {
+        $lines = ($lines | append $"Permission-denied versions \(soft-skipped\): ($agg.permission_denied_services | str join ', ')")
+    }
+
+    if ($agg.failed_services | length) > 0 {
+        $lines = ($lines | append $"Failed services: ($agg.failed_services | str join ', ')")
+    }
+
+    $lines
+}
+
 # Run GHCR purge for all services (or one service when service is non-empty).
 # max_deletes is a GLOBAL budget for the entire run across all services (0 = unlimited).
 # force: when true and desired_tags is empty, delete all candidates instead of
 #   only untagged ones.  Requires --service (single service only) and
 #   dry_run=false.
-# Soft-failure for missing token / missing gh / package not found.
-# Hard-failure (exit 1) only when a service's version list fails for non-404 reasons.
+# --partial-success: tolerate live delete failures instead of failing the run.
+#   Default is strict: any live delete failure makes the run exit 1.
+# Soft-failure for missing token / missing gh / package not found, and for
+#   permission-denied version lists (reported clearly in the final summary).
+# Hard-failure (exit 1) when a service's version list fails for non-404,
+#   non-permission reasons, or when a live delete fails under the strict policy.
 export def ghcr-purge-cli [
     service: string
     dry_run: bool
     max_deletes: int
     debug: bool
     force: bool
+    --partial-success
 ] {
     # Enforce force preconditions before touching the API
     let gate = (validate-force-flags $service $dry_run $force)
@@ -101,35 +194,23 @@ export def ghcr-purge-cli [
     }
 
     if $debug {
-        print --stderr $"DEBUG: owner=($owner) repo=($repo) services=($services | length) dry_run=($dry_run) max_deletes=($max_deletes) force=($force)"
+        print --stderr $"DEBUG: owner=($owner) repo=($repo) services=($services | length) dry_run=($dry_run) max_deletes=($max_deletes) force=($force) partial_success=($partial_success)"
     }
 
-    mut total_deleted = 0
-    mut total_counted = 0
-    mut failed_services = []
-    mut budget_remaining = $max_deletes
-
-    for svc in $services {
-        let result = (purge-service $svc $owner $repo $dry_run $budget_remaining $debug $force)
-        if $result.ok {
-            $total_deleted = $total_deleted + $result.deleted
-            $total_counted = $total_counted + $result.counted
-            if $max_deletes > 0 {
-                $budget_remaining = $budget_remaining - $result.counted
-                if $budget_remaining <= 0 {
-                    print --stderr "INFO: max_deletes budget exhausted; stopping service iteration"
-                    break
-                }
-            }
-        } else {
-            $failed_services = ($failed_services | append $svc)
-        }
+    # Closures cannot capture mutable bindings, so snapshot owner/repo first.
+    let owner_final = $owner
+    let repo_final = $repo
+    let run_service = {|svc, budget_remaining|
+        purge-service $svc $owner_final $repo_final $dry_run $budget_remaining $debug $force --partial-success=$partial_success
     }
 
-    print --stderr $"Purge complete: total_deleted=($total_deleted) total_counted=($total_counted) failed_services=($failed_services | length)"
+    let agg = (aggregate-purge-results $services $max_deletes $run_service)
 
-    if ($failed_services | length) > 0 {
-        print --stderr $"Failed services: ($failed_services | str join ', ')"
+    for line in (format-purge-summary $agg) {
+        print --stderr $line
+    }
+
+    if ($agg.failed_services | length) > 0 {
         exit 1
     }
 }

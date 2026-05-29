@@ -357,6 +357,8 @@ export def ci-help [] {
   print "  --max-deletes <n>       Global budget: max versions deleted across ALL services in this run (0 = unlimited, default: 0)"
   print "  --force                 For ci ghcr-purge: when desired_tags is empty, delete all candidates instead of only untagged ones."
   print "                          Requires --service (single service only) and --dry-run=false."
+  print "  --partial-success       For ci ghcr-purge: tolerate live delete failures and continue."
+  print "                          Default is strict: any live delete failure exits 1."
   print "  --debug                 Enable verbose output"
 }
 
@@ -444,7 +446,7 @@ def list-service-images [service: string] {
 # CI CLI entrypoint - called from dockypody.nu
 export def ci-cli [
   subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, prepare-node-deps, workflow, images, shard helpers, ghcr-purge, help
-  flags: record        # Flags: { service, version, platform, dependencies, target, ref, sha, transitive, debug, dry_run, max_deletes, force }
+  flags: record        # Flags: { service, version, platform, dependencies, target, ref, sha, transitive, debug, dry_run, max_deletes, force, partial_success }
 ] {
   let service = (try { $flags.service } catch { "" })
   let version = (try { $flags.version } catch { "" })
@@ -456,6 +458,7 @@ export def ci-cli [
   let dry_run = (try { $flags.dry_run } catch { false })
   let max_deletes = (try { $flags.max_deletes } catch { 0 })
   let force = (try { $flags.force } catch { false })
+  let partial_success = (try { $flags.partial_success } catch { false })
   let ref = (try { $flags.ref } catch { "" })
   let sha = (try { $flags.sha } catch { "" })
   
@@ -506,7 +509,7 @@ export def ci-cli [
       }
     }
     "ghcr-purge" => {
-      ghcr-purge-cli $service $dry_run $max_deletes $debug $force
+      ghcr-purge-cli $service $dry_run $max_deletes $debug $force --partial-success=$partial_success
     }
     _ => {
       print $"Unknown ci subcommand: ($subcommand)"

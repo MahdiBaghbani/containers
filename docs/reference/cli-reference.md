@@ -60,6 +60,8 @@ nu scripts/dockypody.nu ci ghcr-purge --dry-run
 nu scripts/dockypody.nu ci ghcr-purge --dry-run=false --max-deletes=200
 # Force-wipe is allowed only for a single service and only with --dry-run=false
 nu scripts/dockypody.nu ci ghcr-purge --service nextcloud --dry-run=false --max-deletes=200 --force
+# Optional partial-success policy: tolerate live delete failures and continue
+nu scripts/dockypody.nu ci ghcr-purge --service nextcloud --dry-run=false --partial-success
 
 # Validate commands
 nu scripts/dockypody.nu validate --all-services
@@ -136,7 +138,8 @@ SSH: `--force`.
 
 CI (shared fields): `--service`, `--version`, `--platform`,
 `--dependencies` (comma list), `--target`, `--ref`, `--sha`, `--transitive`,
-`--debug`, `--dry-run`, `--max-deletes`, `--force`.
+`--debug`, `--dry-run`, `--max-deletes`, `--force`,
+`--partial-success`.
 
 Docs: `--fix`.
 
@@ -154,7 +157,7 @@ nu scripts/dockypody.nu test [--suite <name>] [--verbose]
 - `--suite` names a file under `scripts/tests/<suite>.nu` (default suite name
   `all` runs a fixed bundle: architecture, manifests, services, tls, ssh,
   tag-generation, build-system, defaults, pull, validate, registries, ci,
-  ghcr-purge).
+  ghcr-purge, docs-lint).
 - You may pass any suite name matching a `scripts/tests/*.nu` file; suites not in
   the `all` bundle run only when selected explicitly.
 
@@ -205,11 +208,22 @@ Invoke as `nu scripts/dockypody.nu ci <subcommand> [flags]`.
 | `login-registry` | Registry login helper | `--debug` |
 | `merge-cache-shards` | Merge downloaded shards locally | `--service`, `--ref`, `--sha`; optional `--debug`; base dir from `DOCKYPODY_SHARD_BASE_DIR` or `/tmp/docker-images/shards` |
 | `cleanup-cache-shards` | Delete matching GitHub Actions caches | `--service`, `--ref`, `--sha`; `--dry-run`, `--debug`; needs `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `gh` |
-| `ghcr-purge` | Trim GHCR package versions vs SSOT | Optional `--service` (omit = all services), `--dry-run`, `--max-deletes`, `--debug`, `--force` (needs single service, no dry-run; see purge rules in code comments) |
+| `ghcr-purge` | Trim GHCR package versions vs SSOT | Optional `--service` (omit = all services), `--dry-run`, `--max-deletes`, `--debug`, `--force` (needs single service, no dry-run), `--partial-success` (default is strict failure on live delete errors) |
 
 `ci workflow --target` must be exactly one of: `all`, `build`, `build-push`,
 `orchestrator`, `build-service`, `image-purge`. An omitted or empty `--target`
 errors because the router forwards an empty string to `get-workflows-for-target`.
+
+`ci ghcr-purge` reports run totals with separate `planned`, `attempted`,
+`deleted`, `failed`, `skipped`, and `charged` counts. Dry-run reports planned
+candidates but charges `0` against the live delete budget. Permission-denied
+version lists are soft-skipped and named explicitly in the final summary.
+
+`--max-deletes` defaults differ by entrypoint on purpose. The public CLI
+default is `0`, which means unlimited unless you pass a bound explicitly.
+Bundled workflows keep bounded defaults instead: `build-push.yml` runs
+`ghcr-purge` with `--max-deletes=200`, and `image-purge.yml` exposes a
+`max_deletes` input that defaults to `100`.
 
 ### docs
 
@@ -219,10 +233,14 @@ Subcommands: `lint`.
 nu scripts/dockypody.nu docs lint [--fix]
 ```
 
-`lint-docs` can accept explicit file paths when called through the module API;
-`dockypody.nu` always passes an empty list and therefore lints repo-wide Markdown
-(per `glob` rules inside `scripts/lib/docs/lint.nu`), not per-file positional
-arguments.
+`lint-docs` can accept explicit file paths when called through the module API.
+`dockypody.nu` always passes an empty list, so default repo-wide linting uses
+git-aware discovery (`git ls-files --cached --others --exclude-standard`) and
+respects ignored/generated trees. Explicit file paths are still linted exactly
+as passed.
+
+Autofix (`--fix`) replaces all occurrences of each forbidden pattern, rescans
+the changed files, and exits successfully only when the rescan is clean.
 
 ## Build Command
 

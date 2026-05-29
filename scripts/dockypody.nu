@@ -100,6 +100,7 @@ def main [
   --dependencies: string = "",
   --transitive,
   --debug,
+  --partial-success,
   # Docs flags
   --fix,
   # Common flags
@@ -174,7 +175,7 @@ def main [
     "ci" => {
       # Normalize help flags to "help" subcommand - ci-cli handles it internally
       let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force
+      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force $partial_success
     }
     "docs" => {
       # Normalize help flags to "help" subcommand - docs-cli handles it internally
@@ -259,7 +260,8 @@ def run-ci-command [
   debug: bool,
   dry_run: bool,
   max_deletes: int,
-  force: bool
+  force: bool,
+  partial_success: bool
 ] {
   use ./lib/ci/cli.nu [ci-cli]
   ci-cli $subcommand {
@@ -274,7 +276,8 @@ def run-ci-command [
     debug: $debug,
     dry_run: $dry_run,
     max_deletes: $max_deletes,
-    force: $force
+    force: $force,
+    partial_success: $partial_success
   }
 }
 
