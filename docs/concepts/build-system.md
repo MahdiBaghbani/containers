@@ -28,6 +28,12 @@ The DockyPody build system orchestrates the container image build process, handl
 The `dockypody.nu` script is the unified entry point for all build operations:
 
 ```bash
+# Show top-level help
+nu scripts/dockypody.nu help
+
+# Show build help
+nu scripts/dockypody.nu build help
+
 # Build a service
 nu scripts/dockypody.nu build --service gaia
 
@@ -1125,19 +1131,20 @@ The service definition hash enables different behaviors for local and CI builds:
 
 ### Cache Match Diagnostics
 
-In CI, the `--cache-match` flag provides diagnostic information about cache restoration:
+In CI, the `--cache-match` flag carries a diagnostic label about cache
+restoration:
 
 ```bash
 nu scripts/dockypody.nu build --service my-service --cache-match=exact
 ```
 
-Values:
+The build CLI currently accepts `--cache-match` as a free-form string and
+echoes it back in dependency cache diagnostics. Generated workflows currently
+populate labels such as `exact`, `fallback`, and `miss`, but those are workflow
+conventions rather than parser-enforced enum values.
 
-- `exact`: Cache key matched exactly (commit+branch)
-- `fallback`: Fallback key matched (same branch, different commit)
-- `miss`: No cache found
-
-This information appears in auto-build warning messages to help diagnose cache behavior.
+This label appears in auto-build warning messages to help diagnose cache
+behavior.
 
 ## Disk Monitoring
 

@@ -75,7 +75,8 @@ This strategy provides:
 
 ### Cache Match Kind
 
-The workflow determines how the cache was matched and passes this to the build script:
+The workflow determines how the cache was matched and passes a diagnostic label
+to the build script:
 
 | Match Kind | Meaning | Typical Cause |
 | ---------- | ------- | ------------- |
@@ -83,13 +84,18 @@ The workflow determines how the cache was matched and passes this to the build s
 | `fallback` | Restore key matched | New commit on existing branch |
 | `miss` | No cache found | First build on a new branch |
 
-The match kind is passed via the `--cache-match` flag:
+The label is passed via the `--cache-match` flag:
 
 ```bash
 nu scripts/dockypody.nu build --service my-service --cache-match=fallback
 ```
 
-This appears in log messages when dependencies are auto-built, helping diagnose cache behavior.
+Generated workflows currently use `exact`, `fallback`, and `miss` by
+convention, but the DockyPody CLI accepts `--cache-match` as a free-form
+string and echoes it back in dependency cache diagnostics.
+
+This appears in log messages when dependencies are auto-built, helping
+diagnose cache behavior.
 
 ### Cache Workflow Steps
 

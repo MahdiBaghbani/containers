@@ -29,8 +29,8 @@ The `dockypody.nu` script is the canonical entry point for the DockyPody build s
 ### Basic Usage
 
 ```bash
-# Show help
-nu scripts/dockypody.nu --help
+# Show top-level help
+nu scripts/dockypody.nu help
 
 # Build commands
 nu scripts/dockypody.nu build --service gaia
@@ -108,11 +108,19 @@ nu scripts/dockypody.nu docs lint --fix
 
 ### Help routing
 
-Use `nu scripts/dockypody.nu`, `nu scripts/dockypody.nu help`, `-h`, or `--help`
-for top-level usage. Use a second positional for `build`, `test`, and `validate`
-(`nu scripts/dockypody.nu build help`). For `ssh`, `tls`, `ci`, and `docs`, omit
-the subcommand or pass `help` / `-h` / `--help` as the second word to reach
-domain help.
+DockyPody owns the positional `help` contract:
+
+- Top level: `nu scripts/dockypody.nu help`
+- Single-command CLIs: `nu scripts/dockypody.nu build help`,
+  `nu scripts/dockypody.nu test help`,
+  `nu scripts/dockypody.nu validate help`
+- Routed domains: `nu scripts/dockypody.nu tls help`,
+  `nu scripts/dockypody.nu ssh help`,
+  `nu scripts/dockypody.nu ci help`,
+  `nu scripts/dockypody.nu docs help`
+
+Nushell intercepts `--help` and `-h` before `dockypody.nu`'s `main` body runs,
+so those flag forms are Nushell help, not DockyPody-owned command help.
 
 ### Router flags snapshot
 
@@ -172,11 +180,11 @@ nu scripts/dockypody.nu validate [--service <name>] [--all-services] [--manifest
 
 ### tls
 
-Subcommands: `ca`, `certs`, `clean`; help when the subcommand is missing or set
-to `help` / `-h` / `--help`.
+Subcommands: `ca`, `certs`, `clean`; positional help is
+`nu scripts/dockypody.nu tls help`.
 
 ```bash
-nu scripts/dockypody.nu tls ca [--verbose]
+nu scripts/dockypody.nu tls ca [--force] [--verbose]
 nu scripts/dockypody.nu tls certs [--filter svc1,svc2] [--verbose]
 nu scripts/dockypody.nu tls clean [--service a,b] [--dry-run]
      [--skip-shared-ca] [--keep-empty-dirs] [--service-ca-only]
@@ -184,6 +192,13 @@ nu scripts/dockypody.nu tls clean [--service a,b] [--dry-run]
 
 TLS library helpers like `copy-tls` are module exports only; no `tls copy`
 subcommand is routed through `dockypody.nu`.
+
+- `tls ca --force` regenerates the shared CA even if it already exists. After a
+  forced CA regeneration, regenerate service certificates with
+  `nu scripts/dockypody.nu tls certs`.
+- `--filter` applies to `tls certs` only.
+- `--service`, `--dry-run`, `--skip-shared-ca`, `--keep-empty-dirs`, and
+  `--service-ca-only` apply to `tls clean` only.
 
 ### ssh
 
@@ -233,11 +248,10 @@ Subcommands: `lint`.
 nu scripts/dockypody.nu docs lint [--fix]
 ```
 
-`lint-docs` can accept explicit file paths when called through the module API.
-`dockypody.nu` always passes an empty list, so default repo-wide linting uses
-git-aware discovery (`git ls-files --cached --others --exclude-standard`) and
-respects ignored/generated trees. Explicit file paths are still linted exactly
-as passed.
+The routed `dockypody.nu` contract is repo-wide linting only. It always passes
+an empty file list into the module API, so file discovery uses
+`git ls-files --cached --others --exclude-standard` and respects
+ignored/generated trees.
 
 Autofix (`--fix`) replaces all occurrences of each forbidden pattern, rescans
 the changed files, and exits successfully only when the rescan is clean.

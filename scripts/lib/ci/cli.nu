@@ -336,22 +336,26 @@ export def ci-help [] {
   print "Usage: nu scripts/dockypody.nu ci <subcommand> [options]"
   print ""
   print "Subcommands:"
-  print "  list-deps           List dependency services"
-  print "  load-deps           Load dependency tarballs"
-  print "  load-owner          Load owner tarballs"
-  print "  save-owner          Save owner tarballs"
-  print "  prepare-node-deps   Download and load dependency shards from artifacts (CI only)"
-  print "  workflow            Generate CI workflows (--target all|build|build-push|orchestrator|image-purge)"
-  print "  images              List canonical image references for a service"
-  print "  login-registry      Log in to container registry (CI only)"
-  print "  ghcr-purge          Purge stale GHCR package versions based on SSOT"
+  print "  list-deps             List dependency services"
+  print "  load-deps             Load dependency tarballs"
+  print "  load-owner            Load owner tarballs"
+  print "  save-owner            Save owner tarballs"
+  print "  prepare-node-deps     Download and load dependency shards from artifacts (CI only)"
+  print "  workflow              Generate CI workflows (--target all|build|build-push|orchestrator|build-service|image-purge)"
+  print "  images                List canonical image references for a service"
+  print "  login-registry        Log in to container registry (CI only)"
+  print "  merge-cache-shards    Merge per-node cache shards (requires --service, --ref, --sha)"
+  print "  cleanup-cache-shards  Delete shard caches from GitHub Actions (requires --service, --ref, --sha)"
+  print "  ghcr-purge            Purge stale GHCR package versions based on SSOT"
   print ""
   print "Options:"
   print "  --service <name>        Target service"
   print "  --version <name>        Target version (for prepare-node-deps)"
   print "  --platform <name>       Target platform (for prepare-node-deps)"
   print "  --dependencies <list>   Comma-separated dependency services (for prepare-node-deps)"
-  print "  --target <name>         Workflow target (for workflow: all, build, build-push, orchestrator, image-purge)"
+  print "  --target <name>         Workflow target (for workflow: all, build, build-push, orchestrator, build-service, image-purge)"
+  print "  --ref <name>            Git ref (for merge-cache-shards, cleanup-cache-shards)"
+  print "  --sha <name>            Commit SHA (for merge-cache-shards, cleanup-cache-shards)"
   print "  --transitive            Include transitive dependencies"
   print "  --dry-run               Show what would be done without deleting"
   print "  --max-deletes <n>       Global budget: max versions deleted across ALL services in this run (0 = unlimited, default: 0)"
@@ -463,7 +467,7 @@ export def ci-cli [
   let sha = (try { $flags.sha } catch { "" })
   
   match $subcommand {
-    "help" | "--help" | "-h" => {
+    "help" => {
       ci-help
     }
     "list-deps" => {

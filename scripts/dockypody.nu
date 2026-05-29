@@ -22,7 +22,8 @@
 # See docs/reference/cli-reference.md for usage
 
 # Import only help functions for non-subcommand CLIs (build, test, validate)
-# Subcommand-based CLIs (tls, ci, docs) handle help internally via "help" subcommand
+# Subcommand-based CLIs (tls, ssh, ci, docs) handle help internally via the
+# positional "help" subcommand
 use ./lib/build/cli.nu [build-help]
 use ./lib/validate/cli.nu [validate-help]
 use ./lib/test/cli.nu [test-help]
@@ -55,9 +56,11 @@ def show-help [] {
 }
 
 # Main entrypoint - supports direct invocation: nu scripts/dockypody.nu build --service foo
-# Note: --help is handled via positional args to avoid Nushell's auto-help interception
+# Help contract is the positional "help" subcommand, e.g. `dockypody.nu help`,
+# `dockypody.nu build help`, `dockypody.nu tls help`. Nushell's auto-help
+# intercepts `--help`/`-h` before this body runs, so those are not DockyPody-owned.
 def main [
-  command?: string,           # Command: build, test, validate, tls, ci, help
+  command?: string,           # Command: build, test, validate, tls, ssh, ci, docs, help
   subcommand?: string,        # Subcommand or "help" for command-specific help
   # Build flags
   --service: string = "",
@@ -108,19 +111,20 @@ def main [
   --max-deletes: int = 0,
   --verbose
 ] {
-  # Handle top-level help (command is null, "help", "--help", or "-h")
-  if $command == null or $command == "help" or $command == "--help" or $command == "-h" {
+  # Top-level help: positional "help" or no command. `--help`/`-h` never reach
+  # here because Nushell's auto-help intercepts them before main runs.
+  if $command == null or $command == "help" {
     show-help
     return
   }
   
   match $command {
     "ssh" => {
-      let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
+      let subcmd = if $subcommand == null { "help" } else { $subcommand }
       run-ssh-command $subcmd $force
     }
     "build" => {
-      if $subcommand == "help" or $subcommand == "--help" or $subcommand == "-h" {
+      if $subcommand == "help" {
         build-help
         return
       }
@@ -152,34 +156,34 @@ def main [
       }
     }
     "test" => {
-      if $subcommand == "help" or $subcommand == "--help" or $subcommand == "-h" {
+      if $subcommand == "help" {
         test-help
         return
       }
       run-test-command $suite $verbose
     }
     "validate" => {
-      if $subcommand == "help" or $subcommand == "--help" or $subcommand == "-h" {
+      if $subcommand == "help" {
         validate-help
         return
       }
       run-validate-command $service $all_services $manifests_only
     }
     "tls" => {
-      # Normalize help flags to "help" subcommand - tls-cli handles it internally
-      let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
+      # Default missing subcommand to "help"; tls-cli handles it internally.
+      let subcmd = if $subcommand == null { "help" } else { $subcommand }
       let filter_list = if ($filter | str length) > 0 { $filter | split row "," } else { [] }
       let service_list = if ($service | str length) > 0 { $service | split row "," } else { [] }
       run-tls-command $subcmd $service_list $filter_list $service_ca_only $skip_shared_ca $keep_empty_dirs $force $dry_run $verbose
     }
     "ci" => {
-      # Normalize help flags to "help" subcommand - ci-cli handles it internally
-      let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
+      # Default missing subcommand to "help"; ci-cli handles it internally.
+      let subcmd = if $subcommand == null { "help" } else { $subcommand }
       run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force $partial_success
     }
     "docs" => {
-      # Normalize help flags to "help" subcommand - docs-cli handles it internally
-      let subcmd = if $subcommand == null or $subcommand == "--help" or $subcommand == "-h" { "help" } else { $subcommand }
+      # Default missing subcommand to "help"; docs-cli handles it internally.
+      let subcmd = if $subcommand == null { "help" } else { $subcommand }
       run-docs-command $subcmd $fix
     }
     _ => {

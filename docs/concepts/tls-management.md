@@ -245,17 +245,34 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
 # Generate shared CA
 nu scripts/dockypody.nu tls ca
 
+# Regenerate the shared CA
+nu scripts/dockypody.nu tls ca --force
+
 # Generate all service certificates
 nu scripts/dockypody.nu tls certs
 
 # Generate certificates for a subset of TLS-enabled services
 nu scripts/dockypody.nu tls certs --filter revad-base,idp,cernbox-web
+
+# Remove TLS artifacts but keep the shared CA
+nu scripts/dockypody.nu tls clean --skip-shared-ca
+
+# Preview cleanup without removing files
+nu scripts/dockypody.nu tls clean --dry-run
+
+# Remove only build-staged service-local CA mirrors
+nu scripts/dockypody.nu tls clean --service-ca-only
 ```
 
 ## CA Mismatch Resolution
 
 For `ca-and-cert` mode, the build system validates that the service certificate
 was issued by the shared CA. If validation fails, regenerate certificates with
+`nu scripts/dockypody.nu tls certs`.
+
+If you force-regenerate the shared CA with
+`nu scripts/dockypody.nu tls ca --force`, all existing service certificates were
+signed by the previous CA and must be regenerated with
 `nu scripts/dockypody.nu tls certs`.
 
 **Note:** For `cert-only` mode, CA validation is skipped (service uses public CA).

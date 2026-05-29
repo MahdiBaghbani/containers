@@ -51,14 +51,14 @@ export def build-help [] {
   print "  --no-cache             Disable Docker layer cache"
   print "  --cache-bust <key>     Force cache invalidation"
   print "  --dep-cache <mode>     Dependency cache mode (off, soft, strict)"
-  print "  --cache-match <mode>   Cache match reporting (off, on, verbose)"
+  print "  --cache-match <label>  Free-form CI cache diagnostic label, set by workflows (e.g. exact, fallback, miss)"
   print ""
   print "Build Behavior:"
   print "  --latest-only          Only build latest version"
   print "  --fail-fast            Stop on first failure"
   print "  --progress <mode>      Docker progress output (auto, plain, tty)"
-  print "  --pull <mode>          Pre-pull behavior (off, on, always)"
-  print "  --disk-monitor <mode>  Disk usage monitoring (off, on)"
+  print "  --pull <mode>          Pre-pull images (deps, externals, or deps,externals)"
+  print "  --disk-monitor <mode>  Disk usage monitoring (basic, off; default off)"
   print "  --prune-cache-mounts   Prune BuildKit cache between versions"
 }
 

@@ -464,6 +464,115 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_tls_disabled_no_dep_needed)
 
+    # ------------------------------------------------------------------
+    # generate-ca --force behavior (hermetic via --ca-dir override)
+    # ------------------------------------------------------------------
+
+    let test_ca_skip_no_force = (run-test "generate-ca: existing CA without --force is preserved" {
+        use ../lib/tls/ca.nu [generate-ca]
+        let tmp = (^mktemp -d | str trim)
+        let ca_name = "dockypody"
+        let crt = ($tmp | path join $"($ca_name).crt")
+        let key = ($tmp | path join $"($ca_name).key")
+        "SENTINEL-CRT" | save -f $crt
+        "SENTINEL-KEY" | save -f $key
+
+        generate-ca --ca-dir $tmp --ca-name $ca_name
+
+        let crt_after = (open --raw $crt | decode utf-8)
+        rm-temp-context $tmp
+        if not ($crt_after | str contains "SENTINEL-CRT") {
+            error make {msg: "Existing CA cert should be untouched without --force"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_ca_skip_no_force)
+
+    let test_ca_force_regen = (run-test "generate-ca --force regenerates an existing CA" {
+        let openssl_ok = ((try { ^which openssl | complete | get exit_code } catch { 1 }) == 0)
+        if not $openssl_ok {
+            if $verbose_flag { print "    openssl not available; skipping regeneration assertion" }
+            true
+        } else {
+            use ../lib/tls/ca.nu [generate-ca]
+            let tmp = (^mktemp -d | str trim)
+            let ca_name = "dockypody"
+            let crt = ($tmp | path join $"($ca_name).crt")
+            let key = ($tmp | path join $"($ca_name).key")
+            "SENTINEL-CRT" | save -f $crt
+            "SENTINEL-KEY" | save -f $key
+
+            generate-ca --ca-dir $tmp --ca-name $ca_name --force
+
+            let crt_after = (open --raw $crt | decode utf-8)
+            rm-temp-context $tmp
+            if ($crt_after | str contains "SENTINEL-CRT") {
+                error make {msg: "--force should overwrite the existing CA cert"}
+            }
+            if not ($crt_after | str contains "BEGIN CERTIFICATE") {
+                error make {msg: "Regenerated CA cert should be a real PEM certificate"}
+            }
+            true
+        }
+    } $verbose_flag)
+    $results = ($results | append $test_ca_force_regen)
+
+    let test_ca_force_preserves_on_failure = (run-test "generate-ca --force preserves existing CA when generation fails" {
+        use ../lib/tls/ca.nu [generate-ca]
+        let tmp = (^mktemp -d | str trim)
+        let ca_name = "dockypody"
+        let crt = ($tmp | path join $"($ca_name).crt")
+        let key = ($tmp | path join $"($ca_name).key")
+        "SENTINEL-CRT" | save -f $crt
+        "SENTINEL-KEY" | save -f $key
+
+        # Stub openssl that always fails, on a temp bin dir prepended to PATH.
+        # This forces the generation step to fail deterministically without
+        # depending on the real openssl behavior.
+        let bin = (^mktemp -d | str trim)
+        let stub = ($bin | path join "openssl")
+        "#!/bin/sh\nexit 1\n" | save -f $stub
+        ^chmod +x $stub
+
+        let orig_path = ($env.PATH | default [])
+        let patched_path = (if (($orig_path | describe) | str starts-with "list") {
+            $orig_path | prepend $bin
+        } else {
+            [$bin $orig_path] | str join (char esep)
+        })
+
+        let errored = (with-env {PATH: $patched_path} {
+            try {
+                generate-ca --ca-dir $tmp --ca-name $ca_name --force
+                false
+            } catch {
+                true
+            }
+        })
+
+        let crt_after = (open --raw $crt | decode utf-8)
+        let key_after = (open --raw $key | decode utf-8)
+        let tmp_key_leftover = (($tmp | path join $"($ca_name).key.tmp") | path exists)
+        let tmp_crt_leftover = (($tmp | path join $"($ca_name).crt.tmp") | path exists)
+        rm-temp-context $tmp
+        rm-temp-context $bin
+
+        if not $errored {
+            error make {msg: "Expected generate-ca to error when openssl fails"}
+        }
+        if not ($crt_after | str contains "SENTINEL-CRT") {
+            error make {msg: "Existing CA cert must be preserved when --force regeneration fails"}
+        }
+        if not ($key_after | str contains "SENTINEL-KEY") {
+            error make {msg: "Existing CA key must be preserved when --force regeneration fails"}
+        }
+        if $tmp_key_leftover or $tmp_crt_leftover {
+            error make {msg: "Temp CA artifacts should be cleaned up after a failed regeneration"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_ca_force_preserves_on_failure)
+
     print-test-summary $results
 
     if ($results | any {|r| not $r}) {
