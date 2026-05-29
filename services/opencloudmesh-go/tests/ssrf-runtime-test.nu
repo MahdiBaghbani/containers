@@ -376,8 +376,6 @@ def make_sample_config []: nothing -> string {
         ""
         "[outbound_http.ssrf]"
         "mode = \"strict\""
-        "redirect_mode = \"same-host\""
-        "dns_resolution = \"all-records\""
         ""
         "[tls]"
         "mode = \"static\""
@@ -464,8 +462,6 @@ def make_config_with_runtime_state []: nothing -> string {
         "[outbound_http.ssrf]"
         'route_policy = "runtime"'
         'mode = "strict"'
-        'redirect_mode = "same-host"'
-        'dns_resolution = "all-records"'
         ""
         "[tls]"
         'mode = "static"'
@@ -575,6 +571,22 @@ def test_merged_runtime_contract [] {
     ^rm -rf $tmp
 }
 
+# --- production config shape (http-services) ---
+#
+# Reads the real config.toml from the service tree and asserts that the
+# http-services keys are present with the expected values and that no
+# bootstrap_seeded_users content is present.
+
+def test_production_config_http_services_shape [] {
+    let config_path = ($env.FILE_PWD | path join "../configs/config.toml")
+    let raw = (open --raw $config_path)
+    let parsed = (open $config_path)
+
+    assert_eq "prod config api allowed_paths" ($parsed.http.services.api.allowed_paths) ["/tmp" "/data"]
+    assert_eq "prod config ui wayf enabled" ($parsed.http.services.ui.wayf.enabled) true
+    assert_not_contains "prod config no bootstrap_seeded_users" $raw "bootstrap_seeded_users"
+}
+
 # --- interpolation footgun regression (entrypoint-init.nu summary log) ---
 #
 # Guards against bare (s)/(es) command-substitution footguns inside $"..."
@@ -639,6 +651,7 @@ def main [] {
     test_cleanup_ssrf_runtime_state_is_idempotent
 
     test_merged_runtime_contract
+    test_production_config_http_services_shape
 
     test_summary_log_format
 

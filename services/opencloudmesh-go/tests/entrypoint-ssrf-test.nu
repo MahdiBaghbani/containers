@@ -74,8 +74,6 @@ def make_base_config []: nothing -> string {
         ""
         "[outbound_http.ssrf]"
         "mode = \"strict\""
-        "redirect_mode = \"same-host\""
-        "dns_resolution = \"all-records\""
         ""
         "[tls]"
         "mode = \"static\""
