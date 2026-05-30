@@ -346,6 +346,134 @@ def main [--verbose] {
         error make {msg: $"($validate_wf) missing required step: ($name)"}
       }
     }
+    # Structured checks for build-containers.yml.
+    let build_data = (open $build_wf)
+
+    # 1. Nushell-version parity: both workflows must pin the same NU_VERSION.
+    let build_nu_steps = (
+      ($build_data.jobs?.build?.steps? | default [])
+      | where {|s| ($s.name? | default "") == "Install Nushell"}
+    )
+    if ($build_nu_steps | is-empty) {
+      error make {msg: $"($build_wf) missing 'Install Nushell' step"}
+    }
+    let build_nu_step = ($build_nu_steps | first)
+    let build_nu_version = ($build_nu_step.env?.NU_VERSION? | default "")
+    if $build_nu_version == "" {
+      error make {
+        msg: $"($build_wf) Install Nushell step missing NU_VERSION"
+      }
+    }
+    let github_build_wf = ".github/workflows/build-service.yml"
+    if not ($github_build_wf | path exists) {
+      error make {msg: $"Missing GitHub build workflow: ($github_build_wf)"}
+    }
+    let github_build_data = (open $github_build_wf)
+    let github_nu_steps = (
+      ($github_build_data.jobs?.build?.steps? | default [])
+      | where {|s| ($s.name? | default "") == "Install Nushell"}
+    )
+    if ($github_nu_steps | is-empty) {
+      error make {
+        msg: $"($github_build_wf) missing 'Install Nushell' step in build job"
+      }
+    }
+    let github_nu_version = (($github_nu_steps | first).env?.NU_VERSION? | default "")
+    if $build_nu_version != $github_nu_version {
+      error make {
+        msg: $"NU_VERSION mismatch: ($build_wf)=($build_nu_version) ($github_build_wf)=($github_nu_version)"
+      }
+    }
+
+    let build_steps = (
+      ($build_data.jobs?.build?.steps? | default [])
+      | where {|s| ($s.name? | default "") == "Build"}
+    )
+    if ($build_steps | is-empty) {
+      error make {msg: $"($build_wf) missing 'Build' step"}
+    }
+    let build_step = ($build_steps | first)
+    let build_run = ($build_step.run? | default "")
+
+    # 2. Default-service fallback: YAML input default and shell fallback.
+    let wd_svc = (
+      $build_data."on"?.workflow_dispatch?.inputs?.service? | default {}
+    )
+    let svc_default = ($wd_svc."default"? | default "")
+    if $svc_default != "cernbox-web" {
+      error make {
+        msg: $"($build_wf) workflow_dispatch service default mismatch. got=($svc_default)"
+      }
+    }
+    if not ($build_run | str contains 'SERVICE="cernbox-web"') {
+      error make {
+        msg: $"($build_wf) Build step missing SERVICE fallback to cernbox-web"
+      }
+    }
+
+    # 3. workflow_dispatch push input assertions.
+    let wd_push = (
+      $build_data."on"?.workflow_dispatch?.inputs?.push? | default {}
+    )
+    if ($wd_push | is-empty) {
+      error make {msg: $"($build_wf) missing workflow_dispatch input: push"}
+    }
+    let push_type = ($wd_push."type"? | default "")
+    if $push_type != "boolean" {
+      error make {
+        msg: $"($build_wf) workflow_dispatch push type mismatch. got=($push_type) expected=boolean"
+      }
+    }
+    let push_required = ($wd_push."required"? | default false)
+    if not $push_required {
+      error make {
+        msg: $"($build_wf) workflow_dispatch push should be required=true. got=($push_required)"
+      }
+    }
+    let push_default = ($wd_push."default"? | default null)
+    if $push_default != true {
+      error make {
+        msg: $"($build_wf) workflow_dispatch push default mismatch. got=($push_default) expected=true"
+      }
+    }
+
+    # 4. workflow_dispatch extra_tag input assertions.
+    let wd_extra_tag = (
+      $build_data."on"?.workflow_dispatch?.inputs?.extra_tag? | default {}
+    )
+    if ($wd_extra_tag | is-empty) {
+      error make {msg: $"($build_wf) missing workflow_dispatch input: extra_tag"}
+    }
+    let extra_tag_required = ($wd_extra_tag."required"? | default true)
+    if $extra_tag_required {
+      error make {
+        msg: $"($build_wf) workflow_dispatch extra_tag should be required=false. got=($extra_tag_required)"
+      }
+    }
+
+    # 5. Conditional --push forwarding.
+    if not ($build_run | str contains '[ "${{ steps.flags.outputs.push }}" = "true" ]') {
+      error make {
+        msg: $"($build_wf) Build step missing push condition on steps.flags.outputs.push"
+      }
+    }
+    if not ($build_run | str contains 'set -- "$@" --push') {
+      error make {
+        msg: $"($build_wf) Build step missing conditional '--push' append"
+      }
+    }
+
+    # 6. Optional --extra-tag forwarding.
+    if not ($build_run | str contains '[ -n "$EXTRA_TAG" ]') {
+      error make {
+        msg: $"($build_wf) Build step missing non-empty EXTRA_TAG guard"
+      }
+    }
+    if not ($build_run | str contains 'set -- "$@" --extra-tag "$EXTRA_TAG"') {
+      error make {
+        msg: $"($build_wf) Build step missing '--extra-tag' forwarding"
+      }
+    }
     true
   } $verbose)
   $results = ($results | append $test8)
