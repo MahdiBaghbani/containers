@@ -85,8 +85,8 @@ export def generate-ca [
     let subject = (build-subject $ca_name --country $country --state $state --locality $locality --organization $organization)
     let cert_result = (^openssl req -new -x509 
         -days $days
-        -key $ca_key_tmp 
-        -out $ca_cert_tmp 
+        -key $ca_key_tmp
+        -out $ca_cert_tmp
         -subj $subject
         -sha256 | complete)
     
