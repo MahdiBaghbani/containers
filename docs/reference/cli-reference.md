@@ -50,10 +50,12 @@ nu scripts/dockypody.nu tls clean --service-ca-only
 nu scripts/dockypody.nu ssh key
 nu scripts/dockypody.nu ssh key --force
 
-# CI commands (--target is mandatory for workflow; empty defaults error)
+# CI commands (--target is mandatory for workflow; cache-shard helpers are
+# legacy/manual)
 nu scripts/dockypody.nu ci list-deps --service nextcloud
 nu scripts/dockypody.nu ci workflow --target all --dry-run
 nu scripts/dockypody.nu ci images --service nextcloud
+# Legacy/manual maintenance only; shipped workflows use artifact shards instead
 nu scripts/dockypody.nu ci merge-cache-shards --service svc --ref r --sha s
 nu scripts/dockypody.nu ci ghcr-purge --dry-run
 # --max-deletes is a global budget across all services in the run
@@ -92,8 +94,8 @@ nu scripts/dockypody.nu docs lint --fix
 | `ci workflow` | Write CI workflow YAML (--target ..., --dry-run) | `ci/cli.nu [ci-cli]` |
 | `ci images` | List canonical image references | `ci/cli.nu [ci-cli]` |
 | `ci login-registry` | Log into default container registry | `ci/cli.nu [ci-cli]` |
-| `ci merge-cache-shards` | Merge cache shards under shard root | `ci/cli.nu [ci-cli]` |
-| `ci cleanup-cache-shards` | Delete GitHub Actions cache entries for shards | `ci/cli.nu [ci-cli]` |
+| `ci merge-cache-shards` | Legacy/manual cache-shard merge helper; not used by generated artifact workflows | `ci/cli.nu [ci-cli]` |
+| `ci cleanup-cache-shards` | Legacy/manual cache-shard cleanup helper; not used by generated artifact workflows | `ci/cli.nu [ci-cli]` |
 | `ci ghcr-purge` | Purge stale GHCR package versions (SSOT-based) | `ci/cli.nu [ci-cli]` |
 | `docs lint` | Lint documentation files | `docs/cli.nu [docs-cli]` |
 
@@ -165,7 +167,7 @@ nu scripts/dockypody.nu test [--suite <name>] [--verbose]
 - `--suite` names a file under `scripts/tests/<suite>.nu` (default suite name
   `all` runs a fixed bundle: architecture, manifests, services, tls, ssh,
   tag-generation, build-system, defaults, pull, validate, registries, ci,
-  ghcr-purge, docs-lint).
+  ghcr-purge, docs-lint, routed-smoke).
 - You may pass any suite name matching a `scripts/tests/*.nu` file; suites not in
   the `all` bundle run only when selected explicitly.
 
@@ -221,13 +223,18 @@ Invoke as `nu scripts/dockypody.nu ci <subcommand> [flags]`.
 | `workflow` | Rewrite workflow files from templates | Mandatory `--target` (see targets below), `--dry-run` optional |
 | `images` | Print canonical refs for caches | `--service` |
 | `login-registry` | Registry login helper | `--debug` |
-| `merge-cache-shards` | Merge downloaded shards locally | `--service`, `--ref`, `--sha`; optional `--debug`; base dir from `DOCKYPODY_SHARD_BASE_DIR` or `/tmp/docker-images/shards` |
-| `cleanup-cache-shards` | Delete matching GitHub Actions caches | `--service`, `--ref`, `--sha`; `--dry-run`, `--debug`; needs `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `gh` |
+| `merge-cache-shards` | Legacy/manual helper for older cache-shard flows; not part of generated artifact workflows | `--service`, `--ref`, `--sha`; optional `--debug`; base dir from `DOCKYPODY_SHARD_BASE_DIR` or `/tmp/docker-images/shards` |
+| `cleanup-cache-shards` | Legacy/manual helper for older cache-shard flows; not part of generated artifact workflows | `--service`, `--ref`, `--sha`; `--dry-run`, `--debug`; needs `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `gh` |
 | `ghcr-purge` | Trim GHCR package versions vs SSOT | Optional `--service` (omit = all services), `--dry-run`, `--max-deletes`, `--debug`, `--force` (needs single service, no dry-run), `--partial-success` (default is strict failure on live delete errors) |
 
 `ci workflow --target` must be exactly one of: `all`, `build`, `build-push`,
 `orchestrator`, `build-service`, `image-purge`. An omitted or empty `--target`
-errors because the router forwards an empty string to `get-workflows-for-target`.
+is rejected by the routed `ci-cli` preflight before target resolution runs.
+
+Generated workflows use `ci prepare-node-deps` plus workflow-local shard
+artifacts for dependency reuse. `merge-cache-shards` and
+`cleanup-cache-shards` remain available only for legacy or manual maintenance
+flows.
 
 `ci ghcr-purge` reports run totals with separate `planned`, `attempted`,
 `deleted`, `failed`, `skipped`, and `charged` counts. Dry-run reports planned

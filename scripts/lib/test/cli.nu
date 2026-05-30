@@ -42,6 +42,7 @@ export def test-help [] {
   print "  ci               CI helper tests"
   print "  ghcr-purge       GHCR purge desired-tag and decision logic tests"
   print "  docs-lint        Documentation lint detection and autofix tests"
+  print "  routed-smoke     Routed CLI and Makefile dispatch smoke tests"
 }
 
 # Test CLI entrypoint - called from dockypody.nu
@@ -52,7 +53,7 @@ export def test-cli [
   print "Running OCM Containers Test Suite\n"
   
   let test_suites = if $suite == "all" {
-    ["architecture", "manifests", "services", "tls", "ssh", "tag-generation", "build-system", "defaults", "pull", "validate", "registries", "ci", "ghcr-purge", "docs-lint"]
+    ["architecture", "manifests", "services", "tls", "ssh", "tag-generation", "build-system", "defaults", "pull", "validate", "registries", "ci", "ghcr-purge", "docs-lint", "routed-smoke"]
   } else {
     [$suite]
   }
