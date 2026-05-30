@@ -6,6 +6,7 @@ on:
     paths:
       - '.forgejo/workflows/**'
       - '.github/workflows/**'
+      - 'README.md'
       - 'docs/**'
       - 'schemas/**'
       - 'services/**/*.nuon'
@@ -14,6 +15,7 @@ on:
     paths:
       - '.forgejo/workflows/**'
       - '.github/workflows/**'
+      - 'README.md'
       - 'docs/**'
       - 'schemas/**'
       - 'services/**/*.nuon'

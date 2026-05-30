@@ -237,6 +237,67 @@ def main [--verbose] {
   } $verbose)
   $results = ($results | append $test7)
 
+  # Test 8: Forgejo workflow files exist and still invoke expected commands.
+  # Protects against silent drift in .forgejo/workflows/ committed files.
+  let test8 = (run-test "Forgejo workflow files exist and invoke expected commands" {
+    let build_wf = ".forgejo/workflows/build-containers.yml"
+    let validate_wf = ".forgejo/workflows/validate-schemas.yml"
+    if not ($build_wf | path exists) {
+      error make {msg: $"Missing workflow: ($build_wf)"}
+    }
+    if not ($validate_wf | path exists) {
+      error make {msg: $"Missing workflow: ($validate_wf)"}
+    }
+    let build_contents = (open --raw $build_wf)
+    if not ($build_contents | str contains "scripts/dockypody.nu build") {
+      error make {
+        msg: $"($build_wf) does not invoke 'scripts/dockypody.nu build'"
+      }
+    }
+    let validate_contents = (open --raw $validate_wf)
+    if not ($validate_contents | str contains "scripts/dockypody.nu test --suite ci") {
+      error make {
+        msg: $"($validate_wf) does not invoke 'scripts/dockypody.nu test --suite ci'"
+      }
+    }
+    # Parse the YAML and inspect trigger paths arrays directly.
+    let wf_data = (open $validate_wf)
+    let on_block = ($wf_data."on"? | default null)
+    if ($on_block == null) {
+      error make {msg: $"($validate_wf) missing 'on:' trigger block in parsed YAML"}
+    }
+    let push_block = ($on_block.push? | default null)
+    if ($push_block == null) {
+      error make {msg: $"($validate_wf) missing push: trigger"}
+    }
+    let push_paths = ($push_block.paths? | default [])
+    if ($push_paths | is-empty) {
+      error make {msg: $"($validate_wf) missing paths array in push trigger"}
+    }
+    if not ("README.md" in $push_paths) {
+      error make {
+        msg: $"($validate_wf) README.md missing from push trigger paths"
+      }
+    }
+    let pr_block = ($on_block.pull_request? | default null)
+    if ($pr_block == null) {
+      error make {msg: $"($validate_wf) missing pull_request: trigger"}
+    }
+    let pr_paths = ($pr_block.paths? | default [])
+    if ($pr_paths | is-empty) {
+      error make {
+        msg: $"($validate_wf) missing paths array in pull_request trigger"
+      }
+    }
+    if not ("README.md" in $pr_paths) {
+      error make {
+        msg: $"($validate_wf) README.md missing from pull_request trigger paths"
+      }
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test8)
+
   print-test-summary $results
 
   let failed = ($results | where {|r| not $r} | length)
