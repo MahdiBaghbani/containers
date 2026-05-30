@@ -145,10 +145,10 @@ ca: tls
 	@echo "Generating Certificate Authority..."
 	@nu scripts/dockypody.nu tls ca
 
-## Generate certificates for all services
+## Generate TLS certificates
 ## Usage: make tls certs FILTER="service1,service2"
 certs: tls
-	@echo "Generating certificates for all services..."
+	@echo "Generating TLS certificates..."
 	@nu scripts/dockypody.nu tls certs $(if $(FILTER),--filter "$(FILTER)",)
 
 ## Generate CA and all certificates
