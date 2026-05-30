@@ -255,9 +255,18 @@ def main [--verbose] {
       }
     }
     let validate_contents = (open --raw $validate_wf)
-    if not ($validate_contents | str contains "scripts/dockypody.nu test --suite ci") {
-      error make {
-        msg: $"($validate_wf) does not invoke 'scripts/dockypody.nu test --suite ci'"
+    let expected_commands = [
+      "scripts/dockypody.nu docs lint"
+      "scripts/dockypody.nu test --suite ci"
+      "scripts/dockypody.nu test --suite ghcr-purge"
+      "scripts/dockypody.nu test --suite docs-lint"
+      "scripts/dockypody.nu test --suite routed-smoke"
+    ]
+    for cmd in $expected_commands {
+      if not ($validate_contents | str contains $cmd) {
+        error make {
+          msg: $"($validate_wf) does not invoke '($cmd)'"
+        }
       }
     }
     # Parse the YAML and inspect trigger paths arrays directly.
@@ -270,13 +279,29 @@ def main [--verbose] {
     if ($push_block == null) {
       error make {msg: $"($validate_wf) missing push: trigger"}
     }
+    let push_branches = ($push_block.branches? | default [])
+    if ($push_branches | sort) != (["main" "master"] | sort) {
+      error make {
+        msg: $"($validate_wf) push.branches mismatch. got=($push_branches | str join ',') expected=main,master"
+      }
+    }
     let push_paths = ($push_block.paths? | default [])
     if ($push_paths | is-empty) {
       error make {msg: $"($validate_wf) missing paths array in push trigger"}
     }
-    if not ("README.md" in $push_paths) {
+    let expected_trigger_paths = [
+      ".forgejo/workflows/**"
+      ".github/workflows/**"
+      "Makefile"
+      "README.md"
+      "docs/**"
+      "schemas/**"
+      "services/**/*.nuon"
+      "scripts/**"
+    ]
+    if ($push_paths | sort) != ($expected_trigger_paths | sort) {
       error make {
-        msg: $"($validate_wf) README.md missing from push trigger paths"
+        msg: $"($validate_wf) push.paths mismatch. got=($push_paths | sort | str join ',') expected=($expected_trigger_paths | sort | str join ',')"
       }
     }
     let pr_block = ($on_block.pull_request? | default null)
@@ -289,9 +314,36 @@ def main [--verbose] {
         msg: $"($validate_wf) missing paths array in pull_request trigger"
       }
     }
-    if not ("README.md" in $pr_paths) {
+    if ($pr_paths | sort) != ($expected_trigger_paths | sort) {
       error make {
-        msg: $"($validate_wf) README.md missing from pull_request trigger paths"
+        msg: $"($validate_wf) pull_request.paths mismatch. got=($pr_paths | sort | str join ',') expected=($expected_trigger_paths | sort | str join ',')"
+      }
+    }
+    let job_name = ($wf_data.jobs?.validate?.name? | default "")
+    if $job_name != "Lightweight Non-Image Validation" {
+      error make {
+        msg: $"($validate_wf) jobs.validate.name mismatch. got=($job_name)"
+      }
+    }
+    let validate_job = ($wf_data.jobs?.validate? | default {})
+    let job_runs_on = ($validate_job | get --optional "runs-on") | default ""
+    if $job_runs_on != "ubuntu-latest" {
+      error make {
+        msg: $"($validate_wf) jobs.validate.runs-on mismatch. got=($job_runs_on)"
+      }
+    }
+    let steps = ($wf_data.jobs?.validate?.steps? | default [])
+    let step_names = ($steps | each {|s| $s.name? | default ""})
+    let required_step_names = [
+      "Checkout code"
+      "Install Nushell"
+      "Validate schema example files"
+      "Validate all service configs"
+      "Validate schema file references"
+    ]
+    for name in $required_step_names {
+      if not ($name in $step_names) {
+        error make {msg: $"($validate_wf) missing required step: ($name)"}
       }
     }
     true

@@ -51,9 +51,12 @@ Forgejo keeps the committed, non-generated workflows that round out the CI
 story:
 
 - **`.forgejo/workflows/validate-schemas.yml`**: Lightweight non-image
-  validation. It validates schemas and manifests, runs `nu
-  scripts/dockypody.nu docs lint`, and runs the `ci`, `ghcr-purge`, and
-  `docs-lint` test suites.
+  validation. It checks schema examples, service configs and manifests, schema
+  file references in `docs/`, runs `nu scripts/dockypody.nu docs lint`, and
+  runs the `ci`, `ghcr-purge`, `docs-lint`, and `routed-smoke` test suites.
+  It triggers on workflow files, `Makefile`, `README.md`, `docs/**`,
+  `schemas/**`, `services/**/*.nuon`, and `scripts/**`; see the workflow file
+  for the exact committed contract.
 - **`.forgejo/workflows/build-containers.yml`**: Image build workflow that
   installs the same Nushell version as GitHub and calls `nu
   scripts/dockypody.nu build ...` directly.

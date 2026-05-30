@@ -6,6 +6,7 @@ on:
     paths:
       - '.forgejo/workflows/**'
       - '.github/workflows/**'
+      - 'Makefile'
       - 'README.md'
       - 'docs/**'
       - 'schemas/**'
@@ -15,6 +16,7 @@ on:
     paths:
       - '.forgejo/workflows/**'
       - '.github/workflows/**'
+      - 'Makefile'
       - 'README.md'
       - 'docs/**'
       - 'schemas/**'
@@ -77,4 +79,7 @@ jobs:
 
       - name: Run docs-lint tests
         run: nu scripts/dockypody.nu test --suite docs-lint
+
+      - name: Run routed smoke tests
+        run: nu scripts/dockypody.nu test --suite routed-smoke
 
