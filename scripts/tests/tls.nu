@@ -618,6 +618,10 @@ def main [--verbose] {
         if not ($out.stdout | str contains "any other value enables") {
             error make {msg: "build help --disk-monitor wording is not honest about non-off values"}
         }
+        let expected_cache_match_line = "  --cache-match <label>  Legacy/custom-caller diagnostic label; generated workflows no longer populate it"
+        if not ($out.stdout | lines | any {|l| $l == $expected_cache_match_line}) {
+            error make {msg: "build help --cache-match line does not match expected wording"}
+        }
         true
     } $verbose_flag)
     $results = ($results | append $test_smoke_build_help)

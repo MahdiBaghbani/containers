@@ -51,7 +51,7 @@ export def build-help [] {
   print "  --no-cache             Disable Docker layer cache"
   print "  --cache-bust <key>     Force cache invalidation"
   print "  --dep-cache <mode>     Dependency cache mode (off, soft, strict)"
-  print "  --cache-match <label>  Free-form CI cache diagnostic label, set by workflows (e.g. exact, fallback, miss)"
+  print "  --cache-match <label>  Legacy/custom-caller diagnostic label; generated workflows no longer populate it"
   print ""
   print "Build Behavior:"
   print "  --latest-only          Only build latest version"
