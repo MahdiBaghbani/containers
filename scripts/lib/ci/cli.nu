@@ -341,7 +341,7 @@ export def ci-help [] {
   print "  load-owner            Load owner tarballs"
   print "  save-owner            Save owner tarballs"
   print "  prepare-node-deps     Download and load dependency shards from artifacts (CI only)"
-  print "  workflow              Generate CI workflows (--target all|build|build-push|orchestrator|build-service|image-purge)"
+  print "  workflow              Generate CI workflows (requires --target: all|build|build-push|orchestrator|build-service|image-purge)"
   print "  images                List canonical image references for a service"
   print "  login-registry        Log in to container registry (CI only)"
   print "  merge-cache-shards    Merge per-node cache shards (requires --service, --ref, --sha)"
@@ -353,7 +353,7 @@ export def ci-help [] {
   print "  --version <name>        Target version (for prepare-node-deps)"
   print "  --platform <name>       Target platform (for prepare-node-deps)"
   print "  --dependencies <list>   Comma-separated dependency services (for prepare-node-deps)"
-  print "  --target <name>         Workflow target (for workflow: all, build, build-push, orchestrator, build-service, image-purge)"
+  print "  --target <name>         Workflow target (required for workflow: all, build, build-push, orchestrator, build-service, image-purge)"
   print "  --ref <name>            Git ref (for merge-cache-shards, cleanup-cache-shards)"
   print "  --sha <name>            Commit SHA (for merge-cache-shards, cleanup-cache-shards)"
   print "  --transitive            Include transitive dependencies"
@@ -456,7 +456,7 @@ export def ci-cli [
   let version = (try { $flags.version } catch { "" })
   let platform = (try { $flags.platform } catch { "" })
   let dependencies = (try { $flags.dependencies } catch { "" })
-  let target = (try { $flags.target } catch { "all" })
+  let target = (try { $flags.target } catch { "" })
   let transitive = (try { $flags.transitive } catch { false })
   let debug = (try { $flags.debug } catch { false })
   let dry_run = (try { $flags.dry_run } catch { false })
@@ -490,7 +490,11 @@ export def ci-cli [
     }
     "workflow" => {
       use ./workflow.nu [get-workflows-for-target write-workflows]
-      
+
+      if ($target | str length) == 0 {
+        print --stderr "ERROR: --target is required for ci workflow (all, build, build-push, orchestrator, build-service, image-purge)"
+        exit 1
+      }
       let workflows = (get-workflows-for-target $target)
       write-workflows $workflows --dry-run=$dry_run
     }

@@ -673,9 +673,29 @@ def main [--verbose] {
         if not ($out.stdout | str contains "Subcommands:") {
             error make {msg: "ci help missing Subcommands section"}
         }
+        if not ($out.stdout | str contains "required for workflow") {
+            error make {msg: "ci help --target not marked required for workflow"}
+        }
+        if not ($out.stdout | str contains "requires --target") {
+            error make {msg: "ci help workflow subcommand missing requires --target wording"}
+        }
         true
     } $verbose_flag)
     $results = ($results | append $test_smoke_ci_help)
+
+    let test_smoke_ci_workflow_no_target = (run-test "smoke: ci workflow without --target fails with error" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry ci workflow --dry-run | complete)
+        if $out.exit_code == 0 {
+            error make {msg: "ci workflow --dry-run without --target should exit non-zero but exited 0"}
+        }
+        if not ($out.stderr | str contains "--target is required") {
+            error make {msg: $"ci workflow missing-target error should mention --target is required; got: ($out.stderr)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_ci_workflow_no_target)
 
     let test_smoke_docs_help = (run-test "smoke: routed docs help dispatches" {
         let root = (get-repo-root)
