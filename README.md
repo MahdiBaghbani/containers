@@ -126,8 +126,11 @@ See [Service Configuration](docs/concepts/service-configuration.md) for complete
 
 CI/CD workflows are available for GitHub Actions and Forgejo Actions:
 
-- GitHub: `.github/workflows/build-containers.yml`
-- Forgejo: `.forgejo/workflows/build-containers.yml`
+- GitHub: generated workflows under `.github/workflows/`
+  (`build.yml`, `build-push.yml`, `build-orchestrator.yml`,
+  `build-service.yml`, `image-purge.yml`)
+- Forgejo: committed workflows under `.forgejo/workflows/`
+  (`build-containers.yml`, `validate-schemas.yml`)
 
 See [CI/CD Workflows](docs/guides/ci-cd.md) for workflow documentation.
 

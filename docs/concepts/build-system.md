@@ -388,7 +388,8 @@ In the shipped CI flow, dependency reuse happens through generated
 workflow-local shard artifacts, not `actions/cache`. The generated
 `build-orchestrator.yml` passes a comma-separated `dependencies` input to
 the generated `build-service.yml`, and each matrix node prepares the
-matching dependency shards before it builds.
+matching dependency shards before it builds. The current generated workflow
+set has no active `actions/cache` restore/save path for image state.
 
 **How it works:**
 
@@ -403,9 +404,11 @@ matching dependency shards before it builds.
 4. `ci prepare-node-deps` downloads shard artifacts produced earlier in
    the same workflow run and loads the matching dependency images into the
    Docker daemon.
-5. After the node build completes, the workflow creates a shard artifact
-   for the current `service:version[:platform]` so downstream jobs can
-   reuse it.
+5. The build step runs `nu scripts/dockypody.nu build ... --dep-cache=soft`
+   so a missing shard can still be rebuilt instead of failing hard.
+6. After the node build completes, the workflow creates and uploads a
+   shard artifact for the current `service:version[:platform]` so
+   downstream jobs can reuse it.
 
 **Example:**
 
@@ -423,7 +426,8 @@ build_cernbox_revad:
 Each shard upload uses an artifact name shaped like
 `shard-<service>-<version>-<platform|single>` with short retention. The
 generated workflow no longer expands `dependencies` into `dep1`..`dep8`
-slots and no longer restores Docker images through `actions/cache`.
+slots, and it no longer restores or saves Docker images through
+`actions/cache`.
 
 ### Flag Propagation
 
@@ -834,6 +838,10 @@ The CI system uses a generated three-layer architecture:
      then runs GHCR purge)
    - **image-purge.yml**: Manual SSOT-based GHCR purge workflow
 
+The purge story is intentionally split: `build-push.yml` owns the automatic
+post-push purge job, while `image-purge.yml` stays the manual operator
+entry point. `build-orchestrator.yml` itself does not own purge behavior.
+
 ### Generator Commands
 
 ```bash
@@ -869,6 +877,9 @@ The workflow generator writes the shipped GitHub Actions files:
 4. **`image-purge.yml`** - Manual GHCR purge workflow generated from the
    same CLI surface
 
+It does not generate the Forgejo workflows. Those stay as committed,
+hand-edited automation around the same `dockypody` CLI.
+
 ### When to Regenerate
 
 Run the generator when:
@@ -877,7 +888,8 @@ Run the generator when:
 - Changing service dependencies
 - Modifying the service dependency graph
 
-The generated workflows are committed to the repository. CI does not run the generator; it only consumes the committed workflows.
+The generated workflows are committed to the repository. CI does not run the
+generator; it only consumes the committed workflows.
 
 ### Dependency Sets
 
@@ -886,13 +898,15 @@ parsing:
 
 - `defaults.dependencies` in `versions.nuon`
 - `versions[].overrides.dependencies` for version-level overrides
-- `versions[].overrides.platforms.{platform}.dependencies` for platform-specific overrides
+- `versions[].overrides.platforms.{platform}.dependencies` for
+  platform-specific overrides
 
 It uses that closure for the `dependencies` input passed to
 `build-service.yml`, while `needs` still tracks direct dependencies for job
 ordering.
 
-This logic is centralized in `scripts/lib/ci/deps.nu` and used by both the generator and dependency loading scripts.
+This logic is centralized in `scripts/lib/ci/deps.nu` and used by both the
+generator and dependency loading scripts.
 
 ## File Structure
 

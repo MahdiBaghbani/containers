@@ -20,6 +20,7 @@
 # CI domain test suite
 
 use ../lib/ci/deps.nu [get-direct-dependency-services get-all-dependency-services]
+use ../lib/ci/workflow.nu [get-workflows-for-target]
 use ../lib/services/core.nu [list-service-names]
 use ./lib.nu [run-test print-test-summary]
 
@@ -211,6 +212,30 @@ def main [--verbose] {
     true
   } $verbose)
   $results = ($results | append $test6)
+
+  # Test 7: Generated workflow output matches the committed .github/workflows/ files.
+  # Fails on any drift between the generator and the file on disk.
+  let test7 = (run-test "Generated workflows match committed files" {
+    let targets = ["build" "build-push" "orchestrator" "build-service" "image-purge"]
+    for target in $targets {
+      let workflows = (get-workflows-for-target $target)
+      for wf in $workflows {
+        if not ($wf.path | path exists) {
+          error make {
+            msg: $"Committed workflow missing for target ($target): ($wf.path)"
+          }
+        }
+        let committed = (open --raw $wf.path)
+        if $wf.contents != $committed {
+          error make {
+            msg: $"Workflow drift detected for target '($target)': ($wf.path) does not match generator output. Regenerate with: nu scripts/dockypody.nu ci workflow --target ($target)"
+          }
+        }
+      }
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test7)
 
   print-test-summary $results
 
