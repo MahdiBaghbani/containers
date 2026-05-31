@@ -71,15 +71,6 @@ jobs:
       - name: Lint docs
         run: nu scripts/dockypody.nu docs lint
 
-      - name: Run CI workflow parity tests
-        run: nu scripts/dockypody.nu test --suite ci
-
-      - name: Run GHCR purge tests
-        run: nu scripts/dockypody.nu test --suite ghcr-purge
-
-      - name: Run docs-lint tests
-        run: nu scripts/dockypody.nu test --suite docs-lint
-
-      - name: Run routed smoke tests
-        run: nu scripts/dockypody.nu test --suite routed-smoke
+      - name: Run bounded non-Docker test suite bundle
+        run: nu scripts/dockypody.nu test --suite all
 

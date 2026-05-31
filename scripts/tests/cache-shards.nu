@@ -69,6 +69,8 @@ def main [--verbose] {
 
     let t3 = (run-test "merge-node-shards merges manifests and deduplicates images" {
         let tmp_dir = (^mktemp -d | str trim)
+        let owner_name = ($tmp_dir | path basename)
+        let owner_cache = $"/tmp/docker-images/($owner_name)"
 
         let shard1 = {
             node_key: "svc:v1",
@@ -87,8 +89,16 @@ def main [--verbose] {
         # Fake tarball matching image_id-derived filename
         touch $"($tmp_dir)/abc123.tar.zst"
 
-        let result = (merge-node-shards "svc" $tmp_dir)
+        let result = (try {
+            merge-node-shards $owner_name $tmp_dir
+        } catch {|err|
+            rm-tmp $tmp_dir
+            rm-tmp $owner_cache
+            error make {msg: $err.msg}
+        })
+
         rm-tmp $tmp_dir
+        rm-tmp $owner_cache
 
         let nodes = $result.nodes
         let images = $result.images
@@ -99,7 +109,7 @@ def main [--verbose] {
         )
         let img = ($images | get "sha256:abc123")
         let refs_ok = (($img.refs | sort) == ["ref1" "ref2"])
-        let owner_ok = ($img.owner_service == "svc")
+        let owner_ok = ($img.owner_service == $owner_name)
 
         $node_ok and $refs_ok and $owner_ok
     } $verbose_flag)
@@ -168,7 +178,11 @@ def main [--verbose] {
     # ------------------------------------------------------------------
 
     let t_roundtrip = (run-test "write-manifest + read-manifest round-trip" {
-        let test_svc = "__test-roundtrip-cshards__"
+        let tmp_marker = (^mktemp -d | str trim)
+        let test_svc = $"__test-rt-($tmp_marker | path basename)__"
+        rm-tmp $tmp_marker
+        let cache_dir = (get-owner-cache-dir $test_svc)
+
         let node_image_map = {
             nodes: {"svc:v1:prod": "sha256:aaa", "svc:v1:dev": "sha256:bbb"},
             images: {
@@ -177,13 +191,21 @@ def main [--verbose] {
             }
         }
 
-        write-manifest $test_svc $node_image_map
+        try {
+            write-manifest $test_svc $node_image_map
+        } catch {|err|
+            rm-tmp $cache_dir
+            error make {msg: $err.msg}
+        }
 
-        let manifest = (read-manifest $test_svc)
+        let manifest = (try {
+            read-manifest $test_svc
+        } catch {|err|
+            rm-tmp $cache_dir
+            error make {msg: $err.msg}
+        })
 
-        # Clean up
-        let cache_dir = (get-owner-cache-dir $test_svc)
-        try { rm -rf $cache_dir } catch { }
+        rm-tmp $cache_dir
 
         if $manifest == null {
             error make {msg: "read-manifest returned null after write-manifest"}

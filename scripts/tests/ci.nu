@@ -258,10 +258,7 @@ def main [--verbose] {
     let validate_contents = (open --raw $validate_wf)
     let expected_commands = [
       "scripts/dockypody.nu docs lint"
-      "scripts/dockypody.nu test --suite ci"
-      "scripts/dockypody.nu test --suite ghcr-purge"
-      "scripts/dockypody.nu test --suite docs-lint"
-      "scripts/dockypody.nu test --suite routed-smoke"
+      "scripts/dockypody.nu test --suite all"
     ]
     for cmd in $expected_commands {
       if not ($validate_contents | str contains $cmd) {

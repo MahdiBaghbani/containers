@@ -55,8 +55,9 @@ story:
   (`.forgejo/workflows/validate-schemas.yml`): Lightweight non-image
   validation. It checks schema examples, service configs and manifests, schema
   file references in `docs/`, runs `nu scripts/dockypody.nu docs lint`, and
-  runs the `ci`, `ghcr-purge`, `docs-lint`, and `routed-smoke` test suites.
-  It triggers on pushes to `main` and `master`, plus pull requests whose
+  runs `nu scripts/dockypody.nu test --suite all` for the bounded non-Docker
+  public suite bundle. It triggers on pushes to `main` and `master`, plus
+  pull requests whose
   changes touch the committed CI contract (`README.md`, workflow files,
   `docs/**`, `schemas/**`, `services/**/*.nuon`, `scripts/**`, and related
   helper files).
