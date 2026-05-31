@@ -10,7 +10,7 @@ PUBLIC_ORIGIN=https://ocmgo1.docker
 # Leave unset for strict.
 # Set `compat` when you need the compatibility preset.
 # `dev` keeps the container's baked TLS and SSRF overrides.
-OCM_GO_MODE=compat
+# OCM_GO_MODE=compat
 
 # Optional SSRF route-policy envs. Set both or neither.
 # OCM_GO_ROUTE_PRIVATE_CIDRS=10.0.0.0/24
