@@ -164,12 +164,13 @@ bulk of this file starting at [Build Command](#build-command).
 nu scripts/dockypody.nu test [--suite <name>] [--verbose]
 ```
 
-- `--suite` names a file under `scripts/tests/<suite>.nu` (default suite name
-  `all` runs a fixed bundle: architecture, manifests, services, tls, ssh,
-  tag-generation, build-system, defaults, pull, validate, registries, ci,
-  ghcr-purge, docs-lint, routed-smoke).
-- You may pass any suite name matching a `scripts/tests/*.nu` file; suites not in
-  the `all` bundle run only when selected explicitly.
+- `--suite` names a file under `scripts/tests/<suite>.nu`. The default suite
+  name `all` runs the current non-Docker bundle surfaced by
+  `nu scripts/dockypody.nu test help`.
+- You may pass any suite name matching a `scripts/tests/*.nu` file.
+  `docker-integration` stays opt-in, is excluded from `all`, and only runs
+  when `DOCKYPODY_DOCKER_INTEGRATION=1` is set or the suite is invoked
+  directly with `--docker`.
 
 ### validate
 

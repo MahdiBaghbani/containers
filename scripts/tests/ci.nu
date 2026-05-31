@@ -22,6 +22,7 @@
 use ../lib/ci/deps.nu [get-direct-dependency-services get-all-dependency-services]
 use ../lib/ci/workflow.nu [get-workflows-for-target]
 use ../lib/services/core.nu [list-service-names]
+use ../lib/build/dep-nodes.nu [get-dependency-node-candidates get-matching-dependency-shards]
 use ./lib.nu [run-test print-test-summary]
 
 # Build dep_id -> service_name mapping from infra manifests (independent of library).
@@ -477,6 +478,88 @@ def main [--verbose] {
     true
   } $verbose)
   $results = ($results | append $test8)
+
+  # Test 9: get-dependency-node-candidates for common-tools with no target
+  # platform returns candidates for all platforms (debian, alpine, rhel).
+  let test9 = (run-test "dep-nodes: common-tools no target -> all platform candidates" {
+    let candidates = (get-dependency-node-candidates ["common-tools"])
+    if ($candidates | is-empty) {
+      error make {msg: "Expected non-empty candidates for common-tools"}
+    }
+    let platforms = ($candidates | each {|c| $c.platform} | uniq | sort)
+    for plat in ["debian" "alpine"] {
+      if not ($plat in $platforms) {
+        error make {msg: $"Expected platform '($plat)' in candidates, got: ($platforms | str join ',')"}
+      }
+    }
+    ($candidates | all {|c| $c.service == "common-tools"})
+  } $verbose)
+  $results = ($results | append $test9)
+
+  # Test 10: get-dependency-node-candidates filters to matching platform
+  # when the target platform exists in the dependency's platforms.nuon.
+  let test10 = (run-test "dep-nodes: common-tools target=debian -> only debian candidates" {
+    let candidates = (get-dependency-node-candidates ["common-tools"] "debian")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected debian candidates for common-tools"}
+    }
+    let non_debian = ($candidates | where {|c| $c.platform != "debian"})
+    if not ($non_debian | is-empty) {
+      error make {msg: $"Expected only debian, found non-debian: ($non_debian | length)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test10)
+
+  # Test 11: get-dependency-node-candidates falls back to all platforms when
+  # target platform does not exist in the dependency's platforms.nuon.
+  let test11 = (run-test "dep-nodes: common-tools unknown target -> all platform fallback" {
+    let candidates = (get-dependency-node-candidates ["common-tools"] "nonexistent-platform")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected fallback candidates for unknown target platform"}
+    }
+    let platforms = ($candidates | each {|c| $c.platform} | uniq)
+    if ($platforms | length) < 2 {
+      error make {msg: $"Expected multiple platforms in fallback, got: ($platforms | str join ',')"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test11)
+
+  # Test 12: get-matching-dependency-shards uses default platform for
+  # single-platform target (empty target_platform string).
+  let test12 = (run-test "dep-nodes: get-matching-dependency-shards uses default platform for single-platform target" {
+    let candidates = (get-matching-dependency-shards ["common-tools"] "")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected candidates from get-matching-dependency-shards"}
+    }
+    # Single-platform target must resolve to the default platform (debian).
+    let platforms = ($candidates | each {|c| $c.platform} | uniq)
+    if not ("debian" in $platforms) {
+      error make {msg: $"Expected default 'debian', got: ($platforms | str join ',')"}
+    }
+    # Must NOT include other platforms when a single default is available.
+    let non_default = ($candidates | where {|c| $c.platform != "debian"})
+    if not ($non_default | is-empty) {
+      error make {msg: $"Expected only default platform, got: ($non_default | length) extras"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test12)
+
+  # Test 13: get-matching-dependency-shards with explicit matching platform.
+  let test13 = (run-test "dep-nodes: get-matching-dependency-shards with explicit matching platform" {
+    let candidates = (get-matching-dependency-shards ["common-tools"] "debian")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected candidates for debian target"}
+    }
+    let non_debian = ($candidates | where {|c| $c.platform != "debian"})
+    if not ($non_debian | is-empty) {
+      error make {msg: $"Expected only debian, found: ($non_debian | length)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test13)
 
   print-test-summary $results
 

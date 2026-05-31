@@ -23,6 +23,7 @@ use ../lib/core/repo.nu [get-repo-root]
 use ../lib/tls/lib.nu [get-services-dir get-shared-ca-dir build-subject build-san-config]
 use ../lib/build/context.nu [detect-ca-requirements prepare-ca-context cleanup-ca-context]
 use ../lib/validate/tls.nu [validate-tls-config-merged]
+use ../lib/tls/validation.nu [validate-ca cert-matches-ca]
 use ./lib.nu [run-test print-test-summary]
 
 # ---------------------------------------------------------------------------
@@ -572,6 +573,266 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $test_ca_force_preserves_on_failure)
+
+    # ------------------------------------------------------------------
+    # validate-ca: TLS disabled is a no-op
+    # ------------------------------------------------------------------
+
+    let test_va_disabled = (run-test "validate-ca: TLS disabled is a no-op" {
+        validate-ca "some-service" {tls: {enabled: false}} "any-ca"
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_disabled)
+
+    # ------------------------------------------------------------------
+    # validate-ca: empty ca_name with TLS enabled -> error
+    # ------------------------------------------------------------------
+
+    let test_va_empty_ca = (run-test "validate-ca: TLS enabled but empty ca_name -> error" {
+        let errored = (try {
+            validate-ca "some-service" {tls: {enabled: true, mode: "ca-only"}} ""
+            false
+        } catch { true })
+        if not $errored {
+            error make {msg: "Expected error for empty ca_name with TLS enabled"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_empty_ca)
+
+    # ------------------------------------------------------------------
+    # validate-ca: ca-only mode but CA cert file missing -> error
+    # ------------------------------------------------------------------
+
+    let test_va_missing_ca = (run-test "validate-ca: ca-only mode missing CA cert -> error" {
+        let fake_repo = (^mktemp -d | str trim)
+        let ca_dir = ($fake_repo | path join "tls" "certificate-authority")
+        mkdir $ca_dir
+        # Intentionally do not create the .crt file
+
+        let errored = (do {
+            cd $fake_repo
+            try {
+                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-only"}} "test-ca"
+                false
+            } catch { true }
+        })
+        rm-temp-context $fake_repo
+        if not $errored {
+            error make {msg: "Expected error when CA cert file is missing"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_missing_ca)
+
+    # ------------------------------------------------------------------
+    # validate-ca: ca-only mode with CA cert present -> ok (no cert_name needed)
+    # ------------------------------------------------------------------
+
+    let test_va_ca_only_ok = (run-test "validate-ca: ca-only mode with present CA cert -> ok" {
+        let fake_repo = (^mktemp -d | str trim)
+        let ca_dir = ($fake_repo | path join "tls" "certificate-authority")
+        mkdir $ca_dir
+
+        # Write a fake PEM-like cert so the path-exists check passes
+        let ca_name = "test-ca"
+        "-----BEGIN CERTIFICATE-----\nFAKE\n-----END CERTIFICATE-----\n" | save -f ($ca_dir | path join $"($ca_name).crt")
+
+        let ok = (do {
+            cd $fake_repo
+            try {
+                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-only"}} $ca_name
+                true
+            } catch {
+                false
+            }
+        })
+        rm-temp-context $fake_repo
+        if not $ok {
+            error make {msg: "Expected validate-ca to succeed for ca-only mode with present CA cert"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_ca_only_ok)
+
+    # ------------------------------------------------------------------
+    # validate-ca: ca-and-cert mode missing CA cert -> error
+    # ------------------------------------------------------------------
+
+    let test_va_ca_and_cert_no_ca = (run-test "validate-ca: ca-and-cert mode missing CA cert -> error" {
+        let fake_repo = (^mktemp -d | str trim)
+        let ca_dir = ($fake_repo | path join "tls" "certificate-authority")
+        mkdir $ca_dir
+        # No .crt file
+
+        let errored = (do {
+            cd $fake_repo
+            try {
+                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-and-cert", cert_name: "svc.crt"}} "test-ca"
+                false
+            } catch { true }
+        })
+        rm-temp-context $fake_repo
+        if not $errored {
+            error make {msg: "Expected error for ca-and-cert with missing CA cert"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_ca_and_cert_no_ca)
+
+    # ------------------------------------------------------------------
+    # validate-ca: ca-and-cert mode with CA cert but missing service cert -> error
+    # ------------------------------------------------------------------
+
+    let test_va_ca_and_cert_no_service_cert = (run-test "validate-ca: ca-and-cert mode CA present but service cert missing -> error" {
+        let fake_repo = (^mktemp -d | str trim)
+        let ca_dir = ($fake_repo | path join "tls" "certificate-authority")
+        mkdir $ca_dir
+        "FAKE CA CERT" | save -f ($ca_dir | path join "test-ca.crt")
+        # No service cert
+
+        let errored = (do {
+            cd $fake_repo
+            try {
+                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-and-cert", cert_name: "svc.crt"}} "test-ca"
+                false
+            } catch { true }
+        })
+        rm-temp-context $fake_repo
+        if not $errored {
+            error make {msg: "Expected error for ca-and-cert with missing service cert"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_ca_and_cert_no_service_cert)
+
+    # ------------------------------------------------------------------
+    # validate-ca: cert-only mode with missing service cert -> error
+    # ------------------------------------------------------------------
+
+    let test_va_cert_only_missing = (run-test "validate-ca: cert-only mode missing service cert -> error" {
+        let fake_repo = (^mktemp -d | str trim)
+        # No services dir, no certs
+
+        let errored = (do {
+            cd $fake_repo
+            try {
+                validate-ca "my-svc" {tls: {enabled: true, mode: "cert-only", cert_name: "svc.crt"}} "test-ca"
+                false
+            } catch { true }
+        })
+        rm-temp-context $fake_repo
+        if not $errored {
+            error make {msg: "Expected error for cert-only with missing service cert"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_cert_only_missing)
+
+    # ------------------------------------------------------------------
+    # cert-matches-ca: missing files -> false (openssl fails gracefully)
+    # ------------------------------------------------------------------
+
+    let test_cm_missing_files = (run-test "cert-matches-ca: non-existent files -> false" {
+        let result = (cert-matches-ca "/tmp/__nonexistent__.crt" "/tmp/__nonexistent_ca__.crt")
+        if $result {
+            error make {msg: "cert-matches-ca should return false for non-existent files"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_cm_missing_files)
+
+    # ------------------------------------------------------------------
+    # cert-matches-ca: mismatched and matching certs (openssl-conditional)
+    # ------------------------------------------------------------------
+
+    let test_cm_certs = (run-test "cert-matches-ca: mismatched issuer/subject -> false, self-signed -> true" {
+        let openssl_ok = ((try { ^which openssl | complete | get exit_code } catch { 1 }) == 0)
+        if not $openssl_ok {
+            if $verbose_flag { print "    openssl not available; skipping cert-matches-ca cert test" }
+            true
+        } else {
+            let tmp = (^mktemp -d | str trim)
+            let ca1_crt = ($tmp | path join "ca1.crt")
+            let ca1_key = ($tmp | path join "ca1.key")
+            let ca2_crt = ($tmp | path join "ca2.crt")
+            let ca2_key = ($tmp | path join "ca2.key")
+
+            let r1 = (^openssl req -newkey rsa:2048 -days 1 -nodes -x509 -subj "/CN=TestCA1ForDockyPody" -out $ca1_crt -keyout $ca1_key | complete)
+            let r2 = (^openssl req -newkey rsa:2048 -days 1 -nodes -x509 -subj "/CN=TestCA2ForDockyPody" -out $ca2_crt -keyout $ca2_key | complete)
+
+            if $r1.exit_code != 0 or $r2.exit_code != 0 {
+                rm-temp-context $tmp
+                if $verbose_flag { print "    openssl cert generation failed; skipping" }
+                true
+            } else {
+                let mismatched = (cert-matches-ca $ca1_crt $ca2_crt)
+                let self_signed = (cert-matches-ca $ca1_crt $ca1_crt)
+                rm-temp-context $tmp
+
+                if $mismatched {
+                    error make {msg: "cert-matches-ca should return false for mismatched issuer/subject"}
+                }
+                if not $self_signed {
+                    error make {msg: "cert-matches-ca should return true for self-signed cert against itself"}
+                }
+                true
+            }
+        }
+    } $verbose_flag)
+    $results = ($results | append $test_cm_certs)
+
+    # ------------------------------------------------------------------
+    # cert-matches-ca: malformed cert content -> false (parse failure path)
+    # Files exist on disk but contain non-PEM garbage; openssl fails to
+    # parse them, get-cert-issuer/get-ca-subject both return "", and
+    # cert-matches-ca returns false without propagating an error.
+    # ------------------------------------------------------------------
+
+    let test_cm_malformed = (run-test "cert-matches-ca: malformed cert content -> false" {
+        let tmp = (^mktemp -d | str trim)
+        let bad_cert = ($tmp | path join "bad.crt")
+        let bad_ca = ($tmp | path join "bad-ca.crt")
+        "THIS IS NOT VALID PEM CONTENT" | save -f $bad_cert
+        "ALSO INVALID PEM MATERIAL" | save -f $bad_ca
+        let result = (cert-matches-ca $bad_cert $bad_ca)
+        rm-temp-context $tmp
+        if $result {
+            error make {msg: "cert-matches-ca should return false for malformed cert content"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_cm_malformed)
+
+    # ------------------------------------------------------------------
+    # validate-ca: malformed shared/service cert material -> rejected
+    # Both files exist so path-exists checks pass, but openssl cannot
+    # parse them; cert-matches-ca returns false and validate-ca errors.
+    # ------------------------------------------------------------------
+
+    let test_va_malformed_certs = (run-test "validate-ca: malformed shared and service cert -> rejected" {
+        let fake_repo = (^mktemp -d | str trim)
+        let ca_dir = ($fake_repo | path join "tls" "certificate-authority")
+        let svc_dir = ($fake_repo | path join "services" "my-svc" "tls" "certificates")
+        mkdir $ca_dir
+        mkdir $svc_dir
+        "NOT VALID CA PEM" | save -f ($ca_dir | path join "test-ca.crt")
+        "NOT VALID SERVICE PEM" | save -f ($svc_dir | path join "svc.crt")
+
+        let errored = (do {
+            cd $fake_repo
+            try {
+                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-and-cert", cert_name: "svc"}} "test-ca"
+                false
+            } catch { true }
+        })
+        rm-temp-context $fake_repo
+        if not $errored {
+            error make {msg: "validate-ca should reject malformed cert material that cannot match CA"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_va_malformed_certs)
 
     print-test-summary $results
 
