@@ -19,7 +19,11 @@
 
 # Multi-Platform Build Support
 
-This guide covers the multi-platform build system that allows building different container image variants for different base platforms (e.g., Debian, Alpine, Ubuntu).
+This guide covers the platform-manifest build system that allows building
+different container image variants for different base platforms (e.g.,
+Debian, Alpine, Ubuntu). A `platforms.nuon` manifest may define one platform
+or many; this guide focuses on the patterns you use once that manifest is in
+play.
 
 ## Terminology note
 
@@ -38,23 +42,28 @@ The multi-platform build system allows a single service to produce multiple imag
 
 ## Quick Start
 
-### 1. Single-Platform Service (No Changes Required)
+### 1. Single-Platform Service Without `platforms.nuon`
 
-If your service doesn't need multiple platforms, nothing changes:
+If your service stays on the no-`platforms.nuon` shape, nothing changes:
 
 ```bash
 # Works exactly as before
 nu scripts/dockypody.nu build --service my-service --version v1.0.0
 ```
 
-### 2. Multi-Platform Service
+A single-platform service may also choose a one-platform `platforms.nuon`
+manifest when it wants platform-scoped placement rules without introducing
+multiple platform variants.
 
-Create a `platforms.nuon` manifest alongside your service config:
+### 2. Service Using `platforms.nuon`
+
+Create a `platforms.nuon` manifest alongside your service config. The manifest
+may contain one platform or several:
 
 ```text
 services/
+  my-service.nuon         # Base configuration (services/{name}.nuon)
   my-service/
-    my-service.nuon       # Base configuration (services/{service-name}.nuon)
     platforms.nuon        # NEW: Platform variants
     versions.nuon         # Version manifest
 ```
@@ -128,7 +137,7 @@ For complete schema documentation, see [Platform Manifest Schema Reference](../r
       // Optional: Platform-specific external images
       "external_images": {
         "base": {
-          "name": "debian:12-slim",
+          "name": "debian",
           "build_arg": "BASE_IMAGE"
         }
       },
@@ -144,6 +153,13 @@ For complete schema documentation, see [Platform Manifest Schema Reference](../r
       // Optional: Platform-specific labels
       "labels": {
         "org.opencontainers.image.variant": "debian"
+      },
+
+      // Optional: Platform-specific SSH config
+      "ssh": {
+        "enabled": true,
+        "mode": "server",
+        "default_user": "root"
       }
     }
   ]
@@ -171,7 +187,7 @@ Invalid: `Debian` (uppercase), `alpine_3.19` (underscore), `ubuntu--lts` (double
 When a platform manifest exists, configurations are merged in this order:
 
 ```text
-Base Config (services/{service-name}.nuon)
+Base Config (services/{name}.nuon)
   ->
 Platform Config (from platforms.nuon)
   ->
@@ -520,11 +536,15 @@ You can specify exact versions with platform suffixes:
 
 ### Using Single-Platform Dependencies
 
-When a multi-platform service depends on a single-platform service (a service without `platforms.nuon`), the dependency can be used across all parent platforms. This is useful when the dependency's binaries are compatible with all platforms of the parent service.
+When a service using `platforms.nuon` depends on a service that does not use
+`platforms.nuon`, the dependency can be used across all parent platforms. This
+is useful when the dependency's binaries are compatible with all platforms of
+the parent service.
 
 #### Without `single_platform` Flag
 
-By default, single-platform dependencies are allowed with an informational message:
+By default, dependencies without `platforms.nuon` are allowed with an
+informational message:
 
 ```nuon
 // Parent: multi-platform service (production, development)
@@ -574,7 +594,8 @@ Use `single_platform: true` when:
 
 #### `--platform <string>`
 
-Filter builds to a specific platform (requires platforms.nuon):
+Filter builds to a specific platform (requires `platforms.nuon`, even if that
+manifest defines only one platform):
 
 ```bash
 # Build only debian variant
@@ -600,7 +621,8 @@ nu scripts/dockypody.nu build --service my-service --versions "v1.0.0-debian,v1.
 
 **Rules:**
 
-- **Requires `platforms.nuon`**: Platform suffixes are only valid for multi-platform services
+- **Requires `platforms.nuon`**: Platform suffixes are only valid for services
+  using a platform manifest, whether it defines one platform or many
 - Suffix format: `-<platform-name>`
 - Suffix must match a platform in platforms.nuon
 - Cannot have double dashes: `v1.0.0--debian` is invalid
@@ -619,10 +641,10 @@ nu scripts/dockypody.nu build --service my-service --versions "v1.0.0-debian,v1.
 #### `--platform` vs Version Suffix
 
 ```bash
-# WRONG ERROR: Conflict
+# WRONG: Conflicting filters
 nu scripts/dockypody.nu build --service my-service --version v1.0.0-debian --platform alpine
 
-# CORRECT CORRECT: Use one or the other
+# CORRECT: Use one or the other
 nu scripts/dockypody.nu build --service my-service --version v1.0.0-debian
 nu scripts/dockypody.nu build --service my-service --version v1.0.0 --platform debian
 ```
@@ -638,7 +660,7 @@ CI matrix output now includes `platform` field:
   "include": [
     {
       "version": "v1.0.0",
-      "platform": "", // Empty string for single-platform services
+      "platform": "", // Service resolved without an explicit platforms.nuon manifest
       "latest": true
     }
   ]
@@ -652,12 +674,12 @@ CI matrix output now includes `platform` field:
   "include": [
     {
       "version": "v1.0.0",
-      "platform": "debian", // Platform name for multi-platform services
+      "platform": "debian", // Platform name from platforms.nuon
       "latest": true
     },
     {
       "version": "v1.0.0",
-      "platform": "alpine", // Platform name for multi-platform services
+      "platform": "alpine", // Platform name from platforms.nuon
       "latest": false
     }
   ]
@@ -666,8 +688,10 @@ CI matrix output now includes `platform` field:
 
 ### Platform Field Format
 
-- Empty string (`""`) = single-platform service (no `platforms.nuon` exists)
-- Non-empty string = multi-platform service, platform name to pass to `--platform` flag
+- Empty string (`""`) = service resolved without an explicit
+  `platforms.nuon` manifest
+- Non-empty string = platform name from `platforms.nuon`, even when the
+  manifest contains only one platform
 - Never `null` - always a string (empty or platform name)
 
 ### Usage in GitHub Actions
@@ -767,7 +791,8 @@ Dockerfile          -> Dockerfile.debian
 
 #### Step 4: Extract Platform-Specific Config
 
-Move platform-specific configuration from `services/{service-name}.nuon` to `platforms.nuon`:
+Move platform-specific configuration from `services/{name}.nuon` to
+`platforms.nuon`:
 
 #### Before (services/my-service.nuon)
 
@@ -838,7 +863,9 @@ If other services depend on yours, they'll automatically inherit the platform. T
 
 **Single-platform services work unchanged:**
 
-- No platforms.nuon = single-platform behavior
+- No `platforms.nuon` remains a valid single-platform shape
+- A one-platform `platforms.nuon` manifest is also valid when you want
+  platform-scoped placement rules or future expansion room
 - All existing commands work identically
 - No migration required unless you want multi-platform support
 
@@ -875,8 +902,8 @@ CI matrix now includes `platform` field in every entry.
 
 Update CI workflows to handle `platform` field:
 
-- Empty string (`""`) = single-platform
-- Non-empty = multi-platform, pass to `--platform` flag
+- Empty string (`""`) = no `platforms.nuon` in the resolved build shape
+- Non-empty = platform name from `platforms.nuon`, pass to `--platform` flag
 
 ## Best Practices
 
@@ -903,7 +930,7 @@ Update CI workflows to handle `platform` field:
 
 ### 2. Keep Base Config Platform-Agnostic
 
-Put only truly common configuration in `services/{service-name}.nuon`:
+Put only truly common configuration in `services/{name}.nuon`:
 
 ```nuon
 // services/my-service.nuon - platform-agnostic
@@ -1014,34 +1041,23 @@ nu scripts/dockypody.nu build --service my-service --version v1.0.0-alpine
 2. Remove the suffix: `--version v1.0.0`
 3. Check for typos in platform name
 
-### Error: "Multi-platform service depends on single-platform"
+### Info: "Multi-platform service depends on single-platform"
 
 #### Problem: Multi-Platform Depends on Single-Platform
 
 ```text
-Error: Service 'app' (multi-platform) depends on 'lib' (single-platform).
+Info: Service 'app' (multi-platform) depends on 'lib' (single-platform).
 ```
 
-#### Solution
+#### What It Means
 
-Choose one:
+This is informational when the single-platform dependency is intentionally
+shared across all parent platforms. Keep it as-is when the dependency is
+compatible everywhere, or mark it with `single_platform: true` for extra
+clarity in the version override.
 
-1. **Add platforms.nuon to dependency:**
-
-   Create platforms.nuon for the dependency service.
-
-2. **Use explicit platform suffix:**
-
-   ```nuon
-   {
-     "dependencies": {
-       "lib": {
-         "version": "v1.0.0-debian",
-         "build_arg": "LIB_IMAGE"
-       }
-     }
-   }
-   ```
+Treat it as a real problem only when graph or suffix resolution fails, for
+example when a dependency version points at a missing platform-specific tag.
 
 ### Warning: "Base config has platform-specific fields"
 
@@ -1055,7 +1071,7 @@ Consider moving to platform-specific config in platforms.nuon
 **Solution:** This is just a suggestion for better organization. Move platform-specific config to platforms.nuon:
 
 ```text
-// Move FROM services/{service-name}.nuon TO platforms.nuon
+// Move FROM services/{name}.nuon TO platforms.nuon
 "build_args": { ... }
 "external_images": { ... }
 "sources": { ... }

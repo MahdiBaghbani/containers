@@ -27,7 +27,7 @@ Complete reference for the platform manifest schema (`platforms.nuon` files).
 
 Platform manifests are stored as `.nuon` files in service directories:
 
-- `services/{service-name}/platforms.nuon` - Platform manifest
+- `services/{name}/platforms.nuon` - Platform manifest
 
 For the authoritative schema file, see [`schemas/platforms.nuon`](../../schemas/platforms.nuon).
 
@@ -60,6 +60,7 @@ Allowed fields:
 - `external_images` - Default external images (infrastructure only: name and build_arg)
 - `dependencies` - Default dependencies (infrastructure only: service and build_arg)
 - `labels` - Default labels
+- `ssh` - Default SSH configuration for platform-specific runtime behavior
 
 ### How Defaults Work
 
@@ -227,6 +228,7 @@ Defaults are validated using the same rules as platform configs:
 | `external_images` | record | No       | Platform-specific external images (infrastructure only: name and build_arg, no tag)                 |
 | `dependencies`    | record | No       | Platform-specific dependencies (infrastructure only: service and build_arg, no version)             |
 | `labels`          | record | No       | Platform-specific labels                                                                            |
+| `ssh`             | record | No       | Platform-specific SSH configuration                                                                 |
 
 ## Platform Name Rules
 
@@ -287,6 +289,11 @@ Error: Platform name 'debian' is not unique (appears multiple times in platforms
       },
       "labels": {
         "org.opencontainers.image.variant": "debian"
+      },
+      "ssh": {
+        "enabled": true,
+        "mode": "server",
+        "default_user": "root"
       }
     },
     {
@@ -307,7 +314,7 @@ Error: Platform name 'debian' is not unique (appears multiple times in platforms
 When a platform manifest exists, configurations are merged in this order:
 
 ```text
-Base Config (services/{service-name}.nuon)
+Base Config (services/{name}.nuon)
   ->
 Platform Config (from platforms.nuon)
   ->

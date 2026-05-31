@@ -25,11 +25,19 @@ Complete reference for the service configuration schema (`.nuon` files).
 
 ## Schema Location
 
-Service configurations are stored as `.nuon` files in the `services/` directory:
+Service configurations are stored as `.nuon` files in the `services/`
+directory:
 
-- `services/{service-name}.nuon` - Base service configuration
+- `services/{name}.nuon` - Base service configuration
+- `services/{name}/versions.nuon` - Required version manifest
+- `services/{name}/platforms.nuon` - Optional platform manifest with one or
+  more platform entries
 
-For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/service.nuon).
+DockyPody also auto-injects `org.opencloudmesh.service=<service name>` at
+build time, so you do not need to duplicate that label in each manifest.
+
+For the authoritative schema file, see
+[`schemas/service.nuon`](../../schemas/service.nuon).
 
 ## JSONC Compatibility Requirement
 
@@ -48,11 +56,11 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
 
 **CRITICAL**: Source location depends on service type:
 
-- **Single-platform**: Sources are allowed in base config, but they are not
-  required there. They may live entirely in `versions.nuon` defaults or
-  overrides if the merged config is still complete.
-- **Multi-platform**: Sources are **FORBIDDEN** in base config and must live
-  in `versions.nuon` defaults or overrides.
+- **Without `platforms.nuon`**: Sources are allowed in base config, but they
+  are not required there. They may live entirely in `versions.nuon` defaults
+  or overrides if the merged config is still complete.
+- **Services using `platforms.nuon`**: Sources are **FORBIDDEN** in base config
+  and must live in `versions.nuon` defaults or overrides.
 
 ### Single-Platform Example
 
@@ -79,7 +87,7 @@ For the authoritative schema file, see [`schemas/service.nuon`](../../schemas/se
 }
 ```
 
-### Multi-Platform Example
+### Example: Service Using `platforms.nuon`
 
 ```nuon
 // services/my-service.nuon (sources FORBIDDEN here)
@@ -173,9 +181,10 @@ For complete details, see [Source Build Arguments Convention](../concepts/servic
 
 **CRITICAL**: External images use separated `name` and `tag` fields. The `tag` field is **FORBIDDEN** in base config and must be defined in `versions.nuon` overrides.
 
-### Single-Platform Services
+### Services Without `platforms.nuon`
 
-For single-platform services, define `name` in base config and `tag` in version overrides:
+For services without `platforms.nuon`, define `name` in base config and `tag`
+in version overrides:
 
 ```nuon
 // services/my-service.nuon
@@ -203,9 +212,10 @@ For single-platform services, define `name` in base config and `tag` in version 
 }
 ```
 
-### Multi-Platform Services
+### Services Using `platforms.nuon`
 
-For multi-platform services, define `name` in `platforms.nuon` and `tag` in version overrides:
+For services using `platforms.nuon`, define `name` there and `tag` in version
+overrides:
 
 ```nuon
 // services/my-service/platforms.nuon
@@ -241,8 +251,8 @@ For multi-platform services, define `name` in `platforms.nuon` and `tag` in vers
 - Each `external_images` entry MUST include `name` and `build_arg` fields
 - `tag` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)
 - `image` field is **FORBIDDEN** (legacy - use `name` instead)
-- For single-platform: `name` required in base config
-- For multi-platform: `name` required in `platforms.nuon`
+- Without `platforms.nuon`: `name` required in base config
+- With `platforms.nuon`: `name` required in `platforms.nuon`
 - `tag` is **ALWAYS** required in `versions.nuon` overrides (no base fallback)
 - Tag can include digest: `"1.25-trixie@sha256:abc123..."` (digest is optional suffix to tag)
 - Validation occurs during service configuration loading (before build starts)
@@ -261,7 +271,7 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 
 **CRITICAL**: The `version` field is **FORBIDDEN** in base config and `platforms.nuon`. Version must be defined in `versions.nuon` overrides.
 
-### Dependencies: Single-Platform Services
+### Dependencies: Services Without `platforms.nuon`
 
 ```nuon
 // services/my-service.nuon
@@ -288,7 +298,7 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 }
 ```
 
-### Dependencies: Multi-Platform Services
+### Dependencies: Services Using `platforms.nuon`
 
 ```nuon
 // services/my-service/platforms.nuon
@@ -353,8 +363,10 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 - `version` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)
 - `single_platform` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)
 - `single_platform` must be boolean if present
-- For single-platform: dependencies defined in base config with `service` and `build_arg`
-- For multi-platform: dependencies defined in `platforms.nuon` with `service` and `build_arg`
+- Without `platforms.nuon`: dependencies defined in base config with
+  `service` and `build_arg`
+- With `platforms.nuon`: dependencies defined in `platforms.nuon` with
+  `service` and `build_arg`
 - Version is **ALWAYS** defined in `versions.nuon` overrides (never in base config or platforms.nuon)
 
 For complete details on dependency resolution, see [Dependency Management](../concepts/dependency-management.md).
@@ -450,7 +462,7 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
 }
 ```
 
-## Complete Schema Example (Multi-Platform)
+## Complete Schema Example (Service Using `platforms.nuon`)
 
 ```nuon
 // services/my-service.nuon (metadata only)

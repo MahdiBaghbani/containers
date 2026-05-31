@@ -13,6 +13,8 @@ The following container modes are supported:
 - `authprovider-oidc` - OIDC/OAuth2 authentication provider
 - `authprovider-machine` - Machine-to-machine authentication provider
 - `authprovider-ocmshares` - OCM shares authentication provider
+- `authprovider-ocmsharecode` - Share-exchange code validation provider
+- `authprovider-ocmexchangedtoken` - Exchanged-token validation provider
 - `authprovider-publicshares` - Public shares authentication provider
 - `shareproviders` - Share management services (usershareprovider, publicshareprovider, ocmshareprovider, ocmincoming)
 - `groupuserproviders` - User and group management services (userprovider, groupprovider)

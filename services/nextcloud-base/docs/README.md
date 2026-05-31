@@ -6,7 +6,7 @@ Base Docker image for Open Cloud Mesh Nextcloud services with integrated Nushell
 
 `nextcloud-base` provides a foundation image for Nextcloud deployments with:
 
-- **PHP 8.2 Apache runtime** with all required extensions
+- **PHP 8.3 Apache runtime** with all required extensions
 - **Nushell-based entrypoint** for initialization and lifecycle management
 - **TLS certificate integration** for secure inter-service communication
 - **Hook system** for custom initialization logic
@@ -34,19 +34,29 @@ Deploy child images instead:
 - `nextcloud` - Nextcloud server with source code
 - `nextcloud-contacts` - Nextcloud with Contacts app
 
-### Multi-Version Support
+### Base Runtime Versioning
 
-Services built on `nextcloud-base` support multiple Nextcloud versions via `versions.nuon`:
+`nextcloud-base` itself is versioned by base-runtime tags in
+`services/nextcloud-base/versions.nuon`:
 
 ```nuon
 {
-  "default": "v30.0.11",
+  "default": "8.3-apache",
+  "defaults": {
+    "external_images": {
+      "runtime": {
+        "tag": "8.3-apache-trixie"
+      }
+    }
+  },
   "versions": [
-    {"name": "master", "latest": false},
-    {"name": "v30.0.11", "latest": true}
+    {"name": "8.3-apache", "latest": true}
   ]
 }
 ```
+
+Child images such as `nextcloud` and `nextcloud-contacts` keep their own
+application-version manifests on top of this base image.
 
 ### TLS Integration
 
@@ -83,14 +93,14 @@ make tls all
 make build
 
 # Build specific version
-nu scripts/dockypody.nu build --service nextcloud --version v30.0.11
+nu scripts/dockypody.nu build --service nextcloud --version v33.0.3
 ```
 
 ### Running
 
 ```bash
 # Basic run
-docker run -d -p 80:80 nextcloud:v30.0.11-debian
+docker run -d -p 80:80 nextcloud:v33.0.3-debian
 
 # With environment variables
 docker run -d \
@@ -101,13 +111,13 @@ docker run -d \
   -e MYSQL_DATABASE=nextcloud \
   -e MYSQL_USER=nextcloud \
   -e MYSQL_PASSWORD=dbsecret \
-  nextcloud:v30.0.11-debian
+  nextcloud:v33.0.3-debian
 
 # With hooks
 docker run -d \
   -p 80:80 \
   -v ./hooks/post-installation:/docker-entrypoint-hooks.d/post-installation:ro \
-  nextcloud:v30.0.11-debian
+  nextcloud:v33.0.3-debian
 ```
 
 ## Environment Variables
@@ -177,17 +187,17 @@ docker run -d \
 # HTTP-only (default, for reverse proxy)
 docker run -d -p 80:80 \
   -e NEXTCLOUD_HTTPS_MODE=off \
-  nextcloud:v30.0.11-debian
+  nextcloud:v33.0.3-debian
 
 # HTTPS-only (direct HTTPS access)
 docker run -d -p 80:80 -p 443:443 \
   -e NEXTCLOUD_HTTPS_MODE=https-only \
-  nextcloud:v30.0.11-debian
+  nextcloud:v33.0.3-debian
 
 # Both HTTP and HTTPS
 docker run -d -p 80:80 -p 443:443 \
   -e NEXTCLOUD_HTTPS_MODE=http-and-https \
-  nextcloud:v30.0.11-debian
+  nextcloud:v33.0.3-debian
 ```
 
 ### TLS Requirements
@@ -213,7 +223,7 @@ The OCM test suite uses `https-only` mode for WAYF (Where Are You From) tests.
 
 ```text
 nextcloud-base
-|-- PHP 8.2 Apache Runtime
+|-- PHP 8.3 Apache Runtime
 |   |-- Extensions: APCu, imagick, memcached, redis, gd, intl, ...
 |   \-- Apache Modules: rewrite, headers, remoteip, ssl, security2
 |-- Nushell Entrypoint System
@@ -236,5 +246,5 @@ nextcloud-base
 
 - [initialization.md](./initialization.md) - Initialization flow details
 - [entrypoint.md](./entrypoint.md) - Entrypoint architecture
-- [../../docs/guides/multi-version-builds.md](../../docs/guides/multi-version-builds.md) - Version management
-- [../../docs/concepts/tls-management.md](../../docs/concepts/tls-management.md) - TLS system
+- [../../../docs/guides/multi-version-builds.md](../../../docs/guides/multi-version-builds.md) - Version management
+- [../../../docs/concepts/tls-management.md](../../../docs/concepts/tls-management.md) - TLS system

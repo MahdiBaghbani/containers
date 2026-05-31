@@ -34,11 +34,19 @@ Service configurations define how services are built, what sources they use, wha
 
 This requirement ensures compatibility with editors that use JSONC syntax highlighting for `.nuon` files. While NUON supports bare keys, JSONC does not, so quoted keys are required for proper syntax highlighting.
 
-Each service has a configuration file in `services/{service-name}.nuon` that
-defines:
+Each service is discovered from:
+
+- `services/{name}.nuon` - base service metadata and config when no platform
+  manifest is used
+- `services/{name}/versions.nuon` - required version manifest
+- `services/{name}/platforms.nuon` - optional platform manifest with one or
+  more platform entries
+
+The base config in `services/{name}.nuon` defines:
 
 - Service metadata (name, context, dockerfile, tls)
-- Source repositories to build from (single-platform only)
+- Source repositories to build from (only when the service does not use
+  `platforms.nuon`)
 - External base images (not built by us) - infrastructure only (name, no tag)
 - Dependencies (internal service dependencies) - infrastructure only (service, build_arg, no version)
 - Build arguments
@@ -51,12 +59,15 @@ forbidden and must be moved to `platforms.nuon` (infrastructure) or
 
 ## Dockerfile Requirement
 
-- **Required** if the service is single-platform (no `platforms.nuon` exists)
-- **Ignored/Replaced** if the service is multi-platform (has `platforms.nuon`) - each platform defines its own dockerfile in the platforms manifest, and the base config `dockerfile` field is completely replaced by platform-specific dockerfiles
+- **Required** when the service does not use `platforms.nuon`
+- **Ignored/Replaced** if the service uses `platforms.nuon` - even a
+  one-platform manifest replaces the base `dockerfile` field with the
+  per-platform dockerfile entries from the platform manifest
 
 ## Versioning
 
-**CRITICAL REQUIREMENT: All services MUST have version manifests** (`services/{service}/versions.nuon`).
+**CRITICAL REQUIREMENT: All services MUST have version manifests**
+(`services/{name}/versions.nuon`).
 
 The build system requires a version manifest for every service. Without it, builds will fail with a clear error message. This is not optional - it's a core requirement of the build system.
 
@@ -202,7 +213,7 @@ nu scripts/dockypody.nu build --service my-service
 
 Local sources can be defined in the same locations as Git sources:
 
-- **Base config** (single-platform services only)
+- **Base config** (services without `platforms.nuon` only)
 - **`versions.nuon.defaults`** (default configuration for all versions)
 - **`versions.nuon` version overrides** (version-specific paths)
 - **`versions.nuon` platform override blocks** (platform-specific paths)
@@ -709,7 +720,8 @@ External Docker images (not built by us) use separated `name` and `tag` fields. 
 
 **Key rules:**
 
-- `name` field: Infrastructure - defined in base config (single-platform) or platforms.nuon (multi-platform)
+- `name` field: Infrastructure - defined in base config when the service does
+  not use `platforms.nuon`, or in `platforms.nuon` when it does
 - `tag` field: Version control - **ALWAYS** defined in versions.nuon overrides (never in base config or platforms.nuon)
 - `image` field: **FORBIDDEN** (legacy - use `name` instead)
 - Tag can include digest: `"1.25-trixie@sha256:abc123..."` (digest is optional suffix to tag)
@@ -762,13 +774,21 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
 
 ## Labels Configuration
 
-Labels are Docker image metadata (OCI labels), similar to TLS configuration. They are **allowed in base config** even when `platforms.nuon` exists.
+Labels are Docker image metadata (OCI labels), similar to TLS
+configuration. They are **allowed in base config** even when
+`platforms.nuon` exists.
+
+DockyPody also auto-injects `org.opencloudmesh.service=<service name>` at
+build time. You do not need to duplicate that label in every manifest unless
+you want an explicit local override.
 
 **Where labels can be defined:**
 
-- **Base config** - Common labels for all platforms (allowed even when `platforms.nuon` exists)
+- **Base config** - Common labels for all platforms (allowed even when
+  `platforms.nuon` exists)
 - **platforms.nuon** - Platform-specific labels (deep-merged with base labels)
-- **versions.nuon** - Version-specific label overrides (deep-merged with base/platform labels)
+- **versions.nuon** - Version-specific label overrides (deep-merged with
+  base/platform labels)
 
 **Example:**
 

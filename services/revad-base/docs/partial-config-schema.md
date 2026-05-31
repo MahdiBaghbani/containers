@@ -29,7 +29,7 @@ Complete reference for partial configuration files used to extend base Reva conf
 
 Partial configurations are stored as `.toml` files in partial directories:
 
-- **Build-time**: `services/{service}/configs/partial/*.toml` (merged during Dockerfile build)
+- **Build-time**: `services/{name}/configs/partial/*.toml` (merged during Dockerfile build)
 - **Runtime**: `/etc/revad/partial/*.toml` (volume mount) or `/configs/partial/*.toml` (image fallback)
 
 For the authoritative schema file, see [`services/revad-base/schemas/partial-config.nuon`](../schemas/partial-config.nuon).
@@ -112,7 +112,7 @@ Given these partials for `gateway.toml`:
 
 ### Build-Time Partials (Maintainers)
 
-**Location**: `services/{service}/configs/partial/*.toml`
+**Location**: `services/{name}/configs/partial/*.toml`
 
 **When**: Merged during Dockerfile build
 

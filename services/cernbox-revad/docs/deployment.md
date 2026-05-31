@@ -15,7 +15,6 @@ Step-by-step guide for deploying the CERNBox multi-container setup.
 
    ```bash
    cd examples/cernbox
-   cp env.example env  # If needed
    # Edit env file with your configuration
    ```
 
@@ -29,7 +28,7 @@ Step-by-step guide for deploying the CERNBox multi-container setup.
 
    ```bash
    docker-compose ps
-   docker-compose logs gateway
+   docker-compose logs cernbox-1-test-revad-gateway
    ```
 
 ## Deployment Steps
@@ -67,7 +66,7 @@ docker network create traefik-net
 Volumes are created automatically, but you can pre-create them:
 
 ```bash
-mkdir -p volumes/config/reva-{gateway,shareproviders,groupuserproviders,authprovider-oidc,authprovider-machine,authprovider-ocmshares,dataprovider-localhome,dataprovider-ocm,dataprovider-sciencemesh}
+mkdir -p volumes/config/reva-{gateway,shareproviders,groupuserproviders,authprovider-oidc,authprovider-machine,authprovider-ocmshares,authprovider-ocmsharecode,authprovider-ocmexchangedtoken,authprovider-publicshares,dataprovider-localhome,dataprovider-ocm,dataprovider-sciencemesh}
 mkdir -p volumes/data/reva/jsons
 ```
 
@@ -82,7 +81,10 @@ docker-compose up -d
 Start specific services:
 
 ```bash
-docker-compose up -d gateway shareproviders groupuserproviders
+docker-compose up -d \
+  cernbox-1-test-revad-gateway \
+  cernbox-1-test-revad-shareproviders \
+  cernbox-1-test-revad-groupuserproviders
 ```
 
 ### 5. Verify Services
@@ -94,12 +96,12 @@ Check service status:
 docker-compose ps
 
 # Check logs
-docker-compose logs gateway
-docker-compose logs shareproviders
-docker-compose logs groupuserproviders
+docker-compose logs cernbox-1-test-revad-gateway
+docker-compose logs cernbox-1-test-revad-shareproviders
+docker-compose logs cernbox-1-test-revad-groupuserproviders
 
 # Check specific service
-docker-compose logs -f gateway
+docker-compose logs -f cernbox-1-test-revad-gateway
 ```
 
 ## Service Dependencies
@@ -107,47 +109,50 @@ docker-compose logs -f gateway
 Services start in this order:
 
 1. **IdP** - Identity Provider (no dependencies)
-2. **Gateway** - Depends on IdP, Share Providers, User/Group Providers
+2. **Gateway** - Depends on IdP
 3. **Share Providers** - Depends on Gateway
 4. **User/Group Providers** - Depends on Gateway
 5. **Auth Providers** - Depends on Gateway
 6. **Dataproviders** - Depends on Gateway
-7. **Web** - Depends on Gateway, IdP, Dataproviders
+7. **Web** - Depends on IdP, Gateway, and the three dataproviders
 
 Docker Compose handles dependencies automatically via `depends_on`.
 
-## Health Checks
+## Runtime Checks
+
+The example compose file does **not** define a dedicated `/healthz` endpoint.
+Use process, config, and log checks instead.
 
 ### Check Gateway
 
 ```bash
-# Check if gateway is responding
-curl http://localhost:80/healthz
-
 # Check gateway logs
-docker-compose logs gateway | grep -i error
+docker-compose logs cernbox-1-test-revad-gateway
+
+# Check the gateway process inside the container
+docker-compose exec cernbox-1-test-revad-gateway pgrep -a revad
 ```
 
 ### Check Providers
 
 ```bash
 # Check share providers
-docker-compose logs shareproviders
+docker-compose logs cernbox-1-test-revad-shareproviders
 
 # Check user/group providers
-docker-compose logs groupuserproviders
+docker-compose logs cernbox-1-test-revad-groupuserproviders
 
 # Check auth providers
-docker-compose logs authprovider-oidc
+docker-compose logs cernbox-1-test-revad-authprovider-oidc
 ```
 
 ### Check Ports
 
 ```bash
 # Verify ports are listening
-docker-compose exec gateway netstat -tlnp | grep 9142
-docker-compose exec shareproviders netstat -tlnp | grep 9144
-docker-compose exec groupuserproviders netstat -tlnp | grep 9145
+docker-compose exec cernbox-1-test-revad-gateway netstat -tlnp | grep 9142
+docker-compose exec cernbox-1-test-revad-shareproviders netstat -tlnp | grep 9144
+docker-compose exec cernbox-1-test-revad-groupuserproviders netstat -tlnp | grep 9145
 ```
 
 ## Troubleshooting
@@ -171,8 +176,10 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 **Solution:**
 
 - Check environment variables: `docker-compose config`
-- Verify placeholder processing: `docker-compose exec gateway cat /etc/revad/gateway.toml`
-- Check initialization logs: `docker-compose logs gateway | grep -i init`
+- Verify placeholder processing:
+  `docker-compose exec cernbox-1-test-revad-gateway cat /etc/revad/gateway.toml`
+- Check initialization logs:
+  `docker-compose logs cernbox-1-test-revad-gateway | grep -i init`
 
 #### Service Not Found
 
@@ -181,7 +188,8 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 **Solution:**
 
 - Verify service names match in `docker-compose.yaml`
-- Check network connectivity: `docker-compose exec gateway ping shareproviders`
+- Check network connectivity:
+  `docker-compose exec cernbox-1-test-revad-gateway ping cernbox-1-test-revad-shareproviders`
 - Verify ports match environment variables
 
 #### Authentication Failures
@@ -190,10 +198,11 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 
 **Solution:**
 
-- Check IdP is running: `docker-compose ps idp`
+- Check IdP is running: `docker-compose ps cernbox-1-test-idp`
 - Verify OIDC provider configuration
 - Check IdP URL in environment variables
-- Review auth provider logs: `docker-compose logs authprovider-oidc`
+- Review auth provider logs:
+  `docker-compose logs cernbox-1-test-revad-authprovider-oidc`
 
 ### Debug Commands
 
@@ -202,13 +211,13 @@ docker-compose exec groupuserproviders netstat -tlnp | grep 9145
 docker-compose config
 
 # Execute command in container
-docker-compose exec gateway /bin/sh
+docker-compose exec cernbox-1-test-revad-gateway /bin/sh
 
 # View configuration file
-docker-compose exec gateway cat /etc/revad/gateway.toml
+docker-compose exec cernbox-1-test-revad-gateway cat /etc/revad/gateway.toml
 
 # Check service connectivity
-docker-compose exec gateway ping shareproviders
+docker-compose exec cernbox-1-test-revad-gateway ping cernbox-1-test-revad-shareproviders
 
 # View network configuration
 docker network inspect traefik-net
@@ -220,10 +229,10 @@ Services can be scaled independently:
 
 ```bash
 # Scale dataproviders (if needed)
-docker-compose up -d --scale dataprovider-localhome=2
+docker-compose up -d --scale cernbox-1-test-revad-dataprovider-localhome=2
 
 # Scale auth providers (if needed)
-docker-compose up -d --scale authprovider-oidc=2
+docker-compose up -d --scale cernbox-1-test-revad-authprovider-oidc=2
 ```
 
 **Note:** Gateway and provider services are typically single-instance.
@@ -236,7 +245,7 @@ docker-compose up -d --scale authprovider-oidc=2
 2. Restart affected services:
 
    ```bash
-   docker-compose restart gateway
+   docker-compose restart cernbox-1-test-revad-gateway
    ```
 
 ### Update Images

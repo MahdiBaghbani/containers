@@ -792,8 +792,8 @@ When using `--all-services`:
 
 ## Build Script Flow
 
-1. **Load service config** (`services/{service}.nuon`)
-2. **Load version manifest** (`services/{service}/versions.nuon` - required)
+1. **Load service config** (`services/{name}.nuon`)
+2. **Load version manifest** (`services/{name}/versions.nuon` - required)
 3. **Parse CLI parameters** (`--version`, `--all-versions`, etc.)
 4. **Resolve service version** (from manifest)
 5. **Resolve dependencies**:
@@ -976,7 +976,7 @@ services/
 When a platform manifest exists, configurations are merged in this order:
 
 ```text
-Base Config (services/{service-name}.nuon)
+Base Config (services/{name}.nuon)
   ->
 Platform Config (from platforms.nuon)
   ->
@@ -1060,7 +1060,7 @@ For complete details on multi-platform builds, see the [Multi-Platform Builds Gu
 
 DockyPody uses the word "platform" in two different ways:
 
-- Variant platform: The value from `services/<service>/platforms.nuon`
+- Variant platform: The value from `services/{name}/platforms.nuon`
   `platforms[].name` (for example `debian`, `alpine`, `production`). This
   selects a configuration variant and becomes a tag suffix like
   `v1.0.0-debian`.

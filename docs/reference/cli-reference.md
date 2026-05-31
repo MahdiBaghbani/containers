@@ -271,9 +271,10 @@ nu scripts/dockypody.nu build --service <service-name> [options]
 
 ## Service Selection Flags
 
-### `--service <string>` (default: "cernbox-web")
+### `--service <string>`
 
-Build a specific service:
+Build a specific service. Use this when you are not targeting
+`--all-services`:
 
 ```bash
 nu scripts/dockypody.nu build --service revad-base
@@ -377,7 +378,8 @@ nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
 
 ### `--platform <string>`
 
-Filter builds to a specific platform (requires `platforms.nuon`):
+Filter builds to a specific platform (requires `platforms.nuon`, even if that
+manifest defines only one platform):
 
 ```bash
 # Build only debian variant
@@ -458,8 +460,10 @@ nu scripts/dockypody.nu build --service revad-base --matrix-json
 
 **Platform Field:**
 
-- Empty string (`""`) = single-platform service (no `platforms.nuon` exists)
-- Non-empty string = multi-platform service, platform name to pass to `--platform` flag
+- Empty string (`""`) = service resolved without an explicit
+  `platforms.nuon` manifest
+- Non-empty string = platform name from `platforms.nuon`, even when that
+  manifest contains only one platform
 - Never `null` - always a string (empty or platform name)
 
 ## Cache Busting Flags
@@ -622,7 +626,8 @@ Version: v1.1.0
 
 **Multi-Platform Output Format:**
 
-For multi-platform services, each version/platform combination is displayed separately:
+For services using `platforms.nuon`, each version/platform combination is
+displayed separately:
 
 ```text
 === Build Order ===
@@ -643,7 +648,7 @@ Version: v1.0.0 (development)
 - `--all-versions` - Show build order for all versions in the manifest
 - `--versions <list>` - Show build order for specific versions (comma-separated)
 - `--latest-only` - Show build order for versions marked `latest: true`
-- `--platform <string>` - Filter to specific platform (multi-platform services only)
+- `--platform <string>` - Filter to a platform from `platforms.nuon`
 
 **Use cases:**
 

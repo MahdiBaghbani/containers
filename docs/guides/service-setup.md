@@ -48,11 +48,11 @@ Create `services/my-service.nuon`:
   },
   "external_images": {
     "build": {
-      "image": "golang:1.25-trixie",
+      "name": "golang",
       "build_arg": "BASE_BUILD_IMAGE"
     },
     "runtime": {
-      "image": "debian:trixie-slim",
+      "name": "debian",
       "build_arg": "BASE_RUNTIME_IMAGE"
     }
   }
@@ -73,6 +73,10 @@ Create `services/my-service.nuon`:
       "overrides": {
         "sources": {
           "my-source": {"ref": "v1.0.0"}
+        },
+        "external_images": {
+          "build": {"tag": "1.25-trixie"},
+          "runtime": {"tag": "trixie-slim"}
         }
       }
     }
@@ -98,6 +102,10 @@ FROM ${BASE_RUNTIME_IMAGE}
 # ... runtime steps ...
 ```
 
+These ARG defaults are only fallbacks for direct Dockerfile invocation.
+DockyPody injects the authoritative image tags from `versions.nuon` during
+normal builds.
+
 ### 5. Build the Service
 
 ```bash
@@ -106,21 +114,54 @@ nu scripts/dockypody.nu build --service my-service
 
 ## Service with Dependency
 
-### Example: `cernbox-revad` Service (Depends on revad-base)
+### Example: `cernbox-revad` Service (Multi-Platform + Dependencies)
 
-**Config: `services/cernbox-revad.nuon`**
+**Base config: `services/cernbox-revad.nuon`**
 
 ```nuon
 {
   "name": "cernbox-revad",
-  "context": "services/cernbox-revad",
-  "dockerfile": "services/cernbox-revad/Dockerfile",
-  "dependencies": {
-    "revad-base": {
-      "version": "v3.3.3",
-      "build_arg": "REVAD_BASE_IMAGE"
+  "context": "services/cernbox-revad"
+}
+```
+
+**Platforms: `services/cernbox-revad/platforms.nuon`**
+
+```nuon
+{
+  "default": "production",
+  "defaults": {
+    "external_images": {
+      "build": {
+        "name": "golang",
+        "build_arg": "BASE_BUILD_IMAGE"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      },
+      "gaia": {
+        "service": "gaia",
+        "build_arg": "GAIA_IMAGE"
+      },
+      "revad-base": {
+        "service": "revad-base",
+        "build_arg": "REVAD_BASE_IMAGE"
+      }
     }
-  }
+  },
+  "platforms": [
+    {
+      "name": "production",
+      "dockerfile": "services/cernbox-revad/Dockerfile.production"
+    },
+    {
+      "name": "development",
+      "dockerfile": "services/cernbox-revad/Dockerfile.development"
+    }
+  ]
 }
 ```
 
@@ -128,14 +169,43 @@ nu scripts/dockypody.nu build --service my-service
 
 ```nuon
 {
-  "default": "v3.3.3",
+  "default": "master",
+  "defaults": {
+    "external_images": {
+      "build": {
+        "tag": "1.25-trixie"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      },
+      "gaia": {
+        "version": "master",
+        "single_platform": true
+      }
+    }
+  },
   "versions": [
     {
-      "name": "v3.3.3",
+      "name": "master",
       "latest": true,
       "overrides": {
-        "dependencies": {
-          "revad-base": {"version": "v3.3.3"}
+        "platforms": {
+          "production": {
+            "dependencies": {
+              "revad-base": {
+                "version": "master-production"
+              }
+            }
+          },
+          "development": {
+            "dependencies": {
+              "revad-base": {
+                "version": "master-development"
+              }
+            }
+          }
         }
       }
     }
@@ -146,12 +216,16 @@ nu scripts/dockypody.nu build --service my-service
 **Dockerfile:**
 
 ```dockerfile
-ARG REVAD_BASE_IMAGE="revad-base:latest"
+ARG REVAD_BASE_IMAGE="revad-base:master-production"
 FROM ${REVAD_BASE_IMAGE}
 
 COPY ./configs/cernbox /configs/revad
 # ... rest of Dockerfile
 ```
+
+The platform Dockerfile ARG defaults are only non-authoritative fallbacks.
+DockyPody injects the final dependency images from `platforms.nuon` plus
+`versions.nuon` at build time.
 
 **Build commands:**
 
@@ -159,15 +233,17 @@ COPY ./configs/cernbox /configs/revad
 # Build default version
 nu scripts/dockypody.nu build --service cernbox-revad
 
-# Build specific version
-nu scripts/dockypody.nu build --service cernbox-revad --version v3.3.3
+# Build specific version and platform
+nu scripts/dockypody.nu build --service cernbox-revad --version master --platform development
 ```
 
 **Dependency resolution:**
 
-- Service version: `v3.3.3`
-- Dependency resolves to: `revad-base:v3.3.3` (explicit in manifest)
-- Build arg: `REVAD_BASE_IMAGE=revad-base:v3.3.3`
+- Service version: `master`
+- Production dependency resolves to: `revad-base:master-production`
+- Development dependency resolves to: `revad-base:master-development`
+- `gaia` stays single-platform via `single_platform: true`, so it resolves
+  without a platform suffix unless graph resolution fails
 
 ## Multiple Dependencies from Same Service
 
@@ -185,15 +261,37 @@ This example demonstrates the advanced pattern of having multiple dependencies f
   "dependencies": {
     "common-tools-builder": {
       "service": "common-tools",
-      "version": "v1.0.0-debian",
       "build_arg": "COMMON_TOOLS_BUILDER_IMAGE"
     },
     "common-tools-runtime": {
       "service": "common-tools",
-      "version": "v1.0.0-alpine",
       "build_arg": "COMMON_TOOLS_RUNTIME_IMAGE"
     }
   }
+}
+```
+
+**Manifest overrides:**
+
+```nuon
+{
+  "default": "v1.0.0",
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "latest": true,
+      "overrides": {
+        "dependencies": {
+          "common-tools-builder": {
+            "version": "v1.0.0-debian"
+          },
+          "common-tools-runtime": {
+            "version": "v1.0.0-alpine"
+          }
+        }
+      }
+    }
+  ]
 }
 ```
 

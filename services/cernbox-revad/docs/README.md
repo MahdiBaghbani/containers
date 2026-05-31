@@ -29,9 +29,10 @@ For generic Reva service documentation (service descriptions, placeholder system
 
 ### Container Count
 
-- **Total Containers:** 11
+- **Total Containers:** 14
   - 1 Gateway container
-  - 3 Auth provider containers (OIDC, Machine, OCM Shares)
+  - 6 Auth provider containers (OIDC, Machine, OCM Shares, OCM Share Code,
+    OCM Exchanged Token, Public Shares)
   - 2 Provider containers (Share Providers, User/Group Providers)
   - 3 Dataprovider containers (Localhome, OCM, ScienceMesh)
   - 1 IdP container (Keycloak)
@@ -42,7 +43,8 @@ For generic Reva service documentation (service descriptions, placeholder system
 - **Gateway:** 9142 (gRPC), 80 (HTTP)
 - **Share Providers:** 9144 (gRPC)
 - **User/Group Providers:** 9145 (gRPC)
-- **Auth Providers:** 9158 (OIDC), 9166 (Machine), 9278 (OCM Shares)
+- **Auth Providers:** 9158 (OIDC), 9160 (Public Shares), 9166 (Machine),
+  9278 (OCM Shares), 9280 (OCM Share Code), 9282 (OCM Exchanged Token)
 - **Dataproviders:** 9143 (Localhome), 9146 (OCM), 9147 (ScienceMesh)
 
 See [Port Assignments](ports.md) for complete reference.

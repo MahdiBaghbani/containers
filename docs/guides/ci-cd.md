@@ -28,42 +28,48 @@ The shipped build workflows are generated from the current service graph by
 `nu scripts/dockypody.nu ci workflow` and then committed to
 `.github/workflows/`.
 
-- **`.github/workflows/build.yml`**: Generated manual entry point for
-  build-only verification
-- **`.github/workflows/build-push.yml`**: Generated manual entry point for
-  build-and-push runs plus post-push GHCR purge
-- **`.github/workflows/build-orchestrator.yml`**: Generated reusable
-  workflow that encodes service ordering and dependency fan-out
-- **`.github/workflows/build-service.yml`**: Generated reusable workflow for
-  one service's version/platform matrix
-- **`.github/workflows/image-purge.yml`**: Generated manual GHCR purge entry
-  point
+- **`Build All`** (`.github/workflows/build.yml`): Generated manual
+  `workflow_dispatch` entry point for build-only verification
+- **`Build and Push All`** (`.github/workflows/build-push.yml`): Generated
+  manual `workflow_dispatch` entry point for build-and-push runs plus the
+  post-push GHCR purge
+- **`Build Orchestrator`** (`.github/workflows/build-orchestrator.yml`):
+  Generated reusable `workflow_call` workflow that encodes service ordering
+  and dependency fan-out
+- **`Build Service`** (`.github/workflows/build-service.yml`): Generated
+  reusable `workflow_call` workflow for one service's version/platform matrix
+- **`Image Purge`** (`.github/workflows/image-purge.yml`): Generated manual
+  `workflow_dispatch` GHCR purge entry point
 
-These workflows are manual GitHub entry points. `build.yml`,
-`build-push.yml`, and `image-purge.yml` use `workflow_dispatch`, while
-`build-orchestrator.yml` and `build-service.yml` are reusable workflow
-building blocks. When the service graph or workflow templates change, rerun
-the generator and commit the updated files.
+In other words: `build.yml`, `build-push.yml`, and `image-purge.yml` are the
+manual GitHub entry points, while `build-orchestrator.yml` and
+`build-service.yml` are reusable building blocks. When the service graph or
+workflow templates change, rerun the generator and commit the updated files.
 
 ## Forgejo Workflows
 
 Forgejo keeps the committed, non-generated workflows that round out the CI
 story:
 
-- **`.forgejo/workflows/validate-schemas.yml`**: Lightweight non-image
+- **`Validate Schemas and CI Helpers`**
+  (`.forgejo/workflows/validate-schemas.yml`): Lightweight non-image
   validation. It checks schema examples, service configs and manifests, schema
   file references in `docs/`, runs `nu scripts/dockypody.nu docs lint`, and
   runs the `ci`, `ghcr-purge`, `docs-lint`, and `routed-smoke` test suites.
-  It triggers on workflow files, `Makefile`, `README.md`, `docs/**`,
-  `schemas/**`, `services/**/*.nuon`, and `scripts/**`; see the workflow file
-  for the exact committed contract.
-- **`.forgejo/workflows/build-containers.yml`**: Image build workflow that
-  installs the same Nushell version as GitHub and calls `nu
-  scripts/dockypody.nu build ...` directly.
+  It triggers on pushes to `main` and `master`, plus pull requests whose
+  changes touch the committed CI contract (`README.md`, workflow files,
+  `docs/**`, `schemas/**`, `services/**/*.nuon`, `scripts/**`, and related
+  helper files).
+- **`Build Containers`** (`.forgejo/workflows/build-containers.yml`): Image
+  build workflow that installs the same Nushell version as GitHub and calls
+  `nu scripts/dockypody.nu build ...` directly. It can be started manually via
+  `workflow_dispatch`, runs automatically for version tag pushes, and also
+  allows branch-push builds when the head commit message contains `dev-build`
+  or `stage-build`.
 
-In other words: Forgejo handles lightweight automatic validation plus the
-legacy image-build lane, while the generated GitHub workflows describe the
-current build-and-purge graph.
+In other words: Forgejo handles the committed automatic validation lane plus
+the compatible image-build lane, while the generated GitHub workflows
+describe the current build-and-purge graph.
 
 ## GHCR package retention (SSOT purge)
 

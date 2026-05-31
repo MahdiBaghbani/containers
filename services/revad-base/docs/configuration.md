@@ -216,7 +216,7 @@ Partial configs are TOML files that contain:
 
 **Build-Time Partials**:
 
-- Location: `services/{service}/configs/partial/*.toml`
+- Location: `services/{name}/configs/partial/*.toml`
 - Merged during Dockerfile build
 - Baked into image at `/configs/revad/`
 - No markers (content directly merged)
@@ -301,7 +301,7 @@ quality = 80
 For complete documentation on partial configs:
 
 - **Schema Reference**: See [`partial-config-schema.md`](partial-config-schema.md) for complete schema and examples
-- **Schema File**: See [`services/revad-base/schemas/partial-config.nuon`](../../schemas/partial-config.nuon) for authoritative schema definition
+- **Schema File**: See [`services/revad-base/schemas/partial-config.nuon`](../schemas/partial-config.nuon) for authoritative schema definition
 
 ## Related Documentation
 

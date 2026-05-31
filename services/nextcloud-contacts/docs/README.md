@@ -40,7 +40,7 @@ docker run -d \
   -e MYSQL_PASSWORD=dbsecret \
   -e CONTACTS_ENABLE_OCM_INVITES=true \
   -e CONTACTS_MESH_PROVIDERS_SERVICE=https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download \
-  nextcloud-contacts:ocm-testing
+  nextcloud-contacts:v8.1.0-ocm-nc-master
 ```
 
 ## Environment Variables
@@ -52,7 +52,8 @@ docker run -d \
   - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
   - Description: Automatically enables OCM Invites feature after contacts app is enabled
   - Example: `CONTACTS_ENABLE_OCM_INVITES=true`
-  - Note: Only available in `ocm-testing` version. Standard versions will log a warning if set.
+  - Note: Only available in versions that ship the OCM Invite commands (for
+    example `v8.1.0-ocm-nc-master`). Standard versions log a warning if set.
 
 - `CONTACTS_MESH_PROVIDERS_SERVICE` - OCM Discovery Service URL (optional)
   - Type: String (URL)
@@ -95,7 +96,9 @@ These variables control the OCM invites user experience. You can use a mode pres
 
 ### Nextcloud Base Variables
 
-This service inherits all environment variables from `nextcloud-base`. See [nextcloud-base documentation](../nextcloud-base/docs/README.md#environment-variables) for:
+This service inherits all environment variables from `nextcloud-base`. See
+[nextcloud-base documentation](../../nextcloud-base/docs/README.md#environment-variables)
+for:
 
 - Installation variables (`NEXTCLOUD_ADMIN_USER`, `NEXTCLOUD_ADMIN_PASSWORD`, etc.)
 - Database configuration (`MYSQL_*`, `POSTGRES_*`, `SQLITE_*`)
@@ -106,18 +109,21 @@ This service inherits all environment variables from `nextcloud-base`. See [next
 
 ### Standard Version
 
-- **Default**: `v8.1.0-nc-v32.0.2`
+- **Default**: `v8.1.0-nc-master`
 - **Source**: `https://github.com/nextcloud/contacts`
 - **Ref**: `v8.1.0`
 - **Features**: Standard Contacts app, no OCM Invites
 
-### OCM Testing Version
+### OCM Variant
 
-- **Name**: `ocm-testing`
-- **Source**: `https://github.com/sara-nl/nextcloud-contacts`
-- **Ref**: `invite-for-cloudid-exchange`
+- **Name**: `v8.1.0-ocm-nc-master`
+- **Source**: `https://github.com/MahdiBaghbani/nextcloud-contacts`
+- **Ref**: `mahdi/fix/ui-optional-email`
 - **Features**: Contacts app with OCM Invites feature
 - **Usage**: Set `CONTACTS_ENABLE_OCM_INVITES=true` to enable OCM functionality
+
+Additional tracked variants currently include `sta-ocm-m6` and
+`sta-m6-nc-code-flow-arch-redesign` for milestone-specific testing.
 
 ## OCM Invites Feature
 
@@ -133,7 +139,8 @@ The OCM Invites feature allows exchanging cloud IDs through OCM invitation workf
 
 ### Enabling OCM Invites
 
-1. Use `ocm-testing` version: `nextcloud-contacts:ocm-testing`
+1. Use an OCM-capable version, for example
+   `nextcloud-contacts:v8.1.0-ocm-nc-master`
 2. Set environment variable: `CONTACTS_ENABLE_OCM_INVITES=true`
 3. Optionally configure mesh providers service: `CONTACTS_MESH_PROVIDERS_SERVICE=<URL>`
 4. Optionally set mode: `CONTACTS_OCM_INVITES_MODE=basic` or `advanced`
@@ -159,7 +166,7 @@ docker run -d \
   -e CONTACTS_ENABLE_OCM_INVITES=true \
   -e CONTACTS_OCM_INVITES_MODE=advanced \
   -e CONTACTS_MESH_PROVIDERS_SERVICE=https://example.com/providers.json \
-  nextcloud-contacts:ocm-testing
+  nextcloud-contacts:v8.1.0-ocm-nc-master
 ```
 
 ### Manual Enablement
@@ -187,6 +194,7 @@ The Contacts app is built in multiple stages:
 
 - App is baked to `/usr/src/apps/contacts` in the image
 - At runtime, merged into `/usr/src/nextcloud/apps/contacts` by `nextcloud-base`
+- Presence is enforced during `before-starting` by `90-ensure-contacts.nu`
 - Automatically enabled via hook: `90-enable-contacts.nu`
 - OCM Invites configured via hook: `91-enable-contacts-ocm-invites.nu` (if enabled)
 
@@ -194,8 +202,12 @@ The Contacts app is built in multiple stages:
 
 Hooks execute alphabetically:
 
-1. `90-enable-contacts.nu` - Enables contacts app
-2. `91-enable-contacts-ocm-invites.nu` - Enables OCM Invites and configures mode/flags (if relevant env vars are set)
+1. `before-starting/90-ensure-contacts.nu` - Verifies the baked app is present
+   in the runtime tree before Apache starts
+2. `post-installation/90-enable-contacts.nu` - Enables contacts app after
+   install
+3. `post-installation/91-enable-contacts-ocm-invites.nu` - Enables OCM
+   Invites and configures mode/flags (if relevant env vars are set)
 
 ## Building
 
@@ -203,8 +215,8 @@ Hooks execute alphabetically:
 # Build default version
 nu scripts/dockypody.nu build --service nextcloud-contacts
 
-# Build specific version
-nu scripts/dockypody.nu build --service nextcloud-contacts --version ocm-testing
+# Build specific OCM-enabled version
+nu scripts/dockypody.nu build --service nextcloud-contacts --version v8.1.0-ocm-nc-master
 
 # Build with local source
 CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/dockypody.nu build --service nextcloud-contacts
@@ -218,12 +230,12 @@ CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/dockypody.nu buil
 
 **Causes**:
 
-- Using standard version (OCM commands not available)
+- Using a version without the OCM Invite commands
 - Hook execution failed (check logs)
 
 **Solution**:
 
-- Use `ocm-testing` version
+- Use `v8.1.0-ocm-nc-master` or another OCM-capable tracked variant
 - Check container logs for warnings
 - Manually enable: `occ contacts:enable-ocm-invites`
 
@@ -233,13 +245,13 @@ CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/dockypody.nu buil
 
 **Causes**:
 
-- Using standard version (command not available)
+- Using a version without the OCM Invite commands
 - Invalid URL format
 - Hook execution failed
 
 **Solution**:
 
-- Use `ocm-testing` version
+- Use `v8.1.0-ocm-nc-master` or another OCM-capable tracked variant
 - Verify URL starts with `http://` or `https://`
 - Check container logs for warnings
 - Manually configure: `occ contacts:set-mesh-providers-service <URL>`
@@ -261,6 +273,9 @@ CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/dockypody.nu buil
 
 ## See Also
 
-- [nextcloud-base documentation](../nextcloud-base/docs/README.md) - Base service documentation
-- [nextcloud-base initialization](../nextcloud-base/docs/initialization.md) - Initialization flow
-- [Dockerfile Development Guide](../../docs/guides/dockerfile-development.md) - Dockerfile patterns
+- [nextcloud-base documentation](../../nextcloud-base/docs/README.md) - Base
+  service documentation
+- [nextcloud-base initialization](../../nextcloud-base/docs/initialization.md)
+  - Initialization flow
+- [Dockerfile Development Guide](../../../docs/guides/dockerfile-development.md)
+  - Dockerfile patterns
