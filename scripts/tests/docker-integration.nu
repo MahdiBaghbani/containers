@@ -41,10 +41,11 @@ def main [--verbose, --docker] {
     let enabled = ($docker_flag or $env_opt_in)
 
     if not $enabled {
-        print "Docker integration suite: SKIPPED"
+        print "SKIPPED: docker-integration suite is opt-in only"
         print "  This suite checks Docker CLI availability and daemon reachability."
         print "  It is excluded from 'test --suite all' by design."
-        print "  To run: set env DOCKYPODY_DOCKER_INTEGRATION=1 or pass --docker directly."
+        print "  Routed:  DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration"
+        print "  Direct:  nu scripts/tests/docker-integration.nu --docker"
         exit 0
     }
 

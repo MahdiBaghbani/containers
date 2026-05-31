@@ -56,8 +56,9 @@ export def test-help [] {
   }
   print ""
   print "Opt-in suites (excluded from 'all', require Docker daemon):"
-  print "  docker-integration   Docker integration tests"
-  print "    Opt-in: set DOCKYPODY_DOCKER_INTEGRATION=1 or run directly with --docker"
+  print "  docker-integration   Docker CLI and daemon reachability tests"
+  print "    Routed:  DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration"
+  print "    Direct:  nu scripts/tests/docker-integration.nu --docker"
 }
 
 # Test CLI entrypoint - called from dockypody.nu
@@ -74,7 +75,7 @@ export def test-cli [
   }
 
   # Run suites and collect results using reduce to avoid mutable variable scope issues
-  let results = ($test_suites | reduce --fold {passed: 0, failed: 0} {|suite_name, acc|
+  let results = ($test_suites | reduce --fold {passed: 0, failed: 0, skipped: 0} {|suite_name, acc|
     print $"=== ($suite_name | str upcase) ==="
 
     let result = (if $verbose {
@@ -83,14 +84,21 @@ export def test-cli [
       nu $"scripts/tests/($suite_name).nu" | complete
     })
 
-    let next_result = if $result.exit_code == 0 {
-      let counts = ($result.stdout | lines | last 2)
-      print $"($counts.0)\n($counts.1)"
-      {passed: ($acc.passed + 1), failed: $acc.failed}
-    } else {
+    # Detect suites that skipped via the SKIPPED: marker (zero exit, opt-in not set).
+    let has_skip_marker = ($result.stdout | lines | any {|l| $l | str starts-with "SKIPPED:"})
+    let is_skipped = ($result.exit_code == 0 and $has_skip_marker)
+
+    let next_result = if $result.exit_code != 0 {
       print "FAILED"
       print $result.stderr
-      {passed: $acc.passed, failed: ($acc.failed + 1)}
+      {passed: $acc.passed, failed: ($acc.failed + 1), skipped: $acc.skipped}
+    } else if $is_skipped {
+      for l in ($result.stdout | str trim | lines) { print $l }
+      {passed: $acc.passed, failed: $acc.failed, skipped: ($acc.skipped + 1)}
+    } else {
+      let counts = ($result.stdout | lines | last 2)
+      print $"($counts.0)\n($counts.1)"
+      {passed: ($acc.passed + 1), failed: $acc.failed, skipped: $acc.skipped}
     }
     print ""
     $next_result
@@ -100,11 +108,18 @@ export def test-cli [
   print "Test Summary"
   print "================================"
   print $"Suites:  ($test_suites | length)"
-  print $"Passed: ($results.passed)"
-  print $"Failed: ($results.failed)"
+  print $"Passed:  ($results.passed)"
+  if $results.skipped > 0 {
+    print $"Skipped: ($results.skipped)"
+  }
+  print $"Failed:  ($results.failed)"
 
   if $results.failed == 0 {
-    print "\nAll test suites passed!"
+    if $results.skipped > 0 {
+      print $"\nNo test suites failed; ($results.skipped) suite\(s\) skipped"
+    } else {
+      print "\nAll test suites passed!"
+    }
     exit 0
   } else {
     print $"\n($results.failed) test suite\(s\) failed"

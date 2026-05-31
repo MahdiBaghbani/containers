@@ -254,6 +254,66 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_smoke_tls_ca_force_routing)
 
+    let test_smoke_test_help = (run-test "smoke: routed test help dispatches" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry test help | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"test help exited ($out.exit_code): ($out.stderr)"}
+        }
+        if not ($out.stdout | str contains "Usage: nu scripts/dockypody.nu test") {
+            error make {msg: "test help missing Usage line"}
+        }
+        if not ($out.stdout | str contains "Available suites:") {
+            error make {msg: "test help missing Available suites section"}
+        }
+        if not ($out.stdout | str contains "docker-integration") {
+            error make {msg: "test help missing docker-integration opt-in entry"}
+        }
+        if not ($out.stdout | str contains "DOCKYPODY_DOCKER_INTEGRATION=1") {
+            error make {msg: "test help missing routed docker-integration guidance"}
+        }
+        if not ($out.stdout | str contains "nu scripts/tests/docker-integration.nu --docker") {
+            error make {msg: "test help missing direct docker-integration guidance"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_test_help)
+
+    let test_smoke_docker_integration_skipped = (run-test "smoke: docker-integration suite is skipped without opt-in" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (with-env {DOCKYPODY_DOCKER_INTEGRATION: ""} {
+            ^nu $entry test --suite docker-integration | complete
+        })
+        if $out.exit_code != 0 {
+            error make {msg: $"docker-integration without opt-in should exit 0 but exited ($out.exit_code)"}
+        }
+        if not ($out.stdout | str contains "SKIPPED: docker-integration suite is opt-in only") {
+            error make {msg: "docker-integration skip output missing SKIPPED marker line"}
+        }
+        if not ($out.stdout | str contains "DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration") {
+            error make {msg: "docker-integration skip output missing routed guidance line"}
+        }
+        if not ($out.stdout | str contains "nu scripts/tests/docker-integration.nu --docker") {
+            error make {msg: "docker-integration skip output missing direct guidance line"}
+        }
+        if not ($out.stdout | str contains "Skipped: 1") {
+            error make {msg: "docker-integration skip output missing Skipped: 1 in wrapper summary"}
+        }
+        if not ($out.stdout | str contains "Failed:  0") {
+            error make {msg: "docker-integration skip output missing Failed:  0 in wrapper summary"}
+        }
+        if not ($out.stdout | str contains "No test suites failed; 1 suite(s) skipped") {
+            error make {msg: "docker-integration skip output missing non-failure skipped footer"}
+        }
+        if ($out.stdout | str contains "All test suites passed!") {
+            error make {msg: "docker-integration skip output must not show all-passed message when suites were skipped"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_docker_integration_skipped)
+
     print-test-summary $results
 
     if ($results | any {|r| not $r}) {

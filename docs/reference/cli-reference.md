@@ -168,9 +168,10 @@ nu scripts/dockypody.nu test [--suite <name>] [--verbose]
   name `all` runs the current non-Docker bundle surfaced by
   `nu scripts/dockypody.nu test help`.
 - You may pass any suite name matching a `scripts/tests/*.nu` file.
-  `docker-integration` stays opt-in, is excluded from `all`, and only runs
-  when `DOCKYPODY_DOCKER_INTEGRATION=1` is set or the suite is invoked
-  directly with `--docker`.
+  `docker-integration` stays opt-in, is excluded from `all`, and supports two
+  truthful invocation paths:
+  - Routed: `DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration`
+  - Direct: `nu scripts/tests/docker-integration.nu --docker`
 
 ### validate
 
