@@ -38,7 +38,8 @@ const suite_inventory = [
     {name: "routed-smoke",   desc: "Routed CLI and Makefile dispatch smoke tests"}
     {name: "cache-shards",   desc: "CI cache shard helper tests"}
     {name: "orchestration",  desc: "Non-Docker build metadata paths (matrix-json, show-build-order)"}
-    {name: "dep-contract",   desc: "Dependency tag/key contract tests (dependencies, order, hash)"}
+    {name: "dep-contract",     desc: "Dependency tag/key contract tests (dependencies, order, hash)"}
+    {name: "service-def-hash", desc: "Service definition hash stability tests"}
 ]
 
 # Show test CLI help
@@ -66,13 +67,20 @@ export def test-cli [
   suite: string = "all",  # Which test suite to run
   verbose: bool = false   # Show detailed output
 ] {
-  print "Running OCM Containers Test Suite\n"
+  let public_suites = ($suite_inventory | get name)
+  let supported_suites = ($public_suites | append "docker-integration")
 
   let test_suites = if $suite == "all" {
-    $suite_inventory | get name
+    $public_suites
   } else {
+    if not ($suite in $supported_suites) {
+      print --stderr $"Unsupported test suite: '($suite)'. Run: nu scripts/dockypody.nu test help"
+      exit 1
+    }
     [$suite]
   }
+
+  print "Running OCM Containers Test Suite\n"
 
   # Run suites and collect results using reduce to avoid mutable variable scope issues
   let results = ($test_suites | reduce --fold {passed: 0, failed: 0, skipped: 0} {|suite_name, acc|

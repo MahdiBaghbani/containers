@@ -31,6 +31,28 @@ def rm-temp-context [dir: string] {
     try { rm -rf $dir } catch { }
 }
 
+def parse-public-suite-block [help_output: string] {
+    let lines = ($help_output | lines)
+    let available = ($lines | enumerate | where item == "Available suites:")
+    if ($available | is-empty) {
+        error make {msg: "test help missing Available suites marker"}
+    }
+
+    let block_lines = (
+        $lines
+            | skip (($available | first | get index) + 1)
+            | take while {|line| ($line | str trim) != ""}
+    )
+
+    $block_lines | each {|line|
+        let parsed = ($line | parse --regex '^\s+(?P<name>\S+)\s+(?P<desc>.+)$')
+        if ($parsed | is-empty) {
+            error make {msg: $"unable to parse public suite line: ($line)"}
+        }
+        $parsed | get 0.name
+    }
+}
+
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })
     mut results = []
@@ -313,6 +335,53 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $test_smoke_docker_integration_skipped)
+
+    let test_smoke_test_help_inventory = (run-test "smoke: test help public suite block matches runnable public suites exactly" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry test help | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"test help exited ($out.exit_code): ($out.stderr)"}
+        }
+        let expected_public = [
+            "all"
+            "architecture" "manifests" "services" "tls" "ssh" "tag-generation"
+            "build-system" "defaults" "pull" "validate" "registries" "ci"
+            "ghcr-purge" "docs-lint" "routed-smoke" "cache-shards"
+            "orchestration" "dep-contract" "service-def-hash"
+        ]
+        let public_block = (parse-public-suite-block $out.stdout)
+        if $public_block != $expected_public {
+            let expected_text = ($expected_public | str join ", ")
+            let got_text = ($public_block | str join ", ")
+            error make {msg: $"public suite block mismatch. Expected: [($expected_text)]. Got: [($got_text)]"}
+        }
+        for name in ["docker-integration" "helpers" "mocks" "lib"] {
+            if ($name in $public_block) {
+                error make {msg: $"public suite block must not include '($name)'"}
+            }
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_test_help_inventory)
+
+    let test_smoke_internal_suite_errors = (run-test "smoke: unsupported/internal suite name errors clearly" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry test --suite helpers | complete)
+        let expected_stderr = "Unsupported test suite: 'helpers'. Run: nu scripts/dockypody.nu test help"
+        if $out.exit_code == 0 {
+            error make {msg: "test --suite helpers should fail but exited 0"}
+        }
+        if (($out.stdout | str trim) != "") {
+            error make {msg: $"internal suite error should not print stdout; got: ($out.stdout | str trim)"}
+        }
+        if (($out.stderr | str trim) != $expected_stderr) {
+            error make {msg: $"internal suite stderr mismatch. Expected: '($expected_stderr)'. Got: '($out.stderr | str trim)'"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_internal_suite_errors)
 
     print-test-summary $results
 

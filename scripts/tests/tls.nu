@@ -668,7 +668,7 @@ def main [--verbose] {
         let errored = (do {
             cd $fake_repo
             try {
-                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-and-cert", cert_name: "svc.crt"}} "test-ca"
+                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-and-cert", cert_name: "svc"}} "test-ca"
                 false
             } catch { true }
         })
@@ -694,7 +694,7 @@ def main [--verbose] {
         let errored = (do {
             cd $fake_repo
             try {
-                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-and-cert", cert_name: "svc.crt"}} "test-ca"
+                validate-ca "my-svc" {tls: {enabled: true, mode: "ca-and-cert", cert_name: "svc"}} "test-ca"
                 false
             } catch { true }
         })
@@ -717,7 +717,7 @@ def main [--verbose] {
         let errored = (do {
             cd $fake_repo
             try {
-                validate-ca "my-svc" {tls: {enabled: true, mode: "cert-only", cert_name: "svc.crt"}} "test-ca"
+                validate-ca "my-svc" {tls: {enabled: true, mode: "cert-only", cert_name: "svc"}} "test-ca"
                 false
             } catch { true }
         })
