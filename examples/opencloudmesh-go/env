@@ -1,0 +1,17 @@
+# Required admin bootstrap credentials
+OCM_GO_ADMIN_USER=admin
+OCM_GO_ADMIN_PASSWORD=admin
+
+# Set one public origin input.
+PUBLIC_ORIGIN=https://ocmgo1.docker
+# HOST=ocmgo1
+
+# Optional mode override.
+# Leave unset for strict.
+# Set `compat` when you need the compatibility preset.
+# `dev` keeps the container's baked TLS and SSRF overrides.
+OCM_GO_MODE=compat
+
+# Optional SSRF route-policy envs. Set both or neither.
+# OCM_GO_ROUTE_PRIVATE_CIDRS=10.0.0.0/24
+# OCM_GO_ROUTE_SUFFIXES=.docker

@@ -370,8 +370,6 @@ def test_write_ssrf_runtime_partial_empty_cidrs_error_text [] {
 
 def make_sample_config []: nothing -> string {
     [
-        "mode = \"strict\""
-        "compatibility_scope = \"none\""
         "listen_addr = \":443\""
         ""
         "[outbound_http.ssrf]"
@@ -455,8 +453,6 @@ def test_inject_ssrf_route_policy_missing_section [] {
 
 def make_config_with_runtime_state []: nothing -> string {
     [
-        'mode = "strict"'
-        'compatibility_scope = "none"'
         'listen_addr = ":443"'
         ""
         "[outbound_http.ssrf]"
@@ -606,6 +602,84 @@ def test_summary_log_format [] {
     assert_not_contains "summary log no bare (es) footgun" $msg "(es)"
 }
 
+# --- merge_partial_configs marker regression ---
+#
+# merge_partial_configs is SSRF-only / marker-based: every partial it processes
+# MUST contain a [target] section. This test protects against accidentally
+# relaxing that requirement into generic markerless partial merging.
+
+def test_merge_partial_requires_target_marker [] {
+    let tmp = (^mktemp -d)
+    let cfg_dir = $"($tmp)/configs"
+    let partial_dir = $"($tmp)/configs/partial"
+    let cfg = $"($cfg_dir)/config.toml"
+
+    mkdir $cfg_dir
+    mkdir $partial_dir
+    make_sample_config | save -f $cfg
+
+    # A partial without [target] must cause merge_partial_configs to fail.
+    (
+        "[outbound_http.ssrf.route_policies.custom]\nmode = \"off\"\n"
+        | save -f $"($partial_dir)/no-marker.toml"
+    )
+
+    let caught = (try {
+        merge_partial_configs $cfg_dir $partial_dir
+        false
+    } catch {
+        true
+    })
+
+    ^rm -rf $tmp
+
+    if not $caught {
+        error make {
+            msg: "FAIL [merge marker required]: expected error for partial without [target], got none"
+        }
+    }
+}
+
+# --- merge_partial_configs SSRF-body regression ---
+#
+# merge_partial_configs is SSRF-only: a partial that passes the [target]
+# marker check still must not carry arbitrary TOML under the allowed SSRF
+# header. This regression proves extra keys under the runtime route-policy
+# subtree are rejected rather than silently merged into the config.
+
+def test_merge_partial_rejects_non_ssrf_body [] {
+    let tmp = (^mktemp -d)
+    let cfg_dir = $"($tmp)/configs"
+    let partial_dir = $"($tmp)/configs/partial"
+    let cfg = $"($cfg_dir)/config.toml"
+
+    mkdir $cfg_dir
+    mkdir $partial_dir
+    make_sample_config | save -f $cfg
+
+    # Partial uses the expected SSRF runtime header, but adds an extra key that
+    # write_ssrf_runtime_partial never emits; this must be rejected.
+    (
+        "[target]\nfile = \"config.toml\"\n\n[outbound_http.ssrf.route_policies.runtime]\nallow_private_host_suffixes = [\".docker\"]\nallow_private_cidrs = [\"10.1.2.0/24\"]\nallowed_ports = [443]\nallow_ip_literals = false\nunexpected_key = \"value\"\n"
+        | save -f $"($partial_dir)/bad-body.toml"
+    )
+
+    let caught = (try {
+        merge_partial_configs $cfg_dir $partial_dir
+        false
+    } catch {
+        true
+    })
+
+    ^rm -rf $tmp
+
+    if not $caught {
+        error make {
+            msg: "FAIL [merge rejects non-SSRF body]: expected error for partial with extra runtime key, got none"
+        }
+    }
+}
+
 def main [] {
     test_parse_private_cidrs_empty
     test_parse_private_cidrs_single
@@ -654,6 +728,9 @@ def main [] {
     test_production_config_http_services_shape
 
     test_summary_log_format
+
+    test_merge_partial_requires_target_marker
+    test_merge_partial_rejects_non_ssrf_body
 
     print "PASS: all ssrf-runtime tests"
 }

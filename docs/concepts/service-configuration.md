@@ -179,14 +179,15 @@ Add a dedicated version that uses a local path from `versions.nuon`:
   "overrides": {
     "sources": {
       "ocm_go": {
-        "path": ".repos/opencloudmesh-go"
+        "path": "../opencloudmesh-go"
       }
     }
   }
 }
 ```
 
-Build with: `nu scripts/dockypody.nu build --service opencloudmesh-go --version local`
+Build with:
+`nu scripts/dockypody.nu build --service opencloudmesh-go --version local`
 
 **Example - Environment Variable Override:**
 

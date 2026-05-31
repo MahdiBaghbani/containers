@@ -24,7 +24,7 @@
 #
 # Uses temp dirs and direct function invocation; no container startup needed.
 
-use ../scripts/entrypoint-init.nu [setup_ssrf_runtime_route]
+use ../scripts/entrypoint-init.nu [setup_ssrf_runtime_route validate_mode]
 
 def assert_contains [label: string, haystack: string, needle: string] {
     if not ($haystack | str contains $needle) {
@@ -65,11 +65,10 @@ def assert_throws_contains [label: string, thunk: closure, needle: string] {
 }
 
 # Minimal config.toml with [outbound_http.ssrf] section,
-# matching the structure inject_ssrf_route_policy requires.
+# matching the baked container config shape (no top-level mode or
+# compatibility_scope; those come from the upstream preset at load time).
 def make_base_config []: nothing -> string {
     [
-        "mode = \"strict\""
-        "compatibility_scope = \"none\""
         "listen_addr = \":443\""
         ""
         "[outbound_http.ssrf]"
@@ -80,6 +79,55 @@ def make_base_config []: nothing -> string {
         "cert_file = \"/tls/ocmgo.crt\""
         "key_file = \"/tls/ocmgo.key\""
     ] | str join "\n"
+}
+
+def assert_eq [label: string, got: any, want: any] {
+    if $got != $want {
+        error make {
+            msg: $"FAIL [$label]: got ($got | to nuon), want ($want | to nuon)"
+        }
+    }
+}
+
+# --- validate_mode contract ---
+
+# Empty / unset OCM_GO_MODE: returns empty string (no --mode flag injected).
+def test_mode_empty [] {
+    let got = (with-env {OCM_GO_MODE: ""} { validate_mode })
+    assert_eq "mode empty" $got ""
+}
+
+# strict, compat, dev are all accepted and returned as-is.
+def test_mode_strict [] {
+    let got = (with-env {OCM_GO_MODE: "strict"} { validate_mode })
+    assert_eq "mode strict" $got "strict"
+}
+
+def test_mode_compat [] {
+    let got = (with-env {OCM_GO_MODE: "compat"} { validate_mode })
+    assert_eq "mode compat" $got "compat"
+}
+
+def test_mode_dev [] {
+    let got = (with-env {OCM_GO_MODE: "dev"} { validate_mode })
+    assert_eq "mode dev" $got "dev"
+}
+
+# An unrecognised token must fail with a descriptive error.
+def test_mode_invalid_rejected [] {
+    (assert_throws_contains
+        "mode invalid rejected"
+        {|| with-env {OCM_GO_MODE: "bogus"} { validate_mode }}
+        "OCM_GO_MODE must be strict, compat, or dev")
+}
+
+# "interop" is a removed alias; it must be explicitly rejected so the
+# no-legacy decision is enforced as a regression, not just by omission.
+def test_mode_interop_rejected [] {
+    (assert_throws_contains
+        "mode interop rejected (removed alias)"
+        {|| with-env {OCM_GO_MODE: "interop"} { validate_mode }}
+        "OCM_GO_MODE must be strict, compat, or dev")
 }
 
 # --- setup_ssrf_runtime_route contract ---
@@ -229,6 +277,12 @@ def test_setup_cidrs_only [] {
 }
 
 def main [] {
+    test_mode_empty
+    test_mode_strict
+    test_mode_compat
+    test_mode_dev
+    test_mode_invalid_rejected
+    test_mode_interop_rejected
     test_setup_both_unset
     test_setup_both_set
     test_setup_suffixes_only
