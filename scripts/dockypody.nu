@@ -27,6 +27,7 @@
 use ./lib/build/cli.nu [build-help]
 use ./lib/validate/cli.nu [validate-help]
 use ./lib/test/cli.nu [test-help]
+use ./lib/inspect/cli.nu [inspect-help]
 
 def show-help [] {
   print "dockypody - DockyPody unified CLI"
@@ -37,6 +38,7 @@ def show-help [] {
   print "  build              Build container images"
   print "  test               Run test suites"
   print "  validate           Validate configurations"
+  print "  inspect <subcommand> Inspect guard-owned effective config"
   print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean)"
   print "  ssh <subcommand>   Manage SSH keypair (key)"
   print "  ci <subcommand>    CI helper operations (list-deps, load-deps, images, ghcr-purge, etc.)"
@@ -60,7 +62,7 @@ def show-help [] {
 # `dockypody.nu build help`, `dockypody.nu tls help`. Nushell's auto-help
 # intercepts `--help`/`-h` before this body runs, so those are not DockyPody-owned.
 def main [
-  command?: string,           # Command: build, test, validate, tls, ssh, ci, docs, help
+  command?: string,           # Command: build, test, validate, inspect, tls, ssh, ci, docs, help
   subcommand?: string,        # Subcommand or "help" for command-specific help
   # Build flags
   --service: string = "",
@@ -91,7 +93,7 @@ def main [
   --suite: string = "all",
   # Validate flags
   --manifests-only,
-  # Plane (build and validate)
+  # Plane (build, validate, inspect)
   --plane: string = "tracked",
   # TLS/CI flags
   --filter: string = "",
@@ -172,6 +174,14 @@ def main [
       }
       run-validate-command $service $all_services $manifests_only $plane
     }
+    "inspect" => {
+      let subcmd = if $subcommand == null { "help" } else { $subcommand }
+      if $subcmd == "help" {
+        inspect-help
+        return
+      }
+      run-inspect-command $subcmd $service $version $platform $plane
+    }
     "tls" => {
       # Default missing subcommand to "help"; tls-cli handles it internally.
       let subcmd = if $subcommand == null { "help" } else { $subcommand }
@@ -217,6 +227,22 @@ def run-validate-command [service: string, all_services: bool, manifests_only: b
     service: $service,
     all_services: $all_services,
     manifests_only: $manifests_only,
+    plane: $plane
+  }
+}
+
+def run-inspect-command [
+  subcommand: string,
+  service: string,
+  version: string,
+  platform: string,
+  plane: string
+] {
+  use ./lib/inspect/cli.nu [inspect-cli]
+  inspect-cli $subcommand {
+    service: $service,
+    version: $version,
+    platform: $platform,
     plane: $plane
   }
 }

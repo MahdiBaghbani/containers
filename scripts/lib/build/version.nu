@@ -453,7 +453,7 @@ export def build-single-version [
     {}
   })
 
-  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths)
+  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths $plane)
 
   # Detect which CA files the Dockerfile actually needs, then stage them just-in-time.
   let ca_reqs = (if $tls_meta.enabled {

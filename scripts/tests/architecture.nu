@@ -25,7 +25,8 @@ use ../lib/plane/guard.nu [
   guard-plane guard-local-plane-presence parse-plane PLANE_LOCAL
 ]
 use ../lib/plane/effective-config.nu [apply-local-plane-effective-sources]
-use ../lib/build/config.nu [load-service-config]
+use ../lib/build/config.nu [load-service-config detect-all-source-types]
+use ../lib/build/args.nu [generate-build-args]
 use ../lib/manifest/core.nu [load-versions-manifest apply-version-defaults]
 use ../lib/plane/presence.nu [local-root-path local-root-present local-services-path LOCAL_ROOT_DIR]
 use ../lib/plane/audit.nu [audit-local-root-topology LOCAL_MIRROR_FILE require-services-directory]
@@ -304,7 +305,7 @@ def main [--verbose] {
   # Test 3: Expected domain directories exist
   let test3 = (run-test "Required domain directories exist" {
     let lib_path = "scripts/lib"
-    let required_domains = ["build", "ci", "core", "docs", "manifest", "plane", "platforms", "registries", "services", "test", "tls", "validate"]
+    let required_domains = ["build", "ci", "core", "docs", "inspect", "manifest", "plane", "platforms", "registries", "services", "test", "tls", "validate"]
     
     let existing = (ls $lib_path | where type == "dir" | get name | each {|p| $p | path basename})
     
@@ -344,7 +345,7 @@ def main [--verbose] {
   let test5 = (run-test "CLI domains have cli.nu files" {
     let lib_path = "scripts/lib"
     # Domains that must have CLI entrypoints
-    let cli_domains = ["build", "ci", "docs", "registries", "services", "ssh", "test", "tls", "validate"]
+    let cli_domains = ["build", "ci", "docs", "inspect", "registries", "services", "ssh", "test", "tls", "validate"]
     
     let missing_clis = ($cli_domains | where {|domain|
       let cli_path = $"($lib_path)/($domain)/cli.nu"
@@ -1287,8 +1288,83 @@ def main [--verbose] {
     true
   } $verbose_flag)
 
+  # Test 58: local plane build args ignore post-guard env PATH and MODE overrides
+  let test58 = (run-test "local plane build args ignore post-guard env PATH and MODE overrides" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    mkdir ($repo | path join "local-src")
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let manifest = (run-in-temp-repo $repo {|| load-versions-manifest "test-svc" })
+    let version_spec = (apply-version-defaults $manifest { name: "v1", overrides: {} })
+    let cfg = (run-in-temp-repo $repo {||
+      $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
+      load-service-config "test-svc" $version_spec "" null $plane_ctx
+    })
+    let guarded_path = (try { $cfg.sources.my_src.path } catch { "" })
+    let build_args = (run-in-temp-repo $repo {||
+      $env.MY_SRC_PATH = "/etc/passwd"
+      $env.MY_SRC_MODE = "git"
+      let source_types = (detect-all-source-types $cfg.sources $PLANE_LOCAL)
+      generate-build-args "v1" $cfg {sha: "abc", is_local: true, platforms: []} {} {enabled: false} {enabled: false} "" false {} $source_types {} $PLANE_LOCAL
+    })
+    let arg_path = (try { $build_args.MY_SRC_PATH } catch { "" })
+    if $arg_path != $guarded_path {
+      error make {msg: $"Expected build arg path to match guard-owned path '($guarded_path)', got: '($arg_path)'"}
+    }
+    let arg_mode = (try { $build_args.MY_SRC_MODE } catch { "" })
+    if $arg_mode != "local" {
+      error make {msg: $"Expected build arg mode 'local', got: '($arg_mode)'"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 60: inspect effective-config success path on local plane
+  let test60 = (run-test "inspect effective-config returns guard-owned merged config on local plane" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    mkdir ($repo | path join "local-src")
+    let expected_path = ($repo | path join "local-src" | path expand)
+    let entry = (dockypody-entry)
+    let out = (run-in-temp-repo $repo {||
+      $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
+      ^nu $entry inspect effective-config --service test-svc --plane local | complete
+    })
+    if $out.exit_code != 0 {
+      error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
+    }
+    let cfg = (try {
+      $out.stdout | from json
+    } catch {
+      error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+    })
+    let materialized = (try { $cfg.sources.my_src.path | path expand } catch { "" })
+    if $materialized != $expected_path {
+      error make {msg: $"Expected inspect env path ($expected_path), got: ($materialized)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 59: inspect effective-config routes through guard on local plane
+  let test59 = (run-test "inspect effective-config routes through guard on local plane" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    let out = (run-dockypody-in-repo $repo ["inspect" "effective-config" "--service" "test-svc" "--plane" "local"])
+    rm-temp-repo $repo
+    if $out.exit_code == 0 {
+      error make {msg: "Expected inspect to fail when local root is missing"}
+    }
+    if not (($out.stderr | str join " ") | str contains ".dockypody.local") {
+      error make {msg: $"Expected guard error mentioning .dockypody.local, got: ($out.stderr)"}
+    }
+    true
+  } $verbose_flag)
+
   # Collect results
-  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17, $test18, $test19, $test20, $test21, $test22, $test23, $test24, $test25, $test26, $test27, $test28, $test29, $test30, $test31, $test32, $test33, $test34, $test35, $test36, $test37, $test38, $test39, $test40, $test41, $test42, $test43, $test44, $test45, $test46, $test47, $test48, $test49, $test50, $test51, $test52, $test53, $test54, $test55, $test56, $test57]
+  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17, $test18, $test19, $test20, $test21, $test22, $test23, $test24, $test25, $test26, $test27, $test28, $test29, $test30, $test31, $test32, $test33, $test34, $test35, $test36, $test37, $test38, $test39, $test40, $test41, $test42, $test43, $test44, $test45, $test46, $test47, $test48, $test49, $test50, $test51, $test52, $test53, $test54, $test55, $test56, $test57, $test58, $test59, $test60]
   
   print-test-summary $results
   

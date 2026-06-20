@@ -188,6 +188,26 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_smoke_docs_help)
 
+    let test_smoke_inspect_help = (run-test "smoke: routed inspect help dispatches" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry inspect help | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"inspect help exited ($out.exit_code): ($out.stderr)"}
+        }
+        if not ($out.stdout | str contains "inspect <subcommand>") {
+            error make {msg: "inspect help missing routed usage line"}
+        }
+        if not ($out.stdout | str contains "effective-config") {
+            error make {msg: "inspect help missing effective-config subcommand"}
+        }
+        if not ($out.stdout | str contains "--plane") {
+            error make {msg: "inspect help missing --plane option"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_inspect_help)
+
     let test_smoke_make_certs_filter = (run-test "smoke: make -n certs forwards FILTER to tls certs --filter" {
         let make_ok = ((try { ^which make | complete | get exit_code } catch { 1 }) == 0)
         if not $make_ok {

@@ -138,12 +138,13 @@ export def detect-all-source-types [
 # See docs/concepts/service-configuration.md#source-build-arguments-convention for convention
 export def process-sources-to-build-args [
     sources: record,
-    source_types: record = {}
+    source_types: record = {},
+    plane: string = "tracked"
 ] {
     let repo_root = (get-repo-root)
     # If source_types is empty, detect inline
     let detected_types = (if ($source_types | is-empty) {
-        detect-all-source-types $sources
+        detect-all-source-types $sources $plane
     } else {
         $source_types
     })
@@ -161,21 +162,27 @@ export def process-sources-to-build-args [
             let path_build_arg = $"($source_key_upper)_PATH"
             let mode_build_arg = $"($source_key_upper)_MODE"
             
-            # Check for env var override first (highest priority)
-            let env_path_key = $"($source_key_upper)_PATH"
-            let env_path = (try { ($env | get -o $env_path_key) } catch { null })
-            
-            if ($env_path != null) and ($env_path | str length) > 0 {
-                # Validate env var path
-                let path_validation = (validate-local-path $env_path $repo_root)
-                if not $path_validation.valid {
-                    error make {
-                        msg: ($"Environment variable '($env_path_key)' contains invalid path: " + ($path_validation.errors | str join "; "))
+            if $plane != $PLANE_LOCAL {
+                # Tracked plane: env var override still allowed
+                let env_path_key = $"($source_key_upper)_PATH"
+                let env_path = (try { ($env | get -o $env_path_key) } catch { null })
+                
+                if ($env_path != null) and ($env_path | str length) > 0 {
+                    let path_validation = (validate-local-path $env_path $repo_root)
+                    if not $path_validation.valid {
+                        error make {
+                            msg: ($"Environment variable '($env_path_key)' contains invalid path: " + ($path_validation.errors | str join "; "))
+                        }
+                    }
+                    $result = ($result | upsert $path_build_arg $env_path)
+                } else {
+                    let path_value = (try { $source.path } catch { "" })
+                    if ($path_value | str length) > 0 {
+                        $result = ($result | upsert $path_build_arg $path_value)
                     }
                 }
-                $result = ($result | upsert $path_build_arg $env_path)
             } else {
-                # Use config path field
+                # Local plane: guard-owned effective model only (no env re-read)
                 let path_value = (try { $source.path } catch { "" })
                 if ($path_value | str length) > 0 {
                     $result = ($result | upsert $path_build_arg $path_value)
