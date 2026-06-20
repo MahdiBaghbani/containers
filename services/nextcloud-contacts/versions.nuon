@@ -37,6 +37,11 @@
           "build": {
             "tag": "24-trixie-slim"
           }
+        },
+        "dependencies": {
+          "nextcloud": {
+            "version": "sta-ocm-m6-debian"
+          }
         }
       }
     },
@@ -69,28 +74,6 @@
         "dependencies": {
           "nextcloud": {
             "version": "sta-ocm-m6-debian"
-          }
-        }
-      }
-    },
-    {
-      "name": "sta-m6-nc-code-flow-arch-redesign",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "contacts": {
-            "url": "https://github.com/MahdiBaghbani/nextcloud-contacts",
-            "ref": "mahdi/fix/ui-optional-email"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "24-trixie-slim"
-          }
-        },
-        "dependencies": {
-          "nextcloud": {
-            "version": "sta-m6-nc-code-flow-arch-redesign"
           }
         }
       }
