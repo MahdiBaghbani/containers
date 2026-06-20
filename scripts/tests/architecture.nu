@@ -21,7 +21,12 @@
 # Ensures CLI pattern: dockypody.nu routes through domain-local cli.nu files
 
 use ./lib.nu [run-test print-test-summary]
-use ../lib/plane/guard.nu [guard-plane guard-local-plane-presence parse-plane PLANE_LOCAL]
+use ../lib/plane/guard.nu [
+  guard-plane guard-local-plane-presence parse-plane PLANE_LOCAL
+]
+use ../lib/plane/effective-config.nu [apply-local-plane-effective-sources]
+use ../lib/build/config.nu [load-service-config]
+use ../lib/manifest/core.nu [load-versions-manifest apply-version-defaults]
 use ../lib/plane/presence.nu [local-root-path local-root-present local-services-path LOCAL_ROOT_DIR]
 use ../lib/plane/audit.nu [audit-local-root-topology LOCAL_MIRROR_FILE require-services-directory]
 
@@ -49,6 +54,43 @@ def rm-temp-repo [dir: string] {
 
 def seed-tracked-service [repo: string, name: string = "test-svc"] {
   { name: $name } | save -f ($repo | path join $"services/($name).nuon")
+}
+
+def seed-service-with-git-source [repo: string, name: string = "test-svc"] {
+  seed-tracked-service $repo $name
+  mkdir ($repo | path join $"services/($name)")
+  {
+    default: "v1"
+    versions: [{ name: "v1", overrides: {} }]
+    defaults: {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+  } | save -f ($repo | path join $"services/($name)/versions.nuon")
+}
+
+def run-in-temp-repo [repo: string, block: closure] {
+  do -i { cd $repo; do $block }
+}
+
+def expect-effective-config-error [block: closure, needle: string] {
+  let result = (try {
+    do $block
+    { ok: true }
+  } catch {|err|
+    { ok: false, msg: $err.msg }
+  })
+  if $result.ok {
+    error make {msg: $"Expected effective-config to fail (needle: ($needle))"}
+  }
+  if not ($result.msg | str contains $needle) {
+    error make {msg: $"Expected error to mention '($needle)', got: ($result.msg)"}
+  }
+  true
 }
 
 def expect-guard-fail [repo: string, needle: string] {
@@ -199,6 +241,10 @@ def assert-guard-result-shape [repo: string, expected_mirrors: list<string>] {
   if $result.plane != $PLANE_LOCAL {
     error make {msg: $"Expected plane '($PLANE_LOCAL)', got: ($result.plane)"}
   }
+  let expected_repo = ($repo | path expand)
+  if $result.repo_root != $expected_repo {
+    error make {msg: $"Expected repo_root ($expected_repo), got: ($result.repo_root)"}
+  }
   if $result.local_root != (local-root-path $repo) {
     error make {msg: $"Expected local_root match, got: ($result.local_root)"}
   }
@@ -323,6 +369,9 @@ def main [--verbose] {
     }
     if not ("scripts/lib/plane/audit.nu" | path exists) {
       error make {msg: "Missing scripts/lib/plane/audit.nu"}
+    }
+    if not ("scripts/lib/plane/effective-config.nu" | path exists) {
+      error make {msg: "Missing scripts/lib/plane/effective-config.nu"}
     }
     if $LOCAL_ROOT_DIR != ".dockypody.local" {
       error make {msg: $"LOCAL_ROOT_DIR must be .dockypody.local, got ($LOCAL_ROOT_DIR)"}
@@ -906,8 +955,340 @@ def main [--verbose] {
     $ok
   } $verbose_flag)
 
+  # Test 47: env-only SOURCE_PATH materializes with empty legal topology
+  let test47 = (run-test "env-only SOURCE_PATH materializes with empty legal topology" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    mkdir ($repo | path join "local-src")
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let expected_path = ($repo | path join "local-src" | path expand)
+    let out = (run-in-temp-repo $repo {||
+      $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    })
+    let materialized = (try { $out.sources.my_src.path | path expand } catch { "" })
+    if $materialized != $expected_path {
+      error make {msg: $"Expected exact env path ($expected_path), got: ($materialized)"}
+    }
+    if ("url" in ($out.sources.my_src | columns)) or ("ref" in ($out.sources.my_src | columns)) {
+      error make {msg: "Env-only materialization must replace git fields with path only"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 48: additive local fragment source id hard-errors
+  let test48 = (run-test "additive local fragment source id hard-errors" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          extra_src: { path: "local-src" }
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let ok = (expect-effective-config-error {||
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    } "Additive source id")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 49: partial git local fragment hard-errors
+  let test49 = (run-test "partial git local fragment hard-errors" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          my_src: { url: "https://example.com/repo.git" }
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let ok = (expect-effective-config-error {||
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    } "Partial git source is forbidden")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 50: mixed path and git local fragment hard-errors
+  let test50 = (run-test "mixed path and git local fragment hard-errors" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          my_src: {
+            path: "local-src"
+            url: "https://example.com/repo.git"
+            ref: "main"
+          }
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let ok = (expect-effective-config-error {||
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    } "Cannot have both 'path' and 'url'/'ref'")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 51: additive local fragment source id still fails when tracked sources are empty
+  let test51 = (run-test "local fragment source id hard-errors with empty tracked sources" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          extra_src: { path: "local-src" }
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let ok = (expect-effective-config-error {||
+      apply-local-plane-effective-sources { context: "services/test-svc" } "test-svc" { name: "v1" } $plane_ctx
+    } "Additive source id")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 52: version-scoped local fragment source override wins over base fragment
+  let test52 = (run-test "version-scoped local fragment source override applies" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          my_src: { path: "fragment-base" }
+        }
+      }
+      versions: [
+        {
+          name: "v1"
+          overrides: {
+            sources: {
+              my_src: { path: "fragment-v1" }
+            }
+          }
+        }
+      ]
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let out = (apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx)
+    if ($out.sources.my_src.path != "fragment-v1") {
+      error make {msg: $"Expected version-scoped fragment path 'fragment-v1', got: ($out.sources.my_src.path)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 53: env-only SOURCE_PATH overrides local fragment path
+  let test53 = (run-test "env-only SOURCE_PATH overrides local fragment path" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    mkdir ($repo | path join "fragment-path")
+    mkdir ($repo | path join "local-src")
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          my_src: { path: "fragment-path" }
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let expected_path = ($repo | path join "local-src" | path expand)
+    let out = (run-in-temp-repo $repo {||
+      $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    })
+    let materialized = (try { $out.sources.my_src.path | path expand } catch { "" })
+    if $materialized != $expected_path {
+      error make {msg: $"Expected env override path ($expected_path), got: ($materialized)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 54: ref-only local fragment hard-errors
+  let test54 = (run-test "ref-only local fragment hard-errors" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          my_src: { ref: "main" }
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let ok = (expect-effective-config-error {||
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    } "Partial git source is forbidden")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 55: empty local fragment path hard-errors
+  let test55 = (run-test "empty local fragment path hard-errors" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          my_src: { path: "" }
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let ok = (expect-effective-config-error {||
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    } "'path' field is empty")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 56: invalid env SOURCE_PATH hard-errors
+  let test56 = (run-test "invalid env SOURCE_PATH hard-errors" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let ok = (run-in-temp-repo $repo {||
+      $env.MY_SRC_PATH = "/etc/passwd"
+      expect-effective-config-error {||
+        apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+      } "invalid path"
+    })
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 57: load-service-config applies env-only materialization under local plane
+  let test57 = (run-test "load-service-config env-only materialization under local plane" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    mkdir ($repo | path join "local-src")
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let manifest = (run-in-temp-repo $repo {|| load-versions-manifest "test-svc" })
+    let version_spec = (apply-version-defaults $manifest { name: "v1", overrides: {} })
+    let expected_path = ($repo | path join "local-src" | path expand)
+    let out = (run-in-temp-repo $repo {||
+      $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
+      load-service-config "test-svc" $version_spec "" null $plane_ctx
+    })
+    let materialized = (try { $out.sources.my_src.path | path expand } catch { "" })
+    if $materialized != $expected_path {
+      error make {msg: $"Expected load-service-config env path ($expected_path), got: ($materialized)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
   # Collect results
-  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17, $test18, $test19, $test20, $test21, $test22, $test23, $test24, $test25, $test26, $test27, $test28, $test29, $test30, $test31, $test32, $test33, $test34, $test35, $test36, $test37, $test38, $test39, $test40, $test41, $test42, $test43, $test44, $test45, $test46]
+  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17, $test18, $test19, $test20, $test21, $test22, $test23, $test24, $test25, $test26, $test27, $test28, $test29, $test30, $test31, $test32, $test33, $test34, $test35, $test36, $test37, $test38, $test39, $test40, $test41, $test42, $test43, $test44, $test45, $test46, $test47, $test48, $test49, $test50, $test51, $test52, $test53, $test54, $test55, $test56, $test57]
   
   print-test-summary $results
   

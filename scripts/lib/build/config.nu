@@ -23,6 +23,8 @@ use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names merge-version-overrides merge-platform-config get-platform-spec]
 use ../services/core.nu [get-service-config-path]
 use ../validate/core.nu [validate-merged-config validate-local-path]
+use ../plane/guard.nu [PLANE_LOCAL]
+use ../plane/effective-config.nu [apply-local-plane-effective-sources]
 
 # === Flag Parsing Utilities ===
 
@@ -96,29 +98,36 @@ export def get-env-or-config [env_name: string, config_val: any] {
 
 # Detect source type for a single source (local or git)
 # Returns "local" if path field present or {SOURCE_KEY}_PATH env var exists, otherwise "git"
-export def detect-source-type [source: record, source_key: string] {
-    # Check environment variable first (highest priority)
-    let env_path_key = $"($source_key | str upcase)_PATH"
-    let env_path = (try { ($env | get -o $env_path_key) } catch { null })
-    if ($env_path != null) and ($env_path | str length) > 0 {
-        return "local"
+# Under --plane local, env-only resolution is guard-owned; only config path counts.
+export def detect-source-type [
+    source: record,
+    source_key: string,
+    plane: string = "tracked"
+] {
+    if $plane != $PLANE_LOCAL {
+        let env_path_key = $"($source_key | str upcase)_PATH"
+        let env_path = (try { ($env | get -o $env_path_key) } catch { null })
+        if ($env_path != null) and ($env_path | str length) > 0 {
+            return "local"
+        }
     }
-    
-    # Check for path field in config
+
     if "path" in ($source | columns) {
         return "local"
     }
-    
-    # Default to git (backward compatible)
+
     "git"
 }
 
 # Detect source types for all sources (batch operation)
 # Returns record mapping source_key -> "local" | "git"
-export def detect-all-source-types [sources: record] {
+export def detect-all-source-types [
+    sources: record,
+    plane: string = "tracked"
+] {
     ($sources | columns | reduce --fold {} {|source_key, acc|
         let source = ($sources | get $source_key)
-        let source_type = (detect-source-type $source $source_key)
+        let source_type = (detect-source-type $source $source_key $plane)
         $acc | upsert $source_key $source_type
     })
 }
@@ -365,7 +374,8 @@ export def load-service-config [
     service: string,
     version_spec: record,
     platform: string = "",
-    platforms: any = null
+    platforms: any = null,
+    plane_ctx: any = null
 ] {
     let cfg_path = (get-service-config-path $service)
     let base_cfg = (open $cfg_path)
@@ -381,6 +391,10 @@ export def load-service-config [
     }
     
     $merged_cfg = (merge-version-overrides $merged_cfg $version_spec $platform $platforms)
+
+    if $plane_ctx != null and (try { $plane_ctx.plane } catch { "" }) == $PLANE_LOCAL {
+        $merged_cfg = (apply-local-plane-effective-sources $merged_cfg $service $version_spec $plane_ctx)
+    }
     
     # Validate merged config before returning
     let has_platforms = (if $platforms != null { true } else { (check-platforms-manifest-exists $service) })

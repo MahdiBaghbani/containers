@@ -72,7 +72,8 @@ export def run-pulls [
   modes: list,
   build_order: list,
   registry_info: record,
-  is_local: bool
+  is_local: bool,
+  plane_ctx: any = null
 ] {
   # Initialize metrics
   mut metrics = {
@@ -98,7 +99,7 @@ export def run-pulls [
     print ""
     print "=== Pre-pulling External Images (preflight check) ==="
     print ""
-    let externals_result = (pull-externals $build_order $registry_info)
+    let externals_result = (pull-externals $build_order $registry_info $plane_ctx)
     $metrics = ($metrics | upsert externals $externals_result)
   }
   
@@ -145,10 +146,11 @@ def pull-deps [
 # Pull external images with fail-fast semantics
 def pull-externals [
   build_order: list,
-  registry_info: record
+  registry_info: record,
+  plane_ctx: any = null
 ] {
   # Aggregate external images from all build-order nodes
-  let aggregated = (aggregate-external-images $build_order)
+  let aggregated = (aggregate-external-images $build_order $plane_ctx)
   
   if ($aggregated | is-empty) {
     print "No external images declared in build scope."
@@ -237,7 +239,10 @@ export def compute-canonical-image-ref [
 
 # Aggregate external images from all nodes in build order
 # Returns list of {image_ref: string, nodes: list<string>}
-def aggregate-external-images [build_order: list] {
+def aggregate-external-images [
+  build_order: list,
+  plane_ctx: any = null
+] {
   # Accumulate external images with their referencing nodes
   let result = ($build_order | reduce --fold {} {|node, acc|
     # Parse node
@@ -281,7 +286,7 @@ def aggregate-external-images [build_order: list] {
             []
           } else {
             # Load merged config
-            let cfg = (load-service-config $service $version_spec $platform $platforms_manifest)
+            let cfg = (load-service-config $service $version_spec $platform $platforms_manifest $plane_ctx)
             
             # Extract external images
             let external_images = (try { $cfg.external_images } catch { {} })

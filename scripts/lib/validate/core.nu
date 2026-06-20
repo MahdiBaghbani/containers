@@ -36,6 +36,8 @@ use ./ssh.nu [
   validate-platform-ssh
   validate-ssh-config-merged
 ]
+use ../plane/guard.nu [PLANE_LOCAL]
+use ../plane/effective-config.nu [apply-local-plane-effective-sources]
 
 # Re-export for backwards compatibility
 export use ./paths.nu [validate-local-path]
@@ -1258,7 +1260,8 @@ def validate-merged-bundle [
 # (apply-version-defaults -> merge-platform-config -> merge-version-overrides).
 def validate-service-merged-configs [
   service: string,
-  has_platforms: bool
+  has_platforms: bool,
+  plane_ctx: any = null
 ] {
   use ../manifest/core.nu [load-versions-manifest apply-version-defaults]
   use ../platforms/core.nu [load-platforms-manifest get-platform-names get-platform-spec merge-platform-config merge-version-overrides]
@@ -1301,7 +1304,11 @@ def validate-service-merged-configs [
           {ok: false, msg: $err.msg}
         })
         if $merge_result.ok {
-          let bundle = (validate-merged-bundle $merge_result.merged $service $has_platforms $platform $ctx)
+          mut merged = $merge_result.merged
+          if $plane_ctx != null and (try { $plane_ctx.plane } catch { "" }) == $PLANE_LOCAL {
+            $merged = (apply-local-plane-effective-sources $merged $service $version_with_defaults $plane_ctx)
+          }
+          let bundle = (validate-merged-bundle $merged $service $has_platforms $platform $ctx)
           $errors = ($errors | append $bundle.errors)
           $warnings = ($warnings | append $bundle.warnings)
         } else {
@@ -1316,7 +1323,11 @@ def validate-service-merged-configs [
         {ok: false, msg: $err.msg}
       })
       if $merge_result.ok {
-        let bundle = (validate-merged-bundle $merge_result.merged $service $has_platforms "" $ctx)
+        mut merged = $merge_result.merged
+        if $plane_ctx != null and (try { $plane_ctx.plane } catch { "" }) == $PLANE_LOCAL {
+          $merged = (apply-local-plane-effective-sources $merged $service $version_with_defaults $plane_ctx)
+        }
+        let bundle = (validate-merged-bundle $merged $service $has_platforms "" $ctx)
         $errors = ($errors | append $bundle.errors)
         $warnings = ($warnings | append $bundle.warnings)
       } else {
@@ -1330,7 +1341,8 @@ def validate-service-merged-configs [
 
 # Validate that a service has both config AND manifest (complete validation)
 export def validate-service-complete [
-  service: string
+  service: string,
+  plane_ctx: any = null
 ] {
   use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest]
   
@@ -1382,7 +1394,7 @@ export def validate-service-complete [
   # Validate merged configs across versions/platforms only when the base layers
   # are sound; otherwise merged errors would just echo upstream failures.
   if ($all_errors | is-empty) {
-    let merged_result = (validate-service-merged-configs $service $has_platforms)
+    let merged_result = (validate-service-merged-configs $service $has_platforms $plane_ctx)
     if not $merged_result.valid {
       $all_errors = ($all_errors | append $merged_result.errors)
     }

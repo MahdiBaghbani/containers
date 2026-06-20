@@ -198,7 +198,8 @@ export def collect-dep-hashes [
 export def compute-service-def-hash-graph [
     build_order: list,
     registry_info: record,
-    sha_cache: record
+    sha_cache: record,
+    plane_ctx: any = null
 ] {
     use ./sources.nu [extract-source-shas]
     
@@ -216,7 +217,7 @@ export def compute-service-def-hash-graph [
             
             # Load service config
             let node_config = (try {
-                load-node-config $service $version_name $platform
+                load-node-config $service $version_name $platform $plane_ctx
             } catch {|err|
                 print $"WARNING: Could not load config for ($node): (try { $err.msg } catch { 'Unknown error' })"
                 null
@@ -231,9 +232,14 @@ export def compute-service-def-hash-graph [
                 let platforms_manifest = $node_config.platforms_manifest
                 
                 # Extract source types
+                let plane = (if $plane_ctx != null {
+                    (try { $plane_ctx.plane } catch { "tracked" })
+                } else {
+                    "tracked"
+                })
                 let cfg_sources = (try { $cfg.sources } catch { {} })
                 let source_types = (if not ($cfg_sources | is-empty) {
-                    detect-all-source-types $cfg_sources
+                    detect-all-source-types $cfg_sources $plane
                 } else {
                     {}
                 })
@@ -298,7 +304,8 @@ export def compute-service-def-hash-graph [
 def load-node-config [
     service: string,
     version_name: string,
-    platform: string
+    platform: string,
+    plane_ctx: any = null
 ] {
     # Load versions manifest
     if not (check-versions-manifest-exists $service) {
@@ -334,7 +341,7 @@ def load-node-config [
     }
     
     # Load merged config
-    let cfg = (load-service-config $service $version_spec $platform $platforms_manifest)
+    let cfg = (load-service-config $service $version_spec $platform $platforms_manifest $plane_ctx)
     
     {
         cfg: $cfg,

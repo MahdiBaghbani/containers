@@ -17,6 +17,7 @@
 
 # Shared local-plane policy guard (phase 1 entry surface)
 # T1: root presence; T2: whole-root topology audit
+# T3: effective source materialization lives in effective-config.nu
 
 use ./presence.nu [local-root-path local-root-present]
 use ./audit.nu [audit-local-root-topology]
@@ -52,8 +53,14 @@ export def require-local-root-presence [repo_root?: string] {
 # T1+T2 guard: root presence and whole-root topology audit
 export def guard-local-plane-presence [repo_root?: string] {
   require-local-root-presence $repo_root
+  let resolved_root = (if ($repo_root | is-empty) {
+    get-repo-root
+  } else {
+    $repo_root | path expand
+  })
   audit-local-root-topology $repo_root | merge {
     plane: $PLANE_LOCAL
+    repo_root: $resolved_root
   }
 }
 

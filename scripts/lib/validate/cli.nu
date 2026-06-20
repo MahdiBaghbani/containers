@@ -70,7 +70,7 @@ export def validate-cli [
       let result = (if $manifests_only {
         validate-manifest-file $svc
       } else {
-        validate-service-complete $svc
+        validate-service-complete $svc $_plane_ctx
       })
       print-validation-results $result
       print ""
@@ -93,7 +93,7 @@ export def validate-cli [
     let result = (if $manifests_only {
       validate-manifest-file $service
     } else {
-      validate-service-complete $service
+      validate-service-complete $service $_plane_ctx
     })
     print-validation-results $result
     if not $result.valid {

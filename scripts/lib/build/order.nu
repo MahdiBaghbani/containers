@@ -35,7 +35,8 @@ def load-service-config-for-graph [
   service: string,
   version_name: string,
   platform: string,
-  config_cache: record
+  config_cache: record,
+  plane_ctx: any = null
 ] {
   let node_key = (if ($platform | str length) > 0 {
     $"($service):($version_name):($platform)"
@@ -85,7 +86,7 @@ def load-service-config-for-graph [
   }
   
   # Load and merge config
-  let merged_cfg = (load-service-config $service $version_spec $platform $platforms_manifest)
+  let merged_cfg = (load-service-config $service $version_spec $platform $platforms_manifest $plane_ctx)
   
   # Cache and return
   let updated_cache = ($config_cache | insert $node_key $merged_cfg)
@@ -100,7 +101,8 @@ def build-graph-recursive [
   nodes: list,
   edges: list,
   visited: list,
-  config_cache: record
+  config_cache: record,
+  plane_ctx: any = null
 ] {
   let node_key = (if ($platform | str length) > 0 {
     $"($service):($version):($platform)"
@@ -117,7 +119,7 @@ def build-graph-recursive [
   let visited = ($visited | append $node_key)
   
   # Load config (with caching)
-  let config_result = (load-service-config-for-graph $service $version $platform $config_cache)
+  let config_result = (load-service-config-for-graph $service $version $platform $config_cache $plane_ctx)
   let merged_cfg = $config_result.config
   let config_cache = $config_result.cache
   
@@ -155,7 +157,7 @@ def build-graph-recursive [
       let new_edges = ($acc.edges | append {from: $node_key, to: $dep_node_key})
       
       # Recurse into dependency
-      build-graph-recursive $dep_service $dep_resolved.version $dep_resolved.platform $new_nodes $new_edges $acc.visited $acc.config_cache
+      build-graph-recursive $dep_service $dep_resolved.version $dep_resolved.platform $new_nodes $new_edges $acc.visited $acc.config_cache $plane_ctx
     })
     
     $result
@@ -174,7 +176,8 @@ export def build-dependency-graph [
   platforms: any,
   is_local: bool,
   registry_info: record,
-  graph_cache: record = {}
+  graph_cache: record = {},
+  plane_ctx: any = null
 ] {
   # Create target node
   let version_name = $version_spec.name
@@ -205,7 +208,7 @@ export def build-dependency-graph [
   mut config_cache = ($config_cache | insert $node_key $merged_cfg)
   
   # Build graph recursively
-  let result = (build-graph-recursive $service $version_name $platform $nodes $edges $visited $config_cache)
+  let result = (build-graph-recursive $service $version_name $platform $nodes $edges $visited $config_cache $plane_ctx)
   
   # Store graph in cache and return
   let graph = {nodes: $result.nodes, edges: $result.edges}
@@ -325,13 +328,14 @@ export def show-build-order-for-version [
   platform: string,
   platforms_manifest: any,
   info: record,
-  graph_cache: record
+  graph_cache: record,
+  plane_ctx: any = null
 ] {
   # Load service config
-  let cfg = (load-service-config $service $version_spec $platform $platforms_manifest)
+  let cfg = (load-service-config $service $version_spec $platform $platforms_manifest $plane_ctx)
   
   # Build dependency graph (with caching)
-  let result = (build-dependency-graph $service $version_spec $cfg $platform $platforms_manifest false $info $graph_cache)
+  let result = (build-dependency-graph $service $version_spec $cfg $platform $platforms_manifest false $info $graph_cache $plane_ctx)
   let graph = {nodes: $result.nodes, edges: $result.edges}
   let updated_cache = $result.cache
   
@@ -355,7 +359,8 @@ export def compute-single-service-build-order [
   service: string,
   version_specs: list,
   platforms_manifest: any,
-  registry_info: record
+  registry_info: record,
+  plane_ctx: any = null
 ] {
   # Build dependency graphs for each version_spec and merge
   let graph_result = ($version_specs | reduce --fold {nodes: [], edges: []} {|version_spec, acc|
@@ -363,7 +368,7 @@ export def compute-single-service-build-order [
     
     # Load service config
     let cfg = (try {
-      load-service-config $service $version_spec $platform $platforms_manifest
+      load-service-config $service $version_spec $platform $platforms_manifest $plane_ctx
     } catch {|err|
       # If config fails to load, skip this version
       print $"WARNING: Could not load config for ($service):($version_spec.name): ($err.msg)"
@@ -372,7 +377,7 @@ export def compute-single-service-build-order [
     
     # Build dependency graph
     let graph = (try {
-      build-dependency-graph $service $version_spec $cfg $platform $platforms_manifest false $registry_info
+      build-dependency-graph $service $version_spec $cfg $platform $platforms_manifest false $registry_info {} $plane_ctx
     } catch {|err|
       print $"WARNING: Could not build dependency graph for ($service):($version_spec.name): ($err.msg)"
       return $acc

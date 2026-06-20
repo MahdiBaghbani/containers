@@ -136,7 +136,8 @@ export def build-single-version [
   push_deps: bool = false,
   tag_deps: bool = false,
   hash_graph: record = {},
-  cache_match: string = ""
+  cache_match: string = "",
+  plane_ctx: any = null
 ] {
   let current_platform = (try { $version_spec.platform } catch { $platform })
   
@@ -153,11 +154,16 @@ export def build-single-version [
       }
   }
   
-  let cfg = (load-service-config $service $version_spec $current_platform $platforms)
+  let cfg = (load-service-config $service $version_spec $current_platform $platforms $plane_ctx)
   
+  let plane = (if $plane_ctx != null {
+    (try { $plane_ctx.plane } catch { "tracked" })
+  } else {
+    "tracked"
+  })
   let cfg_sources = (try { $cfg.sources } catch { {} })
   let source_types = (if not ($cfg_sources | is-empty) {
-    detect-all-source-types $cfg_sources
+    detect-all-source-types $cfg_sources $plane
   } else {
     {}
   })
@@ -369,7 +375,7 @@ export def build-single-version [
         
         let prev_cache = $current_cache
         try {
-          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $cache_match)
+          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $cache_match $plane_ctx)
           $current_cache = (try { $build_result.sha_cache } catch { $prev_cache })
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
