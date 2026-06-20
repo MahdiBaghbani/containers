@@ -16,9 +16,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Shared local-plane policy guard (phase 1 entry surface)
-# T1: root presence only; later tasks extend topology and materialization
+# T1: root presence; T2: whole-root topology audit
 
 use ./presence.nu [local-root-path local-root-present]
+use ./audit.nu [audit-local-root-topology]
 use ../core/repo.nu [get-repo-root]
 
 export const PLANE_TRACKED = "tracked"
@@ -48,12 +49,11 @@ export def require-local-root-presence [repo_root?: string] {
   }
 }
 
-# T1 guard: root presence only; empty root and optional empty services/ are legal
+# T1+T2 guard: root presence and whole-root topology audit
 export def guard-local-plane-presence [repo_root?: string] {
   require-local-root-presence $repo_root
-  {
+  audit-local-root-topology $repo_root | merge {
     plane: $PLANE_LOCAL
-    local_root: (local-root-path $repo_root)
   }
 }
 

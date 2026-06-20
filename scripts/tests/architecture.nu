@@ -21,8 +21,9 @@
 # Ensures CLI pattern: dockypody.nu routes through domain-local cli.nu files
 
 use ./lib.nu [run-test print-test-summary]
-use ../lib/plane/guard.nu [guard-plane guard-local-plane-presence parse-plane]
+use ../lib/plane/guard.nu [guard-plane guard-local-plane-presence parse-plane PLANE_LOCAL]
 use ../lib/plane/presence.nu [local-root-path local-root-present local-services-path LOCAL_ROOT_DIR]
+use ../lib/plane/audit.nu [audit-local-root-topology LOCAL_MIRROR_FILE require-services-directory]
 
 def make-temp-repo [] {
   let tmp = (^mktemp -d | str trim)
@@ -44,6 +45,175 @@ def run-dockypody-in-repo [repo: string, args: list<string>] {
 
 def rm-temp-repo [dir: string] {
   try { rm -rf $dir } catch { }
+}
+
+def seed-tracked-service [repo: string, name: string = "test-svc"] {
+  { name: $name } | save -f ($repo | path join $"services/($name).nuon")
+}
+
+def expect-guard-fail [repo: string, needle: string] {
+  let result = (try {
+    guard-local-plane-presence $repo
+    { ok: true }
+  } catch {|err|
+    { ok: false, msg: $err.msg }
+  })
+  if $result.ok {
+    error make {msg: $"Expected guard to fail for topology violation (needle: ($needle))"}
+  }
+  if not ($result.msg | str contains $needle) {
+    error make {msg: $"Expected error to mention '($needle)', got: ($result.msg)"}
+  }
+  true
+}
+
+def expect-guard-pass [repo: string] {
+  let result = (try {
+    guard-local-plane-presence $repo
+    { ok: true }
+  } catch {|err|
+    { ok: false, msg: $err.msg }
+  })
+  if not $result.ok {
+    error make {msg: $"Expected legal topology to pass, got: ($result.msg)"}
+  }
+  true
+}
+
+def nobody-drop-available [] {
+  let runuser_ok = ((try { ^which runuser | complete | get exit_code } catch { 1 }) == 0)
+  let sudo_ok = ((try { ^which sudo | complete | get exit_code } catch { 1 }) == 0)
+  $runuser_ok or $sudo_ok
+}
+
+def can-verify-unreadable-topology-contract [] {
+  (chmod-zero-blocks-reads) or (nobody-drop-available)
+}
+
+# chmod 000 is unreliable on privileged runners (DAC may be bypassed).
+def chmod-zero-blocks-reads [] {
+  let probe = (^mktemp -d | str trim)
+  let blocked = (try {
+    ^chmod 000 $probe
+    let can_read = (try {
+      ls $probe | ignore
+      true
+    } catch {
+      false
+    })
+    try { ^chmod 700 $probe } catch { }
+    not $can_read
+  } catch {
+    false
+  })
+  try { rm -rf $probe } catch { }
+  $blocked
+}
+
+def try-nobody-guard-unreadable-topology [repo: string] {
+  let guard_path = ("scripts/lib/plane/guard.nu" | path expand)
+  let script_path = (^mktemp --suffix=.nu | str trim)
+  [
+    $"use '($guard_path)' [guard-local-plane-presence]"
+    "try {"
+    $"  guard-local-plane-presence '($repo)' | ignore"
+    "  exit 2"
+    "} catch {|err|"
+    '  if ($err.msg | str contains "Unable to read local topology directory") {'
+    "    exit 0"
+    "  } else {"
+    "    exit 1"
+    "  }"
+    "}"
+  ] | str join (char nl) | save -f $script_path
+
+  mut verified = false
+  for cmd in [
+    ["runuser", "-u", "nobody", "--", "nu", $script_path]
+    ["sudo", "-n", "-u", "nobody", "nu", $script_path]
+  ] {
+    let result = (try { ^...$cmd | complete } catch { null })
+    if $result != null and $result.exit_code == 0 {
+      $verified = true
+    }
+  }
+
+  try { rm $script_path } catch { }
+  { verified: $verified }
+}
+
+def verify-unreadable-topology-contract [repo: string, dir: string, label: string] {
+  if not (can-verify-unreadable-topology-contract) {
+    print $"  SKIPPED: cannot verify unreadable ($label) on this runner (chmod 000 does not block reads and runuser/sudo nobody drop unavailable)"
+    return true
+  }
+
+  ^chmod 000 $dir
+  mut verified = false
+
+  if (chmod-zero-blocks-reads) {
+    let result = (try {
+      guard-local-plane-presence $repo
+      { ok: true }
+    } catch {|err|
+      { ok: false, msg: $err.msg }
+    })
+    if not $result.ok and ($result.msg | str contains "Unable to read local topology directory") {
+      $verified = true
+    }
+  }
+
+  if not $verified and (nobody-drop-available) {
+    $verified = (try-nobody-guard-unreadable-topology $repo).verified
+  }
+
+  try { ^chmod 700 $dir } catch { }
+
+  if not $verified {
+    error make {msg: $"Failed to verify unreadable ($label) fail-closed contract"}
+  }
+  true
+}
+
+def assert-audit-result-shape [repo: string, expected_mirrors: list<string>] {
+  let result = (audit-local-root-topology $repo)
+  if $result.local_root != (local-root-path $repo) {
+    error make {msg: $"Expected local_root match, got: ($result.local_root)"}
+  }
+  let expected_services = (local-services-path $repo)
+  if ($expected_services | path exists) {
+    if $result.services_path != $expected_services {
+      error make {msg: $"Expected services_path ($expected_services), got: ($result.services_path)"}
+    }
+  } else if not ($result.services_path | is-empty) {
+    error make {msg: $"Expected null services_path when absent, got: ($result.services_path)"}
+  }
+  if $result.mirrors != $expected_mirrors {
+    error make {msg: $"Expected mirrors ($expected_mirrors), got: ($result.mirrors)"}
+  }
+  $result
+}
+
+def assert-guard-result-shape [repo: string, expected_mirrors: list<string>] {
+  let result = (guard-local-plane-presence $repo)
+  if $result.plane != $PLANE_LOCAL {
+    error make {msg: $"Expected plane '($PLANE_LOCAL)', got: ($result.plane)"}
+  }
+  if $result.local_root != (local-root-path $repo) {
+    error make {msg: $"Expected local_root match, got: ($result.local_root)"}
+  }
+  let expected_services = (local-services-path $repo)
+  if ($expected_services | path exists) {
+    if $result.services_path != $expected_services {
+      error make {msg: $"Expected services_path ($expected_services), got: ($result.services_path)"}
+    }
+  } else if not ($result.services_path | is-empty) {
+    error make {msg: $"Expected null services_path when absent, got: ($result.services_path)"}
+  }
+  if $result.mirrors != $expected_mirrors {
+    error make {msg: $"Expected mirrors ($expected_mirrors), got: ($result.mirrors)"}
+  }
+  $result
 }
 
 def main [--verbose] {
@@ -143,16 +313,22 @@ def main [--verbose] {
     }
   } $verbose_flag)
   
-  # Test 6: plane module exposes root presence helpers
-  let test6 = (run-test "plane module exposes local root helpers" {
+  # Test 6: plane module exposes root presence and topology audit helpers
+  let test6 = (run-test "plane module exposes local root and audit helpers" {
     if not ("scripts/lib/plane/presence.nu" | path exists) {
       error make {msg: "Missing scripts/lib/plane/presence.nu"}
     }
     if not ("scripts/lib/plane/guard.nu" | path exists) {
       error make {msg: "Missing scripts/lib/plane/guard.nu"}
     }
+    if not ("scripts/lib/plane/audit.nu" | path exists) {
+      error make {msg: "Missing scripts/lib/plane/audit.nu"}
+    }
     if $LOCAL_ROOT_DIR != ".dockypody.local" {
       error make {msg: $"LOCAL_ROOT_DIR must be .dockypody.local, got ($LOCAL_ROOT_DIR)"}
+    }
+    if $LOCAL_MIRROR_FILE != "versions.nuon" {
+      error make {msg: $"LOCAL_MIRROR_FILE must be versions.nuon, got ($LOCAL_MIRROR_FILE)"}
     }
     true
   } $verbose_flag)
@@ -180,17 +356,9 @@ def main [--verbose] {
   let test8 = (run-test "empty .dockypody.local/ root alone is valid" {
     let repo = (make-temp-repo)
     mkdir (local-root-path $repo)
-    let result = (try {
-      guard-local-plane-presence $repo
-      { ok: true }
-    } catch {|err|
-      { ok: false, msg: $err.msg }
-    })
+    let ok = (expect-guard-pass $repo)
     rm-temp-repo $repo
-    if not $result.ok {
-      error make {msg: $"Root-only topology should pass, got: ($result.msg)"}
-    }
-    true
+    $ok
   } $verbose_flag)
 
   # Test 9: optional empty services/ subtree is valid
@@ -198,17 +366,9 @@ def main [--verbose] {
     let repo = (make-temp-repo)
     mkdir (local-root-path $repo)
     mkdir (local-services-path $repo)
-    let result = (try {
-      guard-local-plane-presence $repo
-      { ok: true }
-    } catch {|err|
-      { ok: false, msg: $err.msg }
-    })
+    let ok = (expect-guard-pass $repo)
     rm-temp-repo $repo
-    if not $result.ok {
-      error make {msg: $"Root with empty services/ should pass, got: ($result.msg)"}
-    }
-    true
+    $ok
   } $verbose_flag)
 
   # Test 10: tracked plane does not require local root
@@ -326,9 +486,428 @@ def main [--verbose] {
     }
     true
   } $verbose_flag)
-  
+
+  # Test 18: unsupported root file hard-errors
+  let test18 = (run-test "unsupported local root file hard-errors" {
+    let repo = (make-temp-repo)
+    mkdir (local-root-path $repo)
+    "" | save -f (local-root-path $repo | path join "notes.txt")
+    let ok = (expect-guard-fail $repo "Unsupported local root file")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 19: unsupported root directory hard-errors
+  let test19 = (run-test "unsupported local root directory hard-errors" {
+    let repo = (make-temp-repo)
+    mkdir (local-root-path $repo)
+    mkdir (local-root-path $repo | path join "cache")
+    let ok = (expect-guard-fail $repo "Unsupported local root directory")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 20: unknown service mirror hard-errors
+  let test20 = (run-test "unknown local service mirror hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    mkdir (local-services-path $repo | path join "shadow-svc")
+    let ok = (expect-guard-fail $repo "Unknown local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 21: unsupported mirror file hard-errors
+  let test21 = (run-test "unsupported local mirror file hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    "" | save -f ($mirror | path join "platforms.nuon")
+    let ok = (expect-guard-fail $repo "Unsupported file in local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 22: unsupported mirror subdirectory hard-errors
+  let test22 = (run-test "unsupported local mirror subdirectory hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    mkdir ($mirror | path join "fragments")
+    let ok = (expect-guard-fail $repo "Unsupported directory in local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 23: empty tracked mirror hard-errors
+  let test23 = (run-test "empty tracked mirror hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    let ok = (expect-guard-fail $repo "Incomplete local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 24: legal tracked mirror with versions.nuon passes
+  let test24 = (run-test "legal tracked mirror with versions.nuon passes" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let ok = (expect-guard-pass $repo)
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 25: unsupported root symlink hard-errors
+  let test25 = (run-test "unsupported local root symlink hard-errors" {
+    let repo = (make-temp-repo)
+    mkdir (local-root-path $repo)
+    ^ln -s /tmp (local-root-path $repo | path join "cache-link")
+    let ok = (expect-guard-fail $repo "Unsupported local root item")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 26: tracked mirror symlink hard-errors
+  let test26 = (run-test "tracked local service mirror symlink hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir ($repo | path join "mirror-target")
+    ^ln -s ($repo | path join "mirror-target") $mirror
+    let ok = (expect-guard-fail $repo "Mirror entries must be directories for tracked services")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 27: unreadable local topology directories hard-error
+  let test27 = (run-test "unreadable local topology directories hard-error" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    let root = (local-root-path $repo)
+    mkdir $root
+    verify-unreadable-topology-contract $repo $root "unreadable local root topology"
+    mkdir $root
+    let services = (local-services-path $repo)
+    mkdir $services
+    verify-unreadable-topology-contract $repo $services "unreadable local services topology"
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 28: loose file directly under services/ hard-errors
+  let test28 = (run-test "loose file under local services hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    "" | save -f (local-services-path $repo | path join "loose-file.txt")
+    let ok = (expect-guard-fail $repo "Mirror entries must be directories for tracked services")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 29: unreadable tracked mirror directory hard-errors
+  let test29 = (run-test "unreadable tracked mirror directory hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    verify-unreadable-topology-contract $repo $mirror "unreadable tracked mirror directory"
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 30: audit-local-root-topology returns mirror list on legal topology
+  let test30 = (run-test "audit-local-root-topology reports legal mirrors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    assert-audit-result-shape $repo ["test-svc"]
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 31: guard-local-plane-presence merges audit fields on legal topology
+  let test31 = (run-test "guard-local-plane-presence returns merged audit shape" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    assert-guard-result-shape $repo ["test-svc"]
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 32: tracked service with absent local mirrors passes
+  let test32 = (run-test "tracked service with absent local mirrors passes" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    assert-guard-result-shape $repo []
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 33: tracked service with empty services/ passes
+  let test33 = (run-test "tracked service with empty local services/ passes" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    assert-guard-result-shape $repo []
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 34: tracked manifest missing name hard-errors when mirror exists
+  let test34 = (run-test "tracked service manifest missing name hard-errors when mirror exists" {
+    let repo = (make-temp-repo)
+    { platforms: [] } | save -f ($repo | path join "services/nameless-svc.nuon")
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    mkdir (local-services-path $repo | path join "nameless-svc")
+    let result = (try {
+      guard-local-plane-presence $repo
+      { ok: true }
+    } catch {|err|
+      { ok: false, msg: $err.msg }
+    })
+    rm-temp-repo $repo
+    if $result.ok {
+      error make {msg: "Expected guard to fail when tracked manifest omits name"}
+    }
+    if not ($result.msg | str contains "Tracked service manifest missing 'name'") {
+      error make {msg: $"Expected missing-name manifest error, got: ($result.msg)"}
+    }
+    true
+  } $verbose_flag)
+
+  # Test 35: non-directory services/ at local root hard-errors
+  let test35 = (run-test "non-directory local services/ path hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let services = (local-services-path $repo)
+    "" | save -f $services
+    let dir_err = (try {
+      require-services-directory $services
+      null
+    } catch {|err|
+      $err.msg
+    })
+    if $dir_err == null {
+      error make {msg: "Expected require-services-directory to fail for file path"}
+    }
+    if not ($dir_err | str contains "Local path must be a directory") {
+      error make {msg: $"Expected directory requirement error, got: ($dir_err)"}
+    }
+    let audit_err = (try {
+      audit-local-root-topology $repo
+      null
+    } catch {|err|
+      $err.msg
+    })
+    if $audit_err == null {
+      error make {msg: "Expected audit-local-root-topology to fail for file services path"}
+    }
+    if not ($audit_err | str contains "Local path must be a directory") {
+      error make {msg: $"Expected directory requirement error from audit, got: ($audit_err)"}
+    }
+    let ok = (expect-guard-fail $repo "Local path must be a directory")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 36: legal versions.nuon plus extra sibling file hard-errors
+  let test36 = (run-test "legal versions.nuon with extra mirror sibling hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    "" | save -f ($mirror | path join "extra.txt")
+    let ok = (expect-guard-fail $repo "Unsupported file in local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 37: hidden dot-prefixed root entry hard-errors
+  let test37 = (run-test "hidden dot-prefixed local root entry hard-errors" {
+    let repo = (make-temp-repo)
+    mkdir (local-root-path $repo)
+    mkdir (local-root-path $repo | path join ".hidden-cache")
+    let ok = (expect-guard-fail $repo "Unsupported local root directory")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 38: hidden dot-prefixed unknown mirror hard-errors
+  let test38 = (run-test "hidden dot-prefixed unknown local service mirror hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    mkdir (local-services-path $repo | path join ".shadow-svc")
+    let ok = (expect-guard-fail $repo "Unknown local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 39: hidden dot-prefixed mirror content hard-errors
+  let test39 = (run-test "hidden dot-prefixed local mirror content hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    "" | save -f ($mirror | path join ".hidden-extra")
+    let ok = (expect-guard-fail $repo "Unsupported file in local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 41: empty legal local root ignores broken tracked manifests
+  let test41 = (run-test "empty legal local root passes despite broken tracked manifest" {
+    let repo = (make-temp-repo)
+    "not valid nuon {" | save -f ($repo | path join "services/test-svc.nuon")
+    mkdir (local-root-path $repo)
+    let ok = (expect-guard-pass $repo)
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 42: empty services/ ignores broken tracked manifests
+  let test42 = (run-test "empty local services/ passes despite broken tracked manifest" {
+    let repo = (make-temp-repo)
+    "not valid nuon {" | save -f ($repo | path join "services/test-svc.nuon")
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    let ok = (expect-guard-pass $repo)
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 43: local mirror for one service passes when another manifest is broken
+  let test43 = (run-test "local mirror passes when unrelated tracked manifest is broken" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "svc-a"
+    "not valid nuon {" | save -f ($repo | path join "services/svc-b.nuon")
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "svc-a")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let ok = (expect-guard-pass $repo)
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
+  # Test 44: audit resolves only local mirror manifests, not whole services/
+  let test44 = (run-test "audit-local-root-topology ignores broken unrelated manifest" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "svc-a"
+    "not valid nuon {" | save -f ($repo | path join "services/svc-b.nuon")
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "svc-a")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    assert-audit-result-shape $repo ["svc-a"]
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+
+  # Test 45: manifest filename vs name mismatch hard-errors with specific message
+  let test45 = (run-test "tracked service manifest filename name mismatch hard-errors" {
+    let repo = (make-temp-repo)
+    { name: "other-name" } | save -f ($repo | path join "services/foo-svc.nuon")
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "foo-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let result = (try {
+      guard-local-plane-presence $repo
+      { ok: true }
+    } catch {|err|
+      { ok: false, msg: $err.msg }
+    })
+    rm-temp-repo $repo
+    if $result.ok {
+      error make {msg: "Expected guard to fail when manifest name mismatches filename"}
+    }
+    if not ($result.msg | str contains "Tracked service manifest name mismatch") {
+      error make {msg: $"Expected name mismatch error, got: ($result.msg)"}
+    }
+    if ($result.msg | str contains "Unknown local service mirror") {
+      error make {msg: $"Name mismatch must not surface as unknown mirror: ($result.msg)"}
+    }
+    true
+  } $verbose_flag)
+
+  # Test 40: broken tracked manifest surfaces manifest error
+  let test40 = (run-test "broken tracked service manifest hard-errors before mirror audit" {
+    let repo = (make-temp-repo)
+    "not valid nuon {" | save -f ($repo | path join "services/test-svc.nuon")
+    mkdir (local-root-path $repo)
+    mkdir (local-services-path $repo)
+    mkdir (local-services-path $repo | path join "test-svc")
+    let result = (try {
+      guard-local-plane-presence $repo
+      { ok: true }
+    } catch {|err|
+      { ok: false, msg: $err.msg }
+    })
+    rm-temp-repo $repo
+    if $result.ok {
+      error make {msg: "Expected guard to fail on broken tracked service manifest"}
+    }
+    if not ($result.msg | str contains "Unable to read tracked service manifest") {
+      error make {msg: $"Expected manifest read error, got: ($result.msg)"}
+    }
+    if ($result.msg | str contains "Unknown local service mirror") {
+      error make {msg: $"Manifest failure must not surface as unknown mirror: ($result.msg)"}
+    }
+    true
+  } $verbose_flag)
+
+  # Test 46: unsupported non-file item inside tracked mirror hard-errors
+  let test46 = (run-test "unsupported local mirror non-file item hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-service $repo "test-svc"
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    { versions: {} } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    ^ln -s /tmp ($mirror | path join "cache-link")
+    let ok = (expect-guard-fail $repo "Unsupported item in local service mirror")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
   # Collect results
-  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17]
+  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17, $test18, $test19, $test20, $test21, $test22, $test23, $test24, $test25, $test26, $test27, $test28, $test29, $test30, $test31, $test32, $test33, $test34, $test35, $test36, $test37, $test38, $test39, $test40, $test41, $test42, $test43, $test44, $test45, $test46]
   
   print-test-summary $results
   
