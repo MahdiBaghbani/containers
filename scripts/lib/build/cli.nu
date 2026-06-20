@@ -24,6 +24,7 @@ use ./config.nu [parse-bool-flag]
 use ./cache.nu [parse-dep-cache-mode]
 use ./pull.nu [parse-pull-modes]
 use ./orchestrate.nu [run-build]
+use ../plane/guard.nu [guard-plane parse-plane]
 
 # Show build CLI help
 export def build-help [] {
@@ -60,6 +61,10 @@ export def build-help [] {
   print "  --pull <mode>          Pre-pull images (deps, externals, or deps,externals)"
   print "  --disk-monitor <mode>  Disk usage monitoring; off disables, any other value enables (e.g. basic; default off)"
   print "  --prune-cache-mounts   Prune BuildKit cache between versions"
+  print ""
+  print "Plane:"
+  print "  --plane <mode>         Config plane: tracked (default) or local"
+  print "                         local requires .dockypody.local/ at repo root"
 }
 
 # Build CLI entrypoint - called from dockypody.nu
@@ -88,8 +93,12 @@ export def build-cli [
   --pull: string = "",
   --cache-match: string = "",
   --disk-monitor: string = "off",
-  --prune-cache-mounts
+  --prune-cache-mounts,
+  --plane: string = "tracked"
 ] {
+  let plane = (parse-plane $plane)
+  let plane_ctx = (guard-plane $plane)
+
   # Detect build environment (local vs CI)
   let meta = (detect-build)
   
@@ -141,10 +150,12 @@ export def build-cli [
       pull: $pull_modes,
       cache_match: $cache_match,
       disk_monitor: $disk_monitor,
-      prune_cache_mounts: $prune_cache_mounts_val
+      prune_cache_mounts: $prune_cache_mounts_val,
+      plane: $plane
     },
     meta: $meta,
-    registry_info: $info
+    registry_info: $info,
+    plane_ctx: $plane_ctx
   }
   
   # Delegate to orchestration layer

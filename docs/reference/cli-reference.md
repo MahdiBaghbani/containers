@@ -134,11 +134,11 @@ Build-related: `--service`, `--all-services`, `--push`, `--latest`,
 `--latest-only`, `--platform`, `--matrix-json`, `--progress`, `--cache-bust`,
 `--no-cache`, `--show-build-order`, `--dep-cache`, `--push-deps`, `--tag-deps`,
 `--fail-fast`, `--pull`, `--cache-match`, `--disk-monitor`,
-`--prune-cache-mounts`.
+`--prune-cache-mounts`, `--plane`.
 
 Test: `--suite`, `--verbose`.
 
-Validate: `--service`, `--all-services`, `--manifests-only`.
+Validate: `--service`, `--all-services`, `--manifests-only`, `--plane`.
 
 TLS: `--service` (comma-separated service names passed to clean), `--filter`
 (comma list for cert generation subset), `--service-ca-only`, `--skip-shared-ca`,
@@ -176,11 +176,17 @@ nu scripts/dockypody.nu test [--suite <name>] [--verbose]
 ### validate
 
 ```bash
-nu scripts/dockypody.nu validate [--service <name>] [--all-services] [--manifests-only]
+nu scripts/dockypody.nu validate [--service <name>] [--all-services]
+     [--manifests-only] [--plane tracked|local]
 ```
 
 - `--all-services`: validate every discovered service (mutually exclusive with a
   single `--service`; see `validate-cli` behavior).
+- `--plane`: config plane for this invocation. `tracked` (default) uses
+  tracked manifests under `services/`. `local` activates the off-git local
+  plane root at `.dockypody.local/`; the command hard-errors when that
+  directory is missing. An empty `.dockypody.local/` root is valid. Service
+  discovery still uses tracked `services/*.nuon` only.
 
 ### tls
 
@@ -270,6 +276,41 @@ the changed files, and exits successfully only when the rescan is clean.
 ```bash
 nu scripts/dockypody.nu build --service <service-name> [options]
 ```
+
+## Config Plane Flag
+
+### `--plane <mode>`
+
+Select the config plane for this invocation. Accepted values: `tracked`
+(default) or `local`.
+
+```bash
+# Default: tracked manifests under services/
+nu scripts/dockypody.nu build --service gaia
+
+# Local plane: require .dockypody.local/ at repo root
+nu scripts/dockypody.nu build --service gaia --plane local
+```
+
+**Modes:**
+
+| Mode | Behavior |
+| ---- | -------- |
+| `tracked` | Use tracked service manifests under `services/` (default) |
+| `local` | Activate the off-git local plane root at `.dockypody.local/` |
+
+**`local` requirements:**
+
+- `.dockypody.local/` must exist at the repository root; otherwise the
+  command hard-errors.
+- An empty `.dockypody.local/` directory is valid.
+- An optional `.dockypody.local/services/` directory with zero mirrors is
+  also valid.
+- Service discovery still uses tracked `services/*.nuon` only; the local
+  plane root is a presence contract in this release, not a topology or
+  source-materialization surface.
+
+`--plane` is also accepted on `validate` with the same modes and rules.
 
 ## Service Selection Flags
 

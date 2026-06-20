@@ -39,6 +39,37 @@ build time, so you do not need to duplicate that label in each manifest.
 For the authoritative schema file, see
 [`schemas/service.nuon`](../../schemas/service.nuon).
 
+## Local-Plane Root (Off-Git)
+
+DockyPody supports a `--plane local` mode on `build` and `validate`. In this
+release, the local plane is a **root presence contract** only: it does not
+change service discovery, topology resolution, or source materialization.
+
+**Tracked plane (default):** Service configurations are discovered from
+tracked manifests under `services/` as documented in [Schema
+Location](#schema-location).
+
+**Local plane:** Activates the off-git local plane root at
+`.dockypody.local/` at the repository root. Pass `--plane local` on `build`
+or `validate`; the default is `--plane tracked`.
+
+**Root presence rules:**
+
+- `--plane local` hard-errors when `.dockypody.local/` does not exist.
+- An empty `.dockypody.local/` directory alone is valid.
+- An optional `.dockypody.local/services/` directory with zero service
+  mirrors is also valid.
+
+**What local plane does not do in this release:**
+
+- Service discovery still uses tracked `services/*.nuon` only. Contents of
+  `.dockypody.local/services/` are not used for discovery.
+- No local topology or source-materialization contract is defined yet beyond
+  root presence.
+
+For CLI details, see [`--plane` in the CLI
+reference](cli-reference.md#config-plane-flag).
+
 ## JSONC Compatibility Requirement
 
 **CRITICAL**: All `.nuon` files MUST be valid JSONC (JSON with Comments) for syntax highlighting support.

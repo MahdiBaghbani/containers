@@ -91,6 +91,8 @@ def main [
   --suite: string = "all",
   # Validate flags
   --manifests-only,
+  # Plane (build and validate)
+  --plane: string = "tracked",
   # TLS/CI flags
   --filter: string = "",
   --service-ca-only,
@@ -152,7 +154,8 @@ def main [
         pull: $pull
         cache_match: $cache_match
         disk_monitor: $disk_monitor
-        prune_cache_mounts: $prune_cache_mounts
+        prune_cache_mounts: $prune_cache_mounts,
+        plane: $plane
       }
     }
     "test" => {
@@ -167,7 +170,7 @@ def main [
         validate-help
         return
       }
-      run-validate-command $service $all_services $manifests_only
+      run-validate-command $service $all_services $manifests_only $plane
     }
     "tls" => {
       # Default missing subcommand to "help"; tls-cli handles it internally.
@@ -200,7 +203,7 @@ def main [
 def run-build-command [flags: record] {
   use ./lib/build/cli.nu [build-cli]
   
-  build-cli --service $flags.service --all-services=$flags.all_services --push=$flags.push --latest=$flags.latest --extra-tag $flags.extra_tag --provenance=$flags.provenance --version $flags.version --all-versions=$flags.all_versions --versions $flags.versions --latest-only=$flags.latest_only --platform $flags.platform --matrix-json=$flags.matrix_json --progress $flags.progress --cache-bust $flags.cache_bust --no-cache=$flags.no_cache --show-build-order=$flags.show_build_order --dep-cache $flags.dep_cache --push-deps=$flags.push_deps --tag-deps=$flags.tag_deps --fail-fast=$flags.fail_fast --pull $flags.pull --cache-match $flags.cache_match --disk-monitor $flags.disk_monitor --prune-cache-mounts=$flags.prune_cache_mounts
+  build-cli --service $flags.service --all-services=$flags.all_services --push=$flags.push --latest=$flags.latest --extra-tag $flags.extra_tag --provenance=$flags.provenance --version $flags.version --all-versions=$flags.all_versions --versions $flags.versions --latest-only=$flags.latest_only --platform $flags.platform --matrix-json=$flags.matrix_json --progress $flags.progress --cache-bust $flags.cache_bust --no-cache=$flags.no_cache --show-build-order=$flags.show_build_order --dep-cache $flags.dep_cache --push-deps=$flags.push_deps --tag-deps=$flags.tag_deps --fail-fast=$flags.fail_fast --pull $flags.pull --cache-match $flags.cache_match --disk-monitor $flags.disk_monitor --prune-cache-mounts=$flags.prune_cache_mounts --plane $flags.plane
 }
 
 def run-test-command [suite: string, verbose: bool] {
@@ -208,12 +211,13 @@ def run-test-command [suite: string, verbose: bool] {
   test-cli $suite $verbose
 }
 
-def run-validate-command [service: string, all_services: bool, manifests_only: bool] {
+def run-validate-command [service: string, all_services: bool, manifests_only: bool, plane: string] {
   use ./lib/validate/cli.nu [validate-cli]
   validate-cli {
     service: $service,
     all_services: $all_services,
-    manifests_only: $manifests_only
+    manifests_only: $manifests_only,
+    plane: $plane
   }
 }
 
