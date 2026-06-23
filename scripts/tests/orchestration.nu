@@ -25,7 +25,69 @@
 # no registry-dependent checks.
 
 use ../lib/core/repo.nu [get-repo-root]
+use ../lib/plane/presence.nu [local-root-path local-services-path]
+use ../lib/plane/audit.nu [LOCAL_MIRROR_FILE]
 use ./lib.nu [run-test print-test-summary]
+
+const ISOLATION_SVC = "test-svc"
+const ISOLATION_TRACKED_V1 = "v1"
+const ISOLATION_TRACKED_V2 = "v2"
+const ISOLATION_LOCAL_ONLY = "dev-local-only"
+
+def make-temp-repo [] {
+    let tmp = (^mktemp -d | str trim)
+    mkdir $tmp
+    mkdir ($tmp | path join "services")
+    ^git -C $tmp init -q
+    $tmp
+}
+
+def rm-temp-repo [dir: string] {
+    try { rm -rf $dir } catch { }
+}
+
+def seed-tracked-versions [repo: string, versions_manifest: record, name: string] {
+    { name: $name } | save -f ($repo | path join $"services/($name).nuon")
+    mkdir ($repo | path join $"services/($name)")
+    $versions_manifest | save -f ($repo | path join $"services/($name)/versions.nuon")
+}
+
+def save-local-fragment [repo: string, name: string, fragment: record] {
+    let mirror = (local-services-path $repo | path join $name)
+    mkdir $mirror
+    $fragment | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+}
+
+def seed-tracked-plane-isolation-fixture [repo: string] {
+    seed-tracked-versions $repo {
+        default: $ISOLATION_TRACKED_V1
+        versions: [
+            { name: $ISOLATION_TRACKED_V1, overrides: {} }
+            { name: $ISOLATION_TRACKED_V2, overrides: {} }
+        ]
+    } $ISOLATION_SVC
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo $ISOLATION_SVC {
+        versions: [
+            {
+                name: $ISOLATION_LOCAL_ONLY
+                overrides: {}
+            }
+            {
+                name: $ISOLATION_TRACKED_V2
+                overrides: {
+                    sources: {
+                        my_src: { path: "../local-src" }
+                    }
+                }
+            }
+        ]
+    }
+}
+
+def run-dockypody-in-repo [repo: string, entry: string, args: list<string>] {
+    do -i { cd $repo; ^nu $entry ...$args } | complete
+}
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })
@@ -205,6 +267,51 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $t7)
+
+    let t8 = (run-test "build --matrix-json: ignores local fragment versions (tracked-only isolation)" {
+        let repo = (make-temp-repo)
+        seed-tracked-plane-isolation-fixture $repo
+        let out = (run-dockypody-in-repo $repo $entry [build --service $ISOLATION_SVC --matrix-json])
+        rm-temp-repo $repo
+        if $out.exit_code != 0 {
+            error make {msg: $"build --matrix-json exited ($out.exit_code): ($out.stderr)"}
+        }
+        let data = (try { $out.stdout | from json } catch {|e|
+            error make {msg: $"Output is not valid JSON: ($e.msg). stdout=($out.stdout)"}
+        })
+        let version_names = ($data.include? | default [] | each {|e| $e.version?} | compact | uniq | sort)
+        if $ISOLATION_LOCAL_ONLY in $version_names {
+            error make {msg: $"Local-only version leaked into matrix JSON: ($version_names | str join ', ')"}
+        }
+        if not ($ISOLATION_TRACKED_V1 in $version_names) {
+            error make {msg: $"Tracked version ($ISOLATION_TRACKED_V1) missing from matrix JSON"}
+        }
+        if not ($ISOLATION_TRACKED_V2 in $version_names) {
+            error make {msg: $"Tracked version ($ISOLATION_TRACKED_V2) missing from matrix JSON"}
+        }
+        if ($version_names | length) != 2 {
+            error make {msg: $"Expected exactly 2 tracked versions, got ($version_names | str join ', ')"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t8)
+
+    let t9 = (run-test "build --matrix-json --plane local: rejected when local fragment is present" {
+        let repo = (make-temp-repo)
+        seed-tracked-plane-isolation-fixture $repo
+        let out = (run-dockypody-in-repo $repo $entry [
+            build --service $ISOLATION_SVC --matrix-json --plane local
+        ])
+        rm-temp-repo $repo
+        if $out.exit_code == 0 {
+            error make {msg: "Expected non-zero exit for --matrix-json with --plane local"}
+        }
+        if not ($out.stderr | str contains "--plane local is not supported") {
+            error make {msg: $"Expected tracked-only rejection in stderr, got: ($out.stderr)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t9)
 
     print-test-summary $results
 

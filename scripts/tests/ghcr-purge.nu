@@ -24,7 +24,66 @@ use ../lib/ci/ghcr/purge.nu [decide-versions-to-delete sort-delete-candidates pl
 use ../lib/ci/ghcr/ssot-tags.nu [compute-desired-tags-for-service]
 use ../lib/ci/ghcr/cli.nu [validate-force-flags aggregate-purge-results format-purge-summary]
 use ../lib/services/core.nu [list-service-names]
+use ../lib/plane/presence.nu [local-root-path local-services-path]
+use ../lib/plane/audit.nu [LOCAL_MIRROR_FILE]
 use ./lib.nu [run-test print-test-summary]
+
+const ISOLATION_SVC = "test-svc"
+const ISOLATION_TRACKED_V1 = "v1"
+const ISOLATION_TRACKED_V2 = "v2"
+const ISOLATION_LOCAL_ONLY = "dev-local-only"
+
+def make-temp-repo [] {
+    let tmp = (^mktemp -d | str trim)
+    mkdir $tmp
+    mkdir ($tmp | path join "services")
+    ^git -C $tmp init -q
+    $tmp
+}
+
+def rm-temp-repo [dir: string] {
+    try { rm -rf $dir } catch { }
+}
+
+def run-in-temp-repo [repo: string, block: closure] {
+    do -i { cd $repo; do $block }
+}
+
+def seed-tracked-versions [repo: string, versions_manifest: record, name: string] {
+    { name: $name } | save -f ($repo | path join $"services/($name).nuon")
+    mkdir ($repo | path join $"services/($name)")
+    $versions_manifest | save -f ($repo | path join $"services/($name)/versions.nuon")
+}
+
+def save-local-fragment [repo: string, name: string, fragment: record] {
+    let mirror = (local-services-path $repo | path join $name)
+    mkdir $mirror
+    $fragment | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+}
+
+def seed-tracked-plane-isolation-fixture [repo: string] {
+    seed-tracked-versions $repo {
+        default: $ISOLATION_TRACKED_V1
+        versions: [
+            { name: $ISOLATION_TRACKED_V1, overrides: {} }
+            { name: $ISOLATION_TRACKED_V2, overrides: {} }
+        ]
+    } $ISOLATION_SVC
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo $ISOLATION_SVC {
+        versions: [
+            { name: $ISOLATION_LOCAL_ONLY, overrides: {} }
+            {
+                name: $ISOLATION_TRACKED_V2
+                overrides: {
+                    sources: {
+                        my_src: { path: "../local-src" }
+                    }
+                }
+            }
+        ]
+    }
+}
 
 # Build a mock GHCR version record matching the API response shape.
 # Optional --updated-at and --created-at flags add the corresponding timestamp
@@ -512,6 +571,26 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $t11)
+
+    let t12 = (run-test "ssot: compute-desired-tags ignores local fragment versions (tracked-only isolation)" {
+        let repo = (make-temp-repo)
+        seed-tracked-plane-isolation-fixture $repo
+        let tags = (run-in-temp-repo $repo {||
+            compute-desired-tags-for-service $ISOLATION_SVC
+        })
+        rm-temp-repo $repo
+        if $ISOLATION_LOCAL_ONLY in $tags {
+            error make {msg: $"Local-only version leaked into SSOT tags: ($tags | str join ', ')"}
+        }
+        if not ($ISOLATION_TRACKED_V1 in $tags) {
+            error make {msg: $"Tracked version tag ($ISOLATION_TRACKED_V1) missing from SSOT output"}
+        }
+        if not ($ISOLATION_TRACKED_V2 in $tags) {
+            error make {msg: $"Tracked version tag ($ISOLATION_TRACKED_V2) missing from SSOT output"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t12)
 
     # ------------------------------------------------------------------ #
     # purge-service-core: injectable, API-free execution contract tests

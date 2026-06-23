@@ -36,6 +36,7 @@ export def compute-desired-tags-for-service [service: string] {
         return []
     }
 
+    # Tracked-only: GHCR SSOT tags must not load local-plane effective manifests.
     let manifest = (load-versions-manifest $service)
     let versions = (try { $manifest.versions } catch { [] })
 
