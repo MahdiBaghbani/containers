@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Local-plane effective source materialization (guard-owned)
-# Applies local fragment sources and env-only {SOURCE_KEY}_PATH overrides.
+# Applies env-only {SOURCE_KEY}_PATH overrides to merged tracked sources.
 
 use ./presence.nu [local-services-path]
 use ./audit.nu [LOCAL_MIRROR_FILE]
@@ -93,46 +93,6 @@ export def validate-local-plane-source-entry [
   }
 }
 
-export def validate-local-plane-fragment-sources [
-  fragment_sources: record,
-  tracked_source_ids: list<string>,
-  context: string
-] {
-  for source_key in ($fragment_sources | columns) {
-    if not ($source_key in $tracked_source_ids) {
-      error make {
-        msg: $"($context): sources.($source_key): Additive source id '($source_key)' is forbidden under --plane local."
-      }
-    }
-    let source = ($fragment_sources | get $source_key)
-    validate-local-plane-source-entry $source_key $source $context
-  }
-}
-
-def extract-fragment-source-overrides [fragment: record, version_name: string] {
-  mut sources = (try { $fragment.overrides.sources } catch { {} })
-
-  if ($version_name | str length) == 0 {
-    return $sources
-  }
-
-  if not ("versions" in ($fragment | columns)) {
-    return $sources
-  }
-
-  let versions = (try { $fragment.versions } catch { [] })
-  let version_match = ($versions | where {|v| (try { $v.name } catch { "" }) == $version_name } | first)
-  if $version_match == null {
-    return $sources
-  }
-
-  let version_sources = (try { $version_match.overrides.sources } catch { {} })
-  for source_key in ($version_sources | columns) {
-    $sources = ($sources | upsert $source_key ($version_sources | get $source_key))
-  }
-  $sources
-}
-
 export def materialize-env-only-sources [
   sources: record,
   service: string,
@@ -158,7 +118,7 @@ export def materialize-env-only-sources [
   $effective
 }
 
-# Apply local fragment sources and env-only materialization to merged tracked sources.
+# Apply env-only {SOURCE_KEY}_PATH materialization to merged tracked sources.
 export def apply-local-plane-effective-sources [
   merged_cfg: record,
   service: string,
@@ -171,27 +131,12 @@ export def apply-local-plane-effective-sources [
 
   let repo_root = (resolve-repo-root $plane_ctx)
   let tracked_sources = (try { $merged_cfg.sources } catch { {} })
-  let tracked_ids = ($tracked_sources | columns)
-  mut effective_sources = $tracked_sources
-  let version_name = (try { $version_spec.name } catch { "" })
 
-  let fragment = (load-local-fragment $service $repo_root)
-  if $fragment != null {
-    let fragment_sources = (extract-fragment-source-overrides $fragment $version_name)
-    if not ($fragment_sources | is-empty) {
-      let ctx = $"Service '($service)' local fragment"
-      validate-local-plane-fragment-sources $fragment_sources $tracked_ids $ctx
-      for source_key in ($fragment_sources | columns) {
-        $effective_sources = ($effective_sources | upsert $source_key ($fragment_sources | get $source_key))
-      }
-    }
-  }
-
-  if ($effective_sources | is-empty) {
+  if ($tracked_sources | is-empty) {
     return $merged_cfg
   }
 
-  $effective_sources = (materialize-env-only-sources $effective_sources $service $repo_root)
+  let effective_sources = (materialize-env-only-sources $tracked_sources $service $repo_root)
 
   if "sources" in ($merged_cfg | columns) {
     $merged_cfg | upsert sources $effective_sources

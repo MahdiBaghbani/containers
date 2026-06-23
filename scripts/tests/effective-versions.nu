@@ -334,6 +334,136 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test_partial_source)
 
+  let test_mixed_path_git = (run-test "mixed path and git local fragment source hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      defaults: {
+        sources: {
+          my_src: { url: "https://example.com/repo.git", ref: "main" }
+        }
+      }
+      versions: [{ name: "v1", overrides: {} }]
+    }
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo "test-svc" {
+      versions: [{
+        name: "dev"
+        overrides: {
+          sources: {
+            my_src: {
+              path: "local-src"
+              url: "https://example.com/repo.git"
+              ref: "main"
+            }
+          }
+        }
+      }]
+    }
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let ok = (run-in-temp-repo $repo {||
+      expect-error {||
+        load-effective-versions-manifest "test-svc" $plane_ctx
+      } "Cannot have both 'path' and 'url'/'ref'"
+    })
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+  $results = ($results | append $test_mixed_path_git)
+
+  let test_empty_path = (run-test "empty local fragment path hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      defaults: {
+        sources: {
+          my_src: { url: "https://example.com/repo.git", ref: "main" }
+        }
+      }
+      versions: [{ name: "v1", overrides: {} }]
+    }
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo "test-svc" {
+      versions: [{
+        name: "dev"
+        overrides: {
+          sources: { my_src: { path: "" } }
+        }
+      }]
+    }
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let ok = (run-in-temp-repo $repo {||
+      expect-error {||
+        load-effective-versions-manifest "test-svc" $plane_ctx
+      } "'path' field is empty"
+    })
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+  $results = ($results | append $test_empty_path)
+
+  let test_empty_source_object = (run-test "empty local fragment source object hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      defaults: {
+        sources: {
+          my_src: { url: "https://example.com/repo.git", ref: "main" }
+        }
+      }
+      versions: [{ name: "v1", overrides: {} }]
+    }
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo "test-svc" {
+      versions: [{
+        name: "dev"
+        overrides: {
+          sources: { my_src: {} }
+        }
+      }]
+    }
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let ok = (run-in-temp-repo $repo {||
+      expect-error {||
+        load-effective-versions-manifest "test-svc" $plane_ctx
+      } "Source entry must be a full local"
+    })
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+  $results = ($results | append $test_empty_source_object)
+
+  let test_ref_only_source = (run-test "ref-only local fragment source hard-errors" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      defaults: {
+        sources: {
+          my_src: { url: "https://example.com/repo.git", ref: "main" }
+        }
+      }
+      versions: [{ name: "v1", overrides: {} }]
+    }
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo "test-svc" {
+      versions: [{
+        name: "dev"
+        overrides: {
+          sources: { my_src: { ref: "main" } }
+        }
+      }]
+    }
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let ok = (run-in-temp-repo $repo {||
+      expect-error {||
+        load-effective-versions-manifest "test-svc" $plane_ctx
+      } "Partial git source"
+    })
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+  $results = ($results | append $test_ref_only_source)
+
   let test_fragment_missing_name = (run-test "local fragment version missing name hard-errors" {
     let repo = (make-temp-repo)
     seed-tracked-versions $repo {

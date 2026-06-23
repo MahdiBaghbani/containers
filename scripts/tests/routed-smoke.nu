@@ -667,52 +667,6 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_smoke_local_env_materialization)
 
-    let test_smoke_local_fragment_semantics = (run-test "smoke: routed inspect effective-config fragment mirror semantics" {
-        let repo = (make-temp-repo)
-        seed-service-with-git-source $repo
-        mkdir (local-root-path $repo)
-        let mirror = (local-services-path $repo | path join "test-svc")
-        mkdir $mirror
-        mkdir ($repo | path join "fragment-src")
-        {
-            overrides: {
-                sources: {
-                    my_src: { path: "fragment-src" }
-                }
-            }
-        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
-        let out = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
-        if $out.exit_code != 0 {
-            rm-temp-repo $repo
-            error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
-        }
-        let cfg = (try {
-            $out.stdout | from json
-        } catch {
-            rm-temp-repo $repo
-            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
-        })
-        assert-inspect-semantic-baseline $cfg $repo "test-svc" "v1" true $mirror
-        if $cfg.env_only {
-            error make {msg: "Fragment override must not be classified as env_only"}
-        }
-        if ($cfg.env_keys_used | length) != 0 {
-            error make {msg: $"Expected empty env_keys_used for fragment path, got: ($cfg.env_keys_used | to json)"}
-        }
-        if ($cfg.source_origin.my_src? | default "") != "fragment-local" {
-            error make {msg: $"Expected source_origin.my_src 'fragment-local', got: ($cfg.source_origin | to json)"}
-        }
-        if not ($cfg.precedence_summary | str contains "local fragment overrides") {
-            error make {msg: $"Expected precedence_summary to mention fragment overrides, got: ($cfg.precedence_summary)"}
-        }
-        if ($cfg.sources.my_src.path? | default "") != "fragment-src" {
-            error make {msg: $"Expected fragment path 'fragment-src', got: ($cfg.sources.my_src.path)"}
-        }
-        rm-temp-repo $repo
-        true
-    } $verbose_flag)
-    $results = ($results | append $test_smoke_local_fragment_semantics)
-
     let test_smoke_local_only_version_inspect = (run-test "smoke: routed inspect effective-config local-only version from fragment versions array" {
         let repo = (make-temp-repo)
         seed-service-with-git-source $repo
@@ -871,25 +825,6 @@ def main [--verbose] {
         assert-routed-failure-names-contract $result "Unknown local service mirror" []
     } $verbose_flag)
     $results = ($results | append $test_smoke_local_bad_topology)
-
-    let test_smoke_local_bad_source = (run-test "smoke: routed inspect effective-config bad local source names additive id contract" {
-        let repo = (make-temp-repo)
-        seed-service-with-git-source $repo
-        mkdir (local-root-path $repo)
-        let mirror = (local-services-path $repo | path join "test-svc")
-        mkdir $mirror
-        {
-            overrides: {
-                sources: {
-                    extra_src: { path: "local-src" }
-                }
-            }
-        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
-        let result = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
-        rm-temp-repo $repo
-        assert-routed-failure-names-contract $result "Additive source id" []
-    } $verbose_flag)
-    $results = ($results | append $test_smoke_local_bad_source)
 
     let test_smoke_local_validate_additive_version_source = (run-test "smoke: routed validate --plane local rejects additive id in fragment versions" {
         let repo = (make-temp-repo)
