@@ -178,3 +178,95 @@ export def load-effective-versions-manifest [
   | upsert versions $merged_versions
   | upsert default $merged_default
 }
+
+# BUILD path: root nodes use effective manifest under local plane; deps stay tracked.
+export def load-build-versions-manifest [
+  service: string,
+  plane_ctx: any,
+  root_scope: bool
+] {
+  if $root_scope {
+    load-effective-versions-manifest $service $plane_ctx
+  } else {
+    load-versions-manifest $service
+  }
+}
+
+# Resolve version_spec from a build-order node key (service:version[:platform]).
+export def resolve-build-node-version-spec [
+  node: string,
+  platform: string,
+  plane_ctx: any,
+  root_scope: bool
+] {
+  use ../manifest/core.nu [
+    apply-version-defaults
+    check-versions-manifest-exists
+    get-version-or-null
+    resolve-version-name
+  ]
+  use ../platforms/core.nu [
+    check-platforms-manifest-exists
+    expand-version-to-platforms
+    get-default-platform
+    load-platforms-manifest
+    strip-platform-suffix
+  ]
+
+  let parts = ($node | split row ":")
+  if ($parts | length) < 2 {
+    error make {
+      msg: $"Invalid build node format: '($node)'. Expected 'service:version' or 'service:version:platform'"
+    }
+  }
+
+  let service = ($parts | get 0)
+  let version_name = ($parts | get 1)
+
+  if not (check-versions-manifest-exists $service) {
+    error make { msg: $"Service '($service)' does not have a version manifest" }
+  }
+
+  let versions_manifest = (load-build-versions-manifest $service $plane_ctx $root_scope)
+
+  let has_platforms = (check-platforms-manifest-exists $service)
+  let platforms_manifest = (if $has_platforms {
+    try { load-platforms-manifest $service } catch { null }
+  } else {
+    null
+  })
+
+  let base_version_name = (if $platforms_manifest != null {
+    let stripped = (try {
+      strip-platform-suffix $version_name $platforms_manifest
+    } catch {
+      {base_name: $version_name, platform_name: ""}
+    })
+    $stripped.base_name
+  } else {
+    $version_name
+  })
+
+  let version_resolved = (resolve-version-name $base_version_name $versions_manifest $platforms_manifest null)
+  let version_spec = (get-version-or-null $versions_manifest $version_resolved.base_name)
+  if $version_spec == null {
+    error make {
+      msg: $"Version '($version_resolved.base_name)' not found in manifest for service '($service)'"
+    }
+  }
+
+  if $has_platforms and ($platform | str length) > 0 {
+    let expanded_versions = (
+      expand-version-to-platforms $version_spec $platforms_manifest (get-default-platform $platforms_manifest)
+    )
+    let matching = ($expanded_versions | where {|item| $item.platform == $platform} | first)
+    if $matching == null {
+      error make {
+        msg: $"Platform '($platform)' not found in expanded versions for '($service):($base_version_name)'"
+      }
+    }
+    $matching
+  } else {
+    apply-version-defaults $versions_manifest $version_spec
+  }
+}

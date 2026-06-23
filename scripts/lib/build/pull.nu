@@ -21,6 +21,7 @@
 use ./config.nu [get-env-or-config load-service-config]
 use ../registries/info.nu [get-registry-info]
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest get-version-or-null]
+use ../plane/versions.nu [load-build-versions-manifest]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest strip-platform-suffix]
 
 # Valid pull modes
@@ -73,7 +74,8 @@ export def run-pulls [
   build_order: list,
   registry_info: record,
   is_local: bool,
-  plane_ctx: any = null
+  plane_ctx: any = null,
+  --root-nodes: list = []
 ] {
   # Initialize metrics
   mut metrics = {
@@ -99,7 +101,7 @@ export def run-pulls [
     print ""
     print "=== Pre-pulling External Images (preflight check) ==="
     print ""
-    let externals_result = (pull-externals $build_order $registry_info $plane_ctx)
+    let externals_result = (pull-externals $build_order $registry_info $plane_ctx --root-nodes $root_nodes)
     $metrics = ($metrics | upsert externals $externals_result)
   }
   
@@ -147,10 +149,11 @@ def pull-deps [
 def pull-externals [
   build_order: list,
   registry_info: record,
-  plane_ctx: any = null
+  plane_ctx: any = null,
+  --root-nodes: list = []
 ] {
   # Aggregate external images from all build-order nodes
-  let aggregated = (aggregate-external-images $build_order $plane_ctx)
+  let aggregated = (aggregate-external-images $build_order $plane_ctx --root-nodes $root_nodes)
   
   if ($aggregated | is-empty) {
     print "No external images declared in build scope."
@@ -241,7 +244,8 @@ export def compute-canonical-image-ref [
 # Returns list of {image_ref: string, nodes: list<string>}
 def aggregate-external-images [
   build_order: list,
-  plane_ctx: any = null
+  plane_ctx: any = null,
+  --root-nodes: list = []
 ] {
   # Accumulate external images with their referencing nodes
   let result = ($build_order | reduce --fold {} {|node, acc|
@@ -253,6 +257,7 @@ def aggregate-external-images [
       let service = ($parts | get 0)
       let version_name = ($parts | get 1)
       let platform = (if ($parts | length) > 2 { $parts | get 2 } else { "" })
+      let root_scope = ($node in $root_nodes)
       
       # Load service config to get external_images
       let external_refs = (try {
@@ -260,7 +265,7 @@ def aggregate-external-images [
         if not (check-versions-manifest-exists $service) {
           []
         } else {
-          let versions_manifest = (load-versions-manifest $service)
+          let versions_manifest = (load-build-versions-manifest $service $plane_ctx $root_scope)
           let has_platforms = (check-platforms-manifest-exists $service)
           let platforms_manifest = (if $has_platforms {
             try { load-platforms-manifest $service } catch { null }

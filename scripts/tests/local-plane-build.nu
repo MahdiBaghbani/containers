@@ -19,7 +19,9 @@
 
 # Local-plane build suppression integration tests (stubbed docker, no daemon)
 
+use ../lib/build/cli.nu [build-cli]
 use ../lib/build/version.nu [build-single-version]
+use ../lib/plane/audit.nu [LOCAL_MIRROR_FILE]
 use ../lib/build/meta.nu [detect-build]
 use ../lib/build/tags.nu [generate-tags]
 use ../lib/inspect/effective-config.nu [inspect-effective-config]
@@ -249,6 +251,54 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $test_local_plane_ci_like_inspect_build_tag)
+
+    let test_local_only_version_via_build_cli = (run-test "local plane build-cli resolves local-only version name" {
+        let repo = (make-temp-repo)
+        seed-build-service $repo "local-svc"
+        mkdir (local-root-path $repo)
+        let mirror = (local-root-path $repo | path join "services" "local-svc")
+        mkdir $mirror
+        {
+            default: "devlocal"
+            versions: [{
+                name: "devlocal"
+                latest: true
+            }]
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+
+        let log_file = ($repo | path join "docker-invocations.log")
+        let stub_dir = (make-docker-stub $log_file)
+        let patched_path = ([$stub_dir] | append ($env.PATH | default []))
+
+        let build_error = (try {
+            with-env {PATH: $patched_path} {
+                do -i {||
+                    cd $repo
+                    build-cli --service local-svc --version devlocal --plane local
+                }
+            }
+            null
+        } catch {|err|
+            try { $err.msg } catch { "Unknown error" }
+        })
+
+        let log_text = (try { open --raw $log_file | decode utf-8 } catch { "" })
+        rm-temp-repo $repo
+        try { rm -rf $stub_dir } catch { }
+
+        if $build_error != null {
+            error make {msg: $"Expected build-cli local-only version success, got: ($build_error)"}
+        }
+
+        let build_lines = (extract-buildx-build-lines $log_text)
+        if ($build_lines | length) != 1 {
+            error make {msg: $"Expected one build invocation for local-only version, got ($build_lines | length): ($build_lines | to json)"}
+        }
+
+        assert-local-plane-build-line ($build_lines | first) "local-svc" "devlocal"
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_local_only_version_via_build_cli)
 
     print-test-summary $results
 

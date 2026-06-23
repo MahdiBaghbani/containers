@@ -36,9 +36,21 @@ use ./hash.nu [compute-service-def-hash-graph]
 use ./pull.nu [run-pulls print-pull-summary compute-canonical-image-ref]
 use ./docker.nu [get-service-def-hash-from-image]
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest filter-versions get-version-or-null resolve-version-name get-version-spec apply-version-defaults get-default-version]
+use ../plane/versions.nu [load-effective-versions-manifest resolve-build-node-version-spec]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names expand-version-to-platforms strip-platform-suffix]
 use ../services/core.nu [list-service-names]
 use ../registries/info.nu [get-registry-info]
+
+def root-nodes-for-service [service: string, version_specs: list] {
+  $version_specs | each {|v|
+    let plat = (try { $v.platform } catch { "" })
+    if ($plat | str length) > 0 {
+      $"($service):($v.name):($plat)"
+    } else {
+      $"($service):($v.name)"
+    }
+  }
+}
 
 # Main build orchestration entrypoint
 # Routes to appropriate build path based on flags
@@ -138,7 +150,7 @@ def run-all-services-build [ctx: record] {
       print $"WARNING: Service '($service_name)' has no versions manifest. Skipping."
       $acc
     } else {
-      let versions_manifest = (load-versions-manifest $service_name)
+      let versions_manifest = (load-effective-versions-manifest $service_name $plane_ctx)
       let has_platforms = (check-platforms-manifest-exists $service_name)
       let platforms_manifest = (if $has_platforms {
         try {
@@ -302,12 +314,20 @@ def run-all-services-build [ctx: record] {
   }
   print ""
   
+  let root_nodes = ($service_builds | each {|item|
+    if ($item.platform | str length) > 0 {
+      $"($item.service):($item.version_spec.name):($item.platform)"
+    } else {
+      $"($item.service):($item.version_spec.name)"
+    }
+  })
+
   # Compute service definition hash graph
-  let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx)
+  let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
   
   # Pre-pull images if --pull flag is provided
   if not ($f.pull | is-empty) {
-    let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx)
+    let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
     print-pull-summary $pull_metrics
     print ""
   }
@@ -347,7 +367,11 @@ def run-all-services-build [ctx: record] {
           $item_node == $node
         })
         
-        let node_version_spec = (resolve-dependency-version-spec $node $node_platform)
+        let node_version_spec = (if $is_target_service {
+          resolve-build-node-version-spec $node $node_platform $plane_ctx true
+        } else {
+          resolve-dependency-version-spec $node $node_platform
+        })
         
         let node_has_platforms = (check-platforms-manifest-exists $node_service)
         let node_platforms_manifest = (if $node_has_platforms {
@@ -467,8 +491,14 @@ def run-single-service-build [ctx: record] {
   let plane_ctx = $ctx.plane_ctx
   mut sha_cache = {}
   
-  # Load service manifests
+  # Load service manifests (root service uses effective versions under local plane)
   let manifests = (load-service-manifests $f.service)
+  let versions_manifest = (if $manifests.has_versions {
+    load-effective-versions-manifest $f.service $plane_ctx
+  } else {
+    null
+  })
+  let manifests = ($manifests | upsert versions_manifest $versions_manifest)
   
   # Validate platform if specified
   validate-platform-flag $f.platform $f.service $manifests.has_platforms $manifests.platforms_manifest
@@ -725,10 +755,11 @@ def run-single-service-build [ctx: record] {
       }
       
       let build_order = (compute-single-service-build-order $f.service $expanded_versions $platforms_manifest $info $plane_ctx)
-      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx)
+      let root_nodes = (root-nodes-for-service $f.service $expanded_versions)
+      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
       
       if not ($f.pull | is-empty) {
-        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx)
+        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
         print-pull-summary $pull_metrics
         print ""
       }
@@ -794,10 +825,11 @@ def run-single-service-build [ctx: record] {
     } else {
       # Single-platform multi-version
       let build_order = (compute-single-service-build-order $f.service $versions_to_build null $info $plane_ctx)
-      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx)
+      let root_nodes = (root-nodes-for-service $f.service $versions_to_build)
+      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
       
       if not ($f.pull | is-empty) {
-        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx)
+        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
         print-pull-summary $pull_metrics
         print ""
       }
@@ -902,10 +934,11 @@ def run-single-service-build [ctx: record] {
     }
     
     let build_order = (compute-single-service-build-order $f.service $expanded_versions $platforms_manifest $info $plane_ctx)
-    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx)
+    let root_nodes = (root-nodes-for-service $f.service $expanded_versions)
+    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
     
     if not ($f.pull | is-empty) {
-      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx)
+      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
       print-pull-summary $pull_metrics
       print ""
     }
@@ -922,10 +955,11 @@ def run-single-service-build [ctx: record] {
   } else {
     # Single-platform build (no platforms manifest)
     let build_order = (compute-single-service-build-order $f.service [$version_spec] null $info $plane_ctx)
-    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx)
+    let root_nodes = (root-nodes-for-service $f.service [$version_spec])
+    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
     
     if not ($f.pull | is-empty) {
-      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx)
+      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
       print-pull-summary $pull_metrics
       print ""
     }
