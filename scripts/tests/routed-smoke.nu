@@ -25,10 +25,75 @@
 # openssl, temp repo) so it never writes a real CA.
 
 use ../lib/core/repo.nu [get-repo-root]
+use ../lib/plane/presence.nu [local-root-path local-services-path]
+use ../lib/plane/audit.nu [LOCAL_MIRROR_FILE]
 use ./lib.nu [run-test print-test-summary]
 
 def rm-temp-context [dir: string] {
     try { rm -rf $dir } catch { }
+}
+
+def make-temp-repo [] {
+    let tmp = (^mktemp -d | str trim)
+    mkdir $tmp
+    mkdir ($tmp | path join "services")
+    mkdir ($tmp | path join "scripts")
+    ^git -C $tmp init -q
+    $tmp
+}
+
+def rm-temp-repo [dir: string] {
+    try { rm -rf $dir } catch { }
+}
+
+def dockypody-entry [] {
+    "scripts/dockypody.nu" | path expand
+}
+
+def run-dockypody-in-repo [repo: string, args: list<string>] {
+    let entry = (dockypody-entry)
+    do -i { cd $repo; ^nu $entry ...$args } | complete
+}
+
+def seed-tracked-service [repo: string, name: string = "test-svc"] {
+    { name: $name } | save -f ($repo | path join $"services/($name).nuon")
+}
+
+def seed-service-with-git-source [repo: string, name: string = "test-svc"] {
+    seed-tracked-service $repo $name
+    mkdir ($repo | path join $"services/($name)")
+    {
+        default: "v1"
+        versions: [{ name: "v1", overrides: {} }]
+        defaults: {
+            sources: {
+                my_src: {
+                    url: "https://example.com/repo.git"
+                    ref: "main"
+                }
+            }
+        }
+    } | save -f ($repo | path join $"services/($name)/versions.nuon")
+}
+
+def assert-routed-failure-names-contract [
+    result: record,
+    contract: string,
+    forbidden: list<string> = []
+] {
+    if $result.exit_code == 0 {
+        error make {msg: $"Expected routed command to fail for contract '($contract)'"}
+    }
+    let combined = ($result.stdout + $result.stderr)
+    if not ($combined | str contains $contract) {
+        error make {msg: $"Expected routed failure to name contract '($contract)', got: ($combined)"}
+    }
+    for needle in $forbidden {
+        if ($combined | str contains $needle) {
+            error make {msg: $"Contract '($contract)' failure must not mention '($needle)', got: ($combined)"}
+        }
+    }
+    true
 }
 
 def parse-public-suite-block [help_output: string] {
@@ -384,6 +449,130 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $test_smoke_test_help_inventory)
+
+    let test_smoke_local_missing_root = (run-test "smoke: routed build --plane local missing root names presence contract" {
+        let repo = (make-temp-repo)
+        seed-tracked-service $repo
+        let result = (run-dockypody-in-repo $repo [build --plane local --show-build-order --service test-svc])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "requires local root directory" [
+            "Unsupported local root"
+            "Unknown local service mirror"
+            "Incomplete local service mirror"
+        ]
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_missing_root)
+
+    let test_smoke_local_empty_topology = (run-test "smoke: routed build --plane local passes guard on empty legal topology" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let result = (run-dockypody-in-repo $repo [build --plane local --show-build-order --service test-svc])
+        rm-temp-repo $repo
+        if $result.exit_code != 0 {
+            error make {msg: $"Expected guard pass on empty legal topology, exit ($result.exit_code): ($result.stderr)"}
+        }
+        let combined = ($result.stdout + $result.stderr)
+        if ($combined | str contains "requires local root directory") {
+            error make {msg: "Empty legal topology must not fail root presence guard"}
+        }
+        if ($combined | str contains "Unsupported local root") {
+            error make {msg: "Empty legal topology must not fail topology audit"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_empty_topology)
+
+    let test_smoke_local_env_materialization = (run-test "smoke: routed inspect effective-config env-only path materialization" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        mkdir ($repo | path join "local-src")
+        let expected_path = ($repo | path join "local-src" | path expand)
+        let entry = (dockypody-entry)
+        let out = (do -i {||
+            cd $repo
+            $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
+            ^nu $entry inspect effective-config --service test-svc --plane local
+        } | complete)
+        rm-temp-repo $repo
+        if $out.exit_code != 0 {
+            error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        let materialized = (try { $cfg.sources.my_src.path | path expand } catch { "" })
+        if $materialized != $expected_path {
+            error make {msg: $"Expected env-only path ($expected_path), got: ($materialized)"}
+        }
+        if ("url" in ($cfg.sources.my_src | columns)) or ("ref" in ($cfg.sources.my_src | columns)) {
+            error make {msg: "Env-only materialization must replace git fields with path only"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_env_materialization)
+
+    let test_smoke_local_bad_topology = (run-test "smoke: routed validate --plane local bad topology names unknown mirror contract" {
+        let repo = (make-temp-repo)
+        seed-tracked-service $repo
+        mkdir (local-root-path $repo)
+        mkdir (local-services-path $repo)
+        mkdir (local-services-path $repo | path join "shadow-svc")
+        let result = (run-dockypody-in-repo $repo [validate --plane local --service test-svc])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Unknown local service mirror" []
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_bad_topology)
+
+    let test_smoke_local_bad_source = (run-test "smoke: routed inspect effective-config bad local source names additive id contract" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        {
+            overrides: {
+                sources: {
+                    extra_src: { path: "local-src" }
+                }
+            }
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let result = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Additive source id" []
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_bad_source)
+
+    let test_smoke_local_guard_ordering = (run-test "smoke: routed validate guard ordering manifest read before mirror audit" {
+        let repo = (make-temp-repo)
+        "not valid nuon {" | save -f ($repo | path join "services/test-svc.nuon")
+        mkdir (local-root-path $repo)
+        mkdir (local-services-path $repo)
+        mkdir (local-services-path $repo | path join "test-svc")
+        let result = (run-dockypody-in-repo $repo [validate --plane local --service test-svc])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Unable to read tracked service manifest" [
+            "Unknown local service mirror"
+        ]
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_guard_ordering)
+
+    let test_smoke_local_incomplete_mirror = (run-test "smoke: routed inspect bad topology names incomplete mirror contract before materialization" {
+        let repo = (make-temp-repo)
+        seed-tracked-service $repo
+        mkdir (local-root-path $repo)
+        mkdir (local-services-path $repo | path join "test-svc")
+        let result = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Incomplete local service mirror" [
+            "Additive source id"
+            "Partial git source is forbidden"
+        ]
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_incomplete_mirror)
 
     let test_smoke_internal_suite_errors = (run-test "smoke: unsupported/internal suite name errors clearly" {
         let root = (get-repo-root)

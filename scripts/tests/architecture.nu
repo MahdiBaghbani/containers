@@ -1348,6 +1348,60 @@ def main [--verbose] {
     true
   } $verbose_flag)
 
+  # Test 61: missing root failure names presence contract before topology audit
+  let test61 = (run-test "missing root failure names presence contract before topology audit" {
+    let repo = (make-temp-repo)
+    let result = (try {
+      guard-local-plane-presence $repo
+      { ok: true }
+    } catch {|err|
+      { ok: false, msg: $err.msg }
+    })
+    rm-temp-repo $repo
+    if $result.ok {
+      error make {msg: "Expected guard to fail when local root is missing"}
+    }
+    if not ($result.msg | str contains "requires local root directory") {
+      error make {msg: $"Expected presence contract error, got: ($result.msg)"}
+    }
+    for forbidden in ["Unsupported local root", "Unknown local service mirror", "Incomplete local service mirror"] {
+      if ($result.msg | str contains $forbidden) {
+        error make {msg: $"Missing root must not surface topology audit error '($forbidden)': ($result.msg)"}
+      }
+    }
+    true
+  } $verbose_flag)
+
+  # Test 62: empty local fragment source object hard-errors
+  let test62 = (run-test "empty local fragment source object hard-errors" {
+    let repo = (make-temp-repo)
+    seed-service-with-git-source $repo
+    mkdir (local-root-path $repo)
+    let mirror = (local-services-path $repo | path join "test-svc")
+    mkdir $mirror
+    {
+      overrides: {
+        sources: {
+          my_src: {}
+        }
+      }
+    } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+    let plane_ctx = (guard-local-plane-presence $repo)
+    let merged = {
+      sources: {
+        my_src: {
+          url: "https://example.com/repo.git"
+          ref: "main"
+        }
+      }
+    }
+    let ok = (expect-effective-config-error {||
+      apply-local-plane-effective-sources $merged "test-svc" { name: "v1" } $plane_ctx
+    } "Source entry must be a full local")
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+
   # Test 59: inspect effective-config routes through guard on local plane
   let test59 = (run-test "inspect effective-config routes through guard on local plane" {
     let repo = (make-temp-repo)
@@ -1364,7 +1418,7 @@ def main [--verbose] {
   } $verbose_flag)
 
   # Collect results
-  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17, $test18, $test19, $test20, $test21, $test22, $test23, $test24, $test25, $test26, $test27, $test28, $test29, $test30, $test31, $test32, $test33, $test34, $test35, $test36, $test37, $test38, $test39, $test40, $test41, $test42, $test43, $test44, $test45, $test46, $test47, $test48, $test49, $test50, $test51, $test52, $test53, $test54, $test55, $test56, $test57, $test58, $test59, $test60]
+  let results = [$test1, $test2, $test3, $test4, $test5, $test6, $test7, $test8, $test9, $test10, $test11, $test12, $test13, $test14, $test15, $test16, $test17, $test18, $test19, $test20, $test21, $test22, $test23, $test24, $test25, $test26, $test27, $test28, $test29, $test30, $test31, $test32, $test33, $test34, $test35, $test36, $test37, $test38, $test39, $test40, $test41, $test42, $test43, $test44, $test45, $test46, $test47, $test48, $test49, $test50, $test51, $test52, $test53, $test54, $test55, $test56, $test57, $test58, $test59, $test60, $test61, $test62]
   
   print-test-summary $results
   
