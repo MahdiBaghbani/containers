@@ -211,6 +211,54 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test10)
+
+  # Test 11: Local plane single-primary suppresses latest and custom tags
+  let test11 = (run-test "Local plane single-primary tag (suppresses latest and extras)" {
+    let version_spec = {name: "v1.0.0", latest: true, tags: ["v1.0", "v1"]}
+    let tags = (generate-tags "my-service" $version_spec true $registry_info "debian" "debian" true)
+    let expected = ["my-service:v1.0.0-debian"]
+    if $tags != $expected {
+      error make {msg: $"Local plane tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test11)
+
+  # Test 12: Local plane single-primary for single-platform service
+  let test12 = (run-test "Local plane single-primary tag (single platform)" {
+    let version_spec = {name: "v2.0.0", latest: true, tags: ["stable"]}
+    let tags = (generate-tags "my-service" $version_spec true $registry_info "" "" true)
+    let expected = ["my-service:v2.0.0"]
+    if $tags != $expected {
+      error make {msg: $"Local plane tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test12)
+
+  # Test 13: Local plane CI-like mode uses registry-qualified primary tag
+  let test13 = (run-test "Local plane CI-like mode uses registry-qualified primary tag" {
+    let version_spec = {name: "v1.0.0", latest: true, tags: ["v1.0", "v1"]}
+    let tags = (generate-tags "my-service" $version_spec false $registry_info "" "" true)
+    let expected = ["ghcr.io/ocm/my-service:v1.0.0"]
+    if $tags != $expected {
+      error make {msg: $"Local plane CI-like tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test13)
+
+  # Test 14: Tracked-plane local build still emits full tag fan-out
+  let test14 = (run-test "Tracked-plane local build retains latest and custom tags" {
+    let version_spec = {name: "v1.0.0", latest: true, tags: ["v1.0"]}
+    let tags = (generate-tags "my-service" $version_spec true $registry_info "debian" "debian" false)
+    let expected = ["my-service:v1.0.0-debian", "my-service:v1.0.0", "my-service:latest-debian", "my-service:latest", "my-service:v1.0-debian", "my-service:v1.0"]
+    if $tags != $expected {
+      error make {msg: $"Tracked-plane tag mismatch. Expected: ($expected | to json), Got: ($tags | to json)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test14)
   
   print-test-summary $results
 }

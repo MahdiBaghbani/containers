@@ -38,6 +38,7 @@ use ./args.nu [generate-build-args]
 use ./order.nu [build-dependency-graph topological-sort-dfs]
 use ./pull.nu [compute-canonical-image-ref]
 use ./hash.nu [compute-service-def-hash-graph]
+use ../plane/guard.nu [PLANE_LOCAL]
 
 # Shorten a hash to at most 8 chars for diagnostic display.
 # Safe for any input including Docker sentinel strings like "<no value>".
@@ -248,7 +249,9 @@ export def build-single-version [
   let source_shas = $source_shas_result.shas
   $current_cache = ($current_cache | merge $source_shas_result.cache)
 
-  let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform)
+  let is_local_plane = ($plane == $PLANE_LOCAL)
+  let effective_push = (if $is_local_plane { false } else { $push_val })
+  let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform $is_local_plane)
   
   let node_key = (if ($current_platform | str length) > 0 {
     $"($service):($version_tag):($current_platform)"
@@ -331,9 +334,9 @@ export def build-single-version [
           ""
         })
         
-        let dep_push = $push_deps
-        let dep_latest = (if $tag_deps { $latest_val } else { false })
-        let dep_extra_tag = (if $tag_deps { $extra_tag } else { "" })
+        let dep_push = (if $is_local_plane { false } else { $push_deps })
+        let dep_latest = (if $is_local_plane { false } else { (if $tag_deps { $latest_val } else { false }) })
+        let dep_extra_tag = (if $is_local_plane { "" } else { (if $tag_deps { $extra_tag } else { "" }) })
         
         let dep_label = (if ($dep_platform | str length) > 0 {
           $"($dep_service):($dep_version_spec.name)-($dep_platform)"
@@ -473,7 +476,7 @@ export def build-single-version [
   # Run docker build; ensure all staged material is cleaned up on both
   # success and failure paths.
   let build_error = (try {
-    build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $push_val $provenance_val $is_local
+    build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $effective_push $provenance_val $is_local
     null
   } catch {|err|
     $err.msg
