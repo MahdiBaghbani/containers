@@ -41,17 +41,19 @@ For the authoritative schema file, see
 
 ## Local-Plane Root (Off-Git)
 
-DockyPody supports a `--plane local` mode on `build` and `validate`. In this
-release, the local plane is a **root presence contract** only: it does not
-change service discovery, topology resolution, or source materialization.
+DockyPody supports a `--plane local` mode on `build` and `validate`. The
+local plane stores per-service versions manifest fragments off-git under
+`.dockypody.local/` at the repository root (git-ignored). Each tracked
+service may have its own
+`.dockypody.local/services/<service>/versions.nuon`.
 
 **Tracked plane (default):** Service configurations are discovered from
 tracked manifests under `services/` as documented in [Schema
 Location](#schema-location).
 
-**Local plane:** Activates the off-git local plane root at
-`.dockypody.local/` at the repository root. Pass `--plane local` on `build`
-or `validate`; the default is `--plane tracked`.
+**Local plane:** Pass `--plane local` on `build` or `validate`; the default
+is `--plane tracked`. Requires `.dockypody.local/` to exist at the repo
+root.
 
 **Root presence rules:**
 
@@ -59,13 +61,32 @@ or `validate`; the default is `--plane tracked`.
 - An empty `.dockypody.local/` directory alone is valid.
 - An optional `.dockypody.local/services/` directory with zero service
   mirrors is also valid.
+- If a service mirror directory `.dockypody.local/services/<service>/`
+  exists, it must contain `versions.nuon`; an empty mirror directory
+  hard-errors ("Incomplete local service mirror").
 
-**What local plane does not do in this release:**
+**Local versions manifest:**
 
-- Service discovery still uses tracked `services/*.nuon` only. Contents of
-  `.dockypody.local/services/` are not used for discovery.
-- No local topology or source-materialization contract is defined yet beyond
-  root presence.
+- Path: `.dockypody.local/services/<service>/versions.nuon`
+- Schema: same `versions: [...]` shape as tracked
+  `services/<service>/versions.nuon`
+- Same-name collision: a local version fully replaces the tracked version
+  (whole-version replace)
+- New local version names are appended to the tracked version list
+- Versions-only: a local mirror must correspond to an already-tracked
+  service (no local-only services)
+- Additive source ids forbidden: a local version may only override source ids
+  already present in the tracked manifest
+
+**Service discovery:** Still uses tracked `services/*.nuon` only. Local
+fragments do not define new services; they only extend or override versions
+for tracked services.
+
+**CI and generators:** Tracked CI generation consumes only tracked versions
+(never local). `--plane local` is rejected at `build --matrix-json`,
+`ci workflow`, and `ci ghcr-purge`. `ci list-deps` always operates on
+tracked manifests (tracked-only by data; it does not reject the flag).
+Use `--plane local` for local dev `build` and `validate` only.
 
 For CLI details, see [`--plane` in the CLI
 reference](cli-reference.md#config-plane-flag).

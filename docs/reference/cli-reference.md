@@ -184,9 +184,13 @@ nu scripts/dockypody.nu validate [--service <name>] [--all-services]
   single `--service`; see `validate-cli` behavior).
 - `--plane`: config plane for this invocation. `tracked` (default) uses
   tracked manifests under `services/`. `local` activates the off-git local
-  plane root at `.dockypody.local/`; the command hard-errors when that
-  directory is missing. An empty `.dockypody.local/` root is valid. Service
-  discovery still uses tracked `services/*.nuon` only.
+  plane at `.dockypody.local/` and merges optional
+  `.dockypody.local/services/<service>/versions.nuon` fragments; the command
+  hard-errors when that root directory is missing. An empty
+  `.dockypody.local/` root is valid. Service discovery still uses tracked
+  `services/*.nuon` only. Tracked CI generation consumes only tracked
+  versions; `--plane local` is rejected at `build --matrix-json`, `ci
+  workflow`, and `ci ghcr-purge`.
 
 ### tls
 
@@ -297,7 +301,7 @@ nu scripts/dockypody.nu build --service gaia --plane local
 | Mode | Behavior |
 | ---- | -------- |
 | `tracked` | Use tracked service manifests under `services/` (default) |
-| `local` | Activate the off-git local plane root at `.dockypody.local/` |
+| `local` | Merge off-git version fragments from `.dockypody.local/services/<service>/versions.nuon` |
 
 **`local` requirements:**
 
@@ -306,9 +310,16 @@ nu scripts/dockypody.nu build --service gaia --plane local
 - An empty `.dockypody.local/` directory is valid.
 - An optional `.dockypody.local/services/` directory with zero mirrors is
   also valid.
-- Service discovery still uses tracked `services/*.nuon` only; the local
-  plane root is a presence contract in this release, not a topology or
-  source-materialization surface.
+- If a service mirror directory exists, it must contain `versions.nuon`;
+  an empty mirror hard-errors ("Incomplete local service mirror").
+- Local fragments use the same `versions: [...]` schema as tracked manifests.
+  Same-name versions are fully replaced; new names are appended. Local-only
+  services and additive source ids are forbidden.
+- Service discovery still uses tracked `services/*.nuon` only.
+- Tracked CI generation consumes only tracked versions (never local).
+  `--plane local` is rejected at `build --matrix-json`, `ci workflow`, and
+  `ci ghcr-purge`. `ci list-deps` always operates on tracked manifests
+  (tracked-only by data; it does not reject the flag).
 
 `--plane` is also accepted on `validate` with the same modes and rules.
 

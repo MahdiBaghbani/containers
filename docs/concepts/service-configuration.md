@@ -179,26 +179,52 @@ Local sources use the `path` field instead of `url`/`ref`:
 }
 ```
 
-**Example - Version Override (opencloudmesh-go):**
+**Example - Off-Git Local Plane (opencloudmesh-go):**
 
-Add a dedicated version that uses a local path from `versions.nuon`:
+For developer-only path overrides, use the off-git local plane instead of
+committing a tracked version.
+
+**Prerequisites:** `--plane local` hard-errors when `.dockypody.local/` does
+not exist. Create the service mirror directory and place the fragment there
+(git-ignored; do not commit). If the mirror directory exists, it must contain
+`versions.nuon` (an empty mirror directory hard-errors). See
+[`examples/opencloudmesh-go/README.md`](../../examples/opencloudmesh-go/README.md)
+for the full setup sequence.
+
+```bash
+mkdir -p .dockypody.local/services/opencloudmesh-go
+```
+
+Save the fragment as
+`.dockypody.local/services/opencloudmesh-go/versions.nuon`:
 
 ```nuon
 {
-  "name": "local",
-  "latest": false,
-  "overrides": {
-    "sources": {
-      "ocm_go": {
-        "path": "../opencloudmesh-go"
+  "versions": [
+    {
+      "name": "dev",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "ocm_go": {
+            "path": "../opencloudmesh-go"
+          }
+        }
       }
     }
-  }
+  ]
 }
 ```
 
 Build with:
-`nu scripts/dockypody.nu build --service opencloudmesh-go --version local`
+
+```bash
+nu scripts/dockypody.nu build --plane local --service opencloudmesh-go --version dev
+```
+
+The local plane merges this fragment with the tracked manifest. Local versions
+may add new names or fully replace a same-named tracked version. Source ids
+must already exist in the tracked manifest (`ocm_go` here).
 
 **Example - Environment Variable Override:**
 
@@ -497,11 +523,11 @@ Source overrides in version manifests use **type-aware merging**:
 // Result: reva has {url: "https://github.com/cs3org/reva", ref: "master"}
 ```
 
-#### Example: Local Source Override (Type Switch)
+#### Example: Path Source Override (Type Switch)
 
 ```nuon
 {
-  "default": "local",
+  "default": "dev-path",
   "defaults": {
     "sources": {
       "gaia": {
@@ -512,7 +538,7 @@ Source overrides in version manifests use **type-aware merging**:
   },
   "versions": [
     {
-      "name": "local",
+      "name": "dev-path",
       "overrides": {
         "sources": {
           "gaia": {
@@ -525,7 +551,9 @@ Source overrides in version manifests use **type-aware merging**:
 }
 ```
 
-**Result:** The `local` version has `sources.gaia` with only `{path: ".repos/gaia"}` - the `url` and `ref` fields from defaults are removed, not merged.
+**Result:** The `dev-path` version has `sources.gaia` with only
+`{path: ".repos/gaia"}` - the `url` and `ref` fields from defaults are
+removed, not merged.
 
 **Important:** Sources from defaults that are **not** in overrides are preserved. Only source keys explicitly defined in overrides are replaced.
 
