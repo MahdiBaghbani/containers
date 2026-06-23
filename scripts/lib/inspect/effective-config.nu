@@ -72,23 +72,18 @@ def resolve-repo-root [plane_ctx: record] {
 }
 
 def fragment-source-keys [fragment: any, version_name: string] {
-  if $fragment == null {
+  if $fragment == null or ($version_name | str length) == 0 {
     return []
   }
-  mut keys = (try { $fragment.overrides.sources } catch { {} } | columns)
-  if ($version_name | str length) > 0 and ("versions" in ($fragment | columns)) {
-    let versions = (try { $fragment.versions } catch { [] })
-    let version_match = ($versions | where {|v| (try { $v.name } catch { "" }) == $version_name } | first)
-    if $version_match != null {
-      let version_sources = (try { $version_match.overrides.sources } catch { {} })
-      for source_key in ($version_sources | columns) {
-        if not ($source_key in $keys) {
-          $keys = ($keys | append $source_key)
-        }
-      }
-    }
+  if not ("versions" in ($fragment | columns)) {
+    return []
   }
-  $keys
+  let versions = (try { $fragment.versions } catch { [] })
+  let version_match = ($versions | where {|v| (try { $v.name } catch { "" }) == $version_name } | first)
+  if $version_match == null {
+    return []
+  }
+  (try { $version_match.overrides.sources } catch { {} } | columns)
 }
 
 def classify-effective-source [source: record] {
@@ -142,24 +137,19 @@ def build-source-origin [
 }
 
 def has-fragment-source-overrides [fragment: any, version_name: string] {
-  if $fragment == null {
+  if $fragment == null or ($version_name | str length) == 0 {
     return false
   }
-  let top_sources = (try { $fragment.overrides.sources } catch { {} })
-  if not ($top_sources | is-empty) {
-    return true
+  if not ("versions" in ($fragment | columns)) {
+    return false
   }
-  if ($version_name | str length) > 0 and ("versions" in ($fragment | columns)) {
-    let versions = (try { $fragment.versions } catch { [] })
-    let version_match = ($versions | where {|v| (try { $v.name } catch { "" }) == $version_name } | first)
-    if $version_match != null {
-      let version_sources = (try { $version_match.overrides.sources } catch { {} })
-      if not ($version_sources | is-empty) {
-        return true
-      }
-    }
+  let versions = (try { $fragment.versions } catch { [] })
+  let version_match = ($versions | where {|v| (try { $v.name } catch { "" }) == $version_name } | first)
+  if $version_match == null {
+    return false
   }
-  false
+  let version_sources = (try { $version_match.overrides.sources } catch { {} })
+  not ($version_sources | is-empty)
 }
 
 def classify-version-origin [
