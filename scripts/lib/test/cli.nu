@@ -29,6 +29,7 @@ const suite_inventory = [
     {name: "tag-generation", desc: "Tag generation tests"}
     {name: "build-system",   desc: "Build system tests"}
     {name: "local-plane-build", desc: "Local-plane build tag/push suppression tests"}
+    {name: "effective-versions", desc: "Effective versions manifest merge tests"}
     {name: "defaults",       desc: "Default value tests"}
     {name: "pull",           desc: "Image pull tests"}
     {name: "validate",       desc: "Validation tests"}

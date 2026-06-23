@@ -536,7 +536,8 @@ def main [--verbose] {
         let expected_public = [
             "all"
             "architecture" "manifests" "services" "tls" "ssh" "tag-generation"
-            "build-system" "local-plane-build" "defaults" "pull" "validate" "registries" "ci"
+            "build-system" "local-plane-build" "effective-versions" "defaults" "pull"
+            "validate" "registries" "ci"
             "ghcr-purge" "docs-lint" "routed-smoke" "cache-shards"
             "orchestration" "dep-contract" "service-def-hash"
         ]
