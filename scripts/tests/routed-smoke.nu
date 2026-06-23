@@ -59,12 +59,20 @@ def seed-tracked-service [repo: string, name: string = "test-svc"] {
     { name: $name } | save -f ($repo | path join $"services/($name).nuon")
 }
 
-def seed-service-with-git-source [repo: string, name: string = "test-svc"] {
+def seed-service-with-git-source [
+    repo: string,
+    name: string = "test-svc",
+    fanout_capable: bool = false
+] {
     seed-tracked-service $repo $name
     mkdir ($repo | path join $"services/($name)")
+    mut version_entry = { name: "v1", overrides: {} }
+    if $fanout_capable {
+        $version_entry = ($version_entry | merge { latest: true, tags: ["extra"] })
+    }
     {
         default: "v1"
-        versions: [{ name: "v1", overrides: {} }]
+        versions: [$version_entry]
         defaults: {
             sources: {
                 my_src: {
@@ -93,6 +101,103 @@ def assert-routed-failure-names-contract [
             error make {msg: $"Contract '($contract)' failure must not mention '($needle)', got: ($combined)"}
         }
     }
+    true
+}
+
+def inspect-suppressed-tag-fanout [] {
+    [
+        "manifest-latest"
+        "cli-latest"
+        "extra-tag"
+        "publish"
+        "dependency-tag-fanout"
+        "dependency-push-fanout"
+    ]
+}
+
+def assert-single-primary-tag-state [cfg: record, service: string, version: string] {
+    let tag_state = $cfg.single_primary_tag_state
+    if not $tag_state.active {
+        error make {msg: "Expected single_primary_tag_state.active true on local plane"}
+    }
+    if $tag_state.policy != "single-primary-non-publish" {
+        error make {msg: $"Expected single-primary policy, got: ($tag_state.policy)"}
+    }
+    let expected_primary = $"($service):($version)"
+    if ($tag_state.primary_tag? | default "") != $expected_primary {
+        error make {msg: $"Expected primary_tag ($expected_primary), got: ($tag_state.primary_tag)"}
+    }
+    let expected_suppressed = (inspect-suppressed-tag-fanout)
+    for item in $expected_suppressed {
+        if not ($item in $tag_state.suppressed) {
+            error make {msg: $"Expected suppressed fan-out item '($item)' in single_primary_tag_state"}
+        }
+    }
+    if ($tag_state.suppressed | length) != ($expected_suppressed | length) {
+        error make {msg: $"Unexpected suppressed fan-out entries: ($tag_state.suppressed | to json)"}
+    }
+    true
+}
+
+def assert-inspect-semantic-baseline [
+    cfg: record,
+    repo: string,
+    service: string,
+    version: string,
+    fragment_present: bool,
+    mirror_path: string = ""
+] {
+    for required_key in [
+        plane service version tracked_service tracked_version local_root
+        local_fragment_present local_mirror_path env_only env_keys_used
+        source_origin precedence_summary single_primary_tag_state
+    ] {
+        if not ($required_key in ($cfg | columns)) {
+            error make {msg: $"Missing required inspect semantic key: ($required_key)"}
+        }
+    }
+
+    if $cfg.plane != "local" {
+        error make {msg: $"Expected plane 'local', got: ($cfg.plane)"}
+    }
+    if $cfg.service != $service {
+        error make {msg: $"Expected service '($service)', got: ($cfg.service)"}
+    }
+    if $cfg.version != $version {
+        error make {msg: $"Expected version '($version)', got: ($cfg.version)"}
+    }
+    if $cfg.tracked_service != $service {
+        error make {msg: $"Expected tracked_service '($service)', got: ($cfg.tracked_service)"}
+    }
+    if $cfg.tracked_version != $version {
+        error make {msg: $"Expected tracked_version '($version)', got: ($cfg.tracked_version)"}
+    }
+
+    let expected_local_root = (local-root-path $repo | path expand)
+    let actual_local_root = (try { $cfg.local_root | path expand } catch { "" })
+    if $actual_local_root != $expected_local_root {
+        error make {msg: $"Expected local_root ($expected_local_root), got: ($actual_local_root)"}
+    }
+
+    if $cfg.local_fragment_present != $fragment_present {
+        error make {msg: $"Expected local_fragment_present ($fragment_present), got: ($cfg.local_fragment_present)"}
+    }
+
+    let expected_mirror = (if ($mirror_path | str length) > 0 {
+        $mirror_path | path expand
+    } else {
+        ""
+    })
+    let actual_mirror = (if ($cfg.local_mirror_path | str length) > 0 {
+        $cfg.local_mirror_path | path expand
+    } else {
+        ""
+    })
+    if $actual_mirror != $expected_mirror {
+        error make {msg: $"Expected local_mirror_path '($expected_mirror)', got: '($actual_mirror)'"}
+    }
+
+    assert-single-primary-tag-state $cfg $service $version
     true
 }
 
@@ -431,7 +536,7 @@ def main [--verbose] {
         let expected_public = [
             "all"
             "architecture" "manifests" "services" "tls" "ssh" "tag-generation"
-            "build-system" "defaults" "pull" "validate" "registries" "ci"
+            "build-system" "local-plane-build" "defaults" "pull" "validate" "registries" "ci"
             "ghcr-purge" "docs-lint" "routed-smoke" "cache-shards"
             "orchestration" "dep-contract" "service-def-hash"
         ]
@@ -483,6 +588,39 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_smoke_local_empty_topology)
 
+    let test_smoke_local_baseline_inspect = (run-test "smoke: routed inspect effective-config baseline local-plane semantics" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo "test-svc" true
+        mkdir (local-root-path $repo)
+        let out = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
+        if $out.exit_code != 0 {
+            rm-temp-repo $repo
+            error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            rm-temp-repo $repo
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        assert-inspect-semantic-baseline $cfg $repo "test-svc" "v1" false ""
+        if $cfg.env_only {
+            error make {msg: "Baseline local inspect must not be classified as env_only"}
+        }
+        if ($cfg.env_keys_used | length) != 0 {
+            error make {msg: $"Expected empty env_keys_used for baseline local inspect, got: ($cfg.env_keys_used | to json)"}
+        }
+        if ($cfg.source_origin.my_src? | default "") != "tracked-git" {
+            error make {msg: $"Expected source_origin.my_src 'tracked-git', got: ($cfg.source_origin | to json)"}
+        }
+        if $cfg.precedence_summary != "tracked manifest" {
+            error make {msg: $"Expected precedence_summary 'tracked manifest', got: ($cfg.precedence_summary)"}
+        }
+        rm-temp-repo $repo
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_baseline_inspect)
+
     let test_smoke_local_env_materialization = (run-test "smoke: routed inspect effective-config env-only path materialization" {
         let repo = (make-temp-repo)
         seed-service-with-git-source $repo
@@ -495,7 +633,6 @@ def main [--verbose] {
             $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
             ^nu $entry inspect effective-config --service test-svc --plane local
         } | complete)
-        rm-temp-repo $repo
         if $out.exit_code != 0 {
             error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
         }
@@ -504,6 +641,7 @@ def main [--verbose] {
         } catch {
             error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
         })
+        assert-inspect-semantic-baseline $cfg $repo "test-svc" "v1" false ""
         let materialized = (try { $cfg.sources.my_src.path | path expand } catch { "" })
         if $materialized != $expected_path {
             error make {msg: $"Expected env-only path ($expected_path), got: ($materialized)"}
@@ -511,9 +649,68 @@ def main [--verbose] {
         if ("url" in ($cfg.sources.my_src | columns)) or ("ref" in ($cfg.sources.my_src | columns)) {
             error make {msg: "Env-only materialization must replace git fields with path only"}
         }
+        if not $cfg.env_only {
+            error make {msg: "Expected env_only true for env PATH materialization"}
+        }
+        if not ("MY_SRC_PATH" in $cfg.env_keys_used) {
+            error make {msg: $"Expected MY_SRC_PATH in env_keys_used, got: ($cfg.env_keys_used | to json)"}
+        }
+        if ($cfg.source_origin.my_src? | default "") != "env-only" {
+            error make {msg: $"Expected source_origin.my_src 'env-only', got: ($cfg.source_origin | to json)"}
+        }
+        if not ($cfg.precedence_summary | str contains "env PATH materialization") {
+            error make {msg: $"Expected precedence_summary to mention env PATH, got: ($cfg.precedence_summary)"}
+        }
+        rm-temp-repo $repo
         true
     } $verbose_flag)
     $results = ($results | append $test_smoke_local_env_materialization)
+
+    let test_smoke_local_fragment_semantics = (run-test "smoke: routed inspect effective-config fragment mirror semantics" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        mkdir ($repo | path join "fragment-src")
+        {
+            overrides: {
+                sources: {
+                    my_src: { path: "fragment-src" }
+                }
+            }
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let out = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
+        if $out.exit_code != 0 {
+            rm-temp-repo $repo
+            error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            rm-temp-repo $repo
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        assert-inspect-semantic-baseline $cfg $repo "test-svc" "v1" true $mirror
+        if $cfg.env_only {
+            error make {msg: "Fragment override must not be classified as env_only"}
+        }
+        if ($cfg.env_keys_used | length) != 0 {
+            error make {msg: $"Expected empty env_keys_used for fragment path, got: ($cfg.env_keys_used | to json)"}
+        }
+        if ($cfg.source_origin.my_src? | default "") != "fragment-local" {
+            error make {msg: $"Expected source_origin.my_src 'fragment-local', got: ($cfg.source_origin | to json)"}
+        }
+        if not ($cfg.precedence_summary | str contains "local fragment overrides") {
+            error make {msg: $"Expected precedence_summary to mention fragment overrides, got: ($cfg.precedence_summary)"}
+        }
+        if ($cfg.sources.my_src.path? | default "") != "fragment-src" {
+            error make {msg: $"Expected fragment path 'fragment-src', got: ($cfg.sources.my_src.path)"}
+        }
+        rm-temp-repo $repo
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_fragment_semantics)
 
     let test_smoke_local_bad_topology = (run-test "smoke: routed validate --plane local bad topology names unknown mirror contract" {
         let repo = (make-temp-repo)
