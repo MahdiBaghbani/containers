@@ -23,6 +23,7 @@ use ../lib/ci/deps.nu [get-direct-dependency-services get-all-dependency-service
 use ../lib/ci/workflow.nu [get-workflows-for-target]
 use ../lib/services/core.nu [list-service-names]
 use ../lib/build/dep-nodes.nu [get-dependency-node-candidates get-matching-dependency-shards]
+use ../lib/core/repo.nu [get-repo-root]
 use ./lib.nu [run-test print-test-summary]
 
 # Build dep_id -> service_name mapping from infra manifests (independent of library).
@@ -557,6 +558,45 @@ def main [--verbose] {
     true
   } $verbose)
   $results = ($results | append $test13)
+
+  # Test 14: tracked-only generators reject --plane local at routed entrypoints.
+  let entry = ((get-repo-root) | path join "scripts" "dockypody.nu")
+
+  let test14a = (run-test "tracked-only: build --matrix-json --plane local is rejected" {
+    let out = (^nu $entry build --service revad-base --matrix-json --plane local | complete)
+    if $out.exit_code == 0 {
+      error make {msg: "Expected build --matrix-json --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for matrix-json; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test14a)
+
+  let test14b = (run-test "tracked-only: ci workflow --plane local is rejected" {
+    let out = (^nu $entry ci workflow --target build --plane local --dry-run | complete)
+    if $out.exit_code == 0 {
+      error make {msg: "Expected ci workflow --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for ci workflow; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test14b)
+
+  let test14c = (run-test "tracked-only: ci ghcr-purge --plane local is rejected" {
+    let out = (^nu $entry ci ghcr-purge --plane local --dry-run | complete)
+    if $out.exit_code == 0 {
+      error make {msg: "Expected ci ghcr-purge --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for ci ghcr-purge; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test14c)
 
   print-test-summary $results
 

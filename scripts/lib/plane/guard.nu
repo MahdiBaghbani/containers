@@ -64,6 +64,15 @@ export def guard-local-plane-presence [repo_root?: string] {
   }
 }
 
+# Reject `--plane local` on tracked-only generator surfaces (matrix, workflow, SSOT tags).
+export def reject-local-plane-for-tracked-generator [plane: string, surface: string] {
+  if (parse-plane $plane) == $PLANE_LOCAL {
+    error make {
+      msg: $"--plane local is not supported for ($surface). This generator uses tracked manifests only."
+    }
+  }
+}
+
 # Route guard by plane; tracked plane is a no-op
 export def guard-plane [plane: string, repo_root?: string] {
   let resolved = (parse-plane $plane)

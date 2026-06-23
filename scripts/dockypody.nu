@@ -192,7 +192,7 @@ def main [
     "ci" => {
       # Default missing subcommand to "help"; ci-cli handles it internally.
       let subcmd = if $subcommand == null { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force $partial_success
+      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force $partial_success $plane
     }
     "docs" => {
       # Default missing subcommand to "help"; docs-cli handles it internally.
@@ -295,7 +295,8 @@ def run-ci-command [
   dry_run: bool,
   max_deletes: int,
   force: bool,
-  partial_success: bool
+  partial_success: bool,
+  plane: string
 ] {
   use ./lib/ci/cli.nu [ci-cli]
   ci-cli $subcommand {
@@ -311,7 +312,8 @@ def run-ci-command [
     dry_run: $dry_run,
     max_deletes: $max_deletes,
     force: $force,
-    partial_success: $partial_success
+    partial_success: $partial_success,
+    plane: $plane
   }
 }
 

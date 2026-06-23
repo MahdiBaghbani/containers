@@ -24,7 +24,7 @@ use ./config.nu [parse-bool-flag]
 use ./cache.nu [parse-dep-cache-mode]
 use ./pull.nu [parse-pull-modes]
 use ./orchestrate.nu [run-build]
-use ../plane/guard.nu [guard-plane parse-plane]
+use ../plane/guard.nu [guard-plane parse-plane reject-local-plane-for-tracked-generator]
 
 # Show build CLI help
 export def build-help [] {
@@ -97,6 +97,10 @@ export def build-cli [
   --plane: string = "tracked"
 ] {
   let plane = (parse-plane $plane)
+  let matrix_json_val = (parse-bool-flag ($matrix_json | default false))
+  if $matrix_json_val {
+    reject-local-plane-for-tracked-generator $plane "CI matrix JSON generation"
+  }
   let plane_ctx = (guard-plane $plane)
 
   # Detect build environment (local vs CI)
@@ -112,7 +116,6 @@ export def build-cli [
   let provenance_val = (parse-bool-flag ($provenance | default false))
   let all_versions_val = (parse-bool-flag ($all_versions | default false))
   let latest_only_val = (parse-bool-flag ($latest_only | default false))
-  let matrix_json_val = (parse-bool-flag ($matrix_json | default false))
   let no_cache_val = (parse-bool-flag ($no_cache | default false))
   let show_build_order_val = (parse-bool-flag ($show_build_order | default false))
   let push_deps_val = (parse-bool-flag ($push_deps | default false))

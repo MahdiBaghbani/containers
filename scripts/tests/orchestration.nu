@@ -194,6 +194,18 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $t6)
 
+    let t7 = (run-test "build --matrix-json --plane local: rejected as tracked-only surface" {
+        let out = (^nu $entry build --service revad-base --matrix-json --plane local | complete)
+        if $out.exit_code == 0 {
+            error make {msg: "Expected non-zero exit for --matrix-json with --plane local"}
+        }
+        if not ($out.stderr | str contains "--plane local is not supported") {
+            error make {msg: $"Expected tracked-only rejection in stderr, got: ($out.stderr)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t7)
+
     print-test-summary $results
 
     if ($results | any {|r| not $r}) {
