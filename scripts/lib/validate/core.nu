@@ -38,6 +38,7 @@ use ./ssh.nu [
 ]
 use ../plane/guard.nu [PLANE_LOCAL]
 use ../plane/effective-config.nu [apply-local-plane-effective-sources]
+use ../plane/versions.nu [load-effective-versions-manifest]
 
 # Re-export for backwards compatibility
 export use ./paths.nu [validate-local-path]
@@ -1263,7 +1264,11 @@ def validate-service-merged-configs [
   has_platforms: bool,
   plane_ctx: any = null
 ] {
-  use ../manifest/core.nu [load-versions-manifest apply-version-defaults]
+  use ../manifest/core.nu [
+    check-versions-manifest-exists
+    load-versions-manifest
+    apply-version-defaults
+  ]
   use ../platforms/core.nu [load-platforms-manifest get-platform-names get-platform-spec merge-platform-config merge-version-overrides]
 
   mut errors = []
@@ -1275,7 +1280,20 @@ def validate-service-merged-configs [
     return {valid: true, errors: [], warnings: []}
   }
 
-  let manifest = (try { load-versions-manifest $service } catch { null })
+  let is_local_plane = $plane_ctx != null and (try { $plane_ctx.plane } catch { "" }) == $PLANE_LOCAL
+  let manifest = (if $is_local_plane {
+    if not (check-versions-manifest-exists $service) {
+      null
+    } else {
+      try {
+        load-effective-versions-manifest $service $plane_ctx
+      } catch {|err|
+        return {valid: false, errors: [$err.msg], warnings: []}
+      }
+    }
+  } else {
+    try { load-versions-manifest $service } catch { null }
+  })
   if $manifest == null {
     return {valid: true, errors: [], warnings: []}
   }

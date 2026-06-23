@@ -31,10 +31,12 @@ use ../platforms/core.nu [
 use ../plane/guard.nu [PLANE_LOCAL PLANE_TRACKED]
 use ../plane/presence.nu [local-root-path local-services-path]
 use ../plane/effective-config.nu [load-local-fragment]
+use ../plane/versions.nu [load-effective-versions-manifest]
 
 export def resolve-inspect-version-spec [
   service: string,
-  version: string
+  version: string,
+  plane_ctx: any = null
 ] {
   if not (check-versions-manifest-exists $service) {
     error make {
@@ -42,7 +44,16 @@ export def resolve-inspect-version-spec [
     }
   }
 
-  let manifest = (load-versions-manifest $service)
+  let plane = (if $plane_ctx != null {
+    try { $plane_ctx.plane } catch { $PLANE_TRACKED }
+  } else {
+    $PLANE_TRACKED
+  })
+  let manifest = (if $plane == $PLANE_LOCAL {
+    load-effective-versions-manifest $service $plane_ctx
+  } else {
+    load-versions-manifest $service
+  })
   let version_name = (if ($version | str length) > 0 {
     $version
   } else {
@@ -130,12 +141,73 @@ def build-source-origin [
   })
 }
 
-def build-precedence-summary [plane: string, env_keys_used: list<string>, fragment_present: bool] {
+def has-fragment-source-overrides [fragment: any, version_name: string] {
+  if $fragment == null {
+    return false
+  }
+  let top_sources = (try { $fragment.overrides.sources } catch { {} })
+  if not ($top_sources | is-empty) {
+    return true
+  }
+  if ($version_name | str length) > 0 and ("versions" in ($fragment | columns)) {
+    let versions = (try { $fragment.versions } catch { [] })
+    let version_match = ($versions | where {|v| (try { $v.name } catch { "" }) == $version_name } | first)
+    if $version_match != null {
+      let version_sources = (try { $version_match.overrides.sources } catch { {} })
+      if not ($version_sources | is-empty) {
+        return true
+      }
+    }
+  }
+  false
+}
+
+def classify-version-origin [
+  plane: string,
+  version_name: string,
+  fragment: any,
+  tracked_manifest: record
+] {
+  if $plane != $PLANE_LOCAL or $fragment == null {
+    return "tracked"
+  }
+  let tracked_names = (
+    try { $tracked_manifest.versions } catch { [] }
+    | each {|v| (try { $v.name } catch { "" })}
+  )
+  let fragment_names = (
+    try { $fragment.versions } catch { [] }
+    | each {|v| (try { $v.name } catch { "" })}
+  )
+  if not ($version_name in $fragment_names) {
+    return "tracked"
+  }
+  if $version_name in $tracked_names {
+    "local-replace"
+  } else {
+    "local-only"
+  }
+}
+
+def build-precedence-summary [
+  plane: string,
+  env_keys_used: list<string>,
+  version_origin: string,
+  has_fragment_source_overrides: bool
+] {
   if $plane != $PLANE_LOCAL {
     return "tracked manifest only"
   }
-  mut parts = ["tracked manifest"]
-  if $fragment_present {
+  mut parts = (if $version_origin == "local-only" {
+    ["local-only version"]
+  } else {
+    mut base = ["tracked manifest"]
+    if $version_origin == "local-replace" {
+      $base = ($base | append "local version (replace)")
+    }
+    $base
+  })
+  if $has_fragment_source_overrides {
     $parts = ($parts | append "local fragment overrides")
   }
   if ($env_keys_used | length) > 0 {
@@ -195,6 +267,13 @@ def build-inspect-semantic-record [
     null
   })
   let local_fragment_present = $fragment != null
+  let tracked_manifest = (if $plane == $PLANE_LOCAL {
+    load-versions-manifest $service
+  } else {
+    {}
+  })
+  let version_origin = (classify-version-origin $plane $version_name $fragment $tracked_manifest)
+  let has_fragment_source_overrides = (has-fragment-source-overrides $fragment $version_name)
   let fragment_keys = (if $fragment == null { [] } else { fragment-source-keys $fragment $version_name })
 
   let local_mirror_path = (if $plane == $PLANE_LOCAL {
@@ -231,7 +310,7 @@ def build-inspect-semantic-record [
     env_only: $env_only
     env_keys_used: $env_keys_used
     source_origin: (build-source-origin $sources $env_keys_used $fragment_keys)
-    precedence_summary: (build-precedence-summary $plane $env_keys_used $local_fragment_present)
+    precedence_summary: (build-precedence-summary $plane $env_keys_used $version_origin $has_fragment_source_overrides)
     single_primary_tag_state: (build-single-primary-tag-state $plane $service $version_spec $platform $default_platform)
   }
 }
@@ -243,7 +322,7 @@ export def inspect-effective-config [
   version: string = "",
   platform: string = ""
 ] {
-  let version_spec = (resolve-inspect-version-spec $service $version)
+  let version_spec = (resolve-inspect-version-spec $service $version $plane_ctx)
   let has_platforms = (check-platforms-manifest-exists $service)
   let platforms_manifest = (if $has_platforms { load-platforms-manifest $service } else { null })
 
