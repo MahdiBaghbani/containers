@@ -33,6 +33,18 @@ Version manifests are stored as `.nuon` files in service directories:
 
 For the authoritative schema file, see [`schemas/versions.nuon`](../../schemas/versions.nuon).
 
+## JSONC Compatibility Requirement
+
+All DockyPody `versions.nuon` files, including off-git local-plane fragments
+under `.dockypody.local/services/<service>/versions.nuon`, MUST be authored in
+JSONC-style form for IDE and linter readability.
+
+- All keys MUST be quoted strings
+- Trailing commas are allowed
+- Comments are allowed
+- All string values MUST be quoted
+- Do not use bare keys or native NUON table syntax for manifest files
+
 ## Top-Level Fields
 
 | Field | Type | Required | Description |

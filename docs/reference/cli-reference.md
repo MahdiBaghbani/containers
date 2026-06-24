@@ -313,6 +313,8 @@ nu scripts/dockypody.nu build --service gaia --plane local
 - If a service mirror directory exists, it must contain `versions.nuon`;
   an empty mirror hard-errors ("Incomplete local service mirror").
 - Local fragments use the same `versions: [...]` schema as tracked manifests.
+- Local fragments use the same JSONC-style authoring rules as tracked
+  manifests. Do not use bare keys or NUON table syntax.
   Same-name versions are fully replaced; new names are appended. Local-only
   services and additive source ids are forbidden.
 - Service discovery still uses tracked `services/*.nuon` only.

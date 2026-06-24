@@ -70,6 +70,8 @@ root.
 - Path: `.dockypody.local/services/<service>/versions.nuon`
 - Schema: same `versions: [...]` shape as tracked
   `services/<service>/versions.nuon`
+- Authoring: same JSONC-style rules as tracked manifests. Use quoted keys and
+  string values; do not use bare keys or NUON table syntax.
 - Same-name collision: a local version fully replaces the tracked version
   (whole-version replace)
 - New local version names are appended to the tracked version list
