@@ -198,6 +198,16 @@ mkdir -p .dockypody.local/services/opencloudmesh-go
 Save the fragment as
 `.dockypody.local/services/opencloudmesh-go/versions.nuon`:
 
+Use the same JSONC-style rules here as tracked manifests: quoted keys, quoted
+string values, and normal object entries in `"versions"`. Do not save compact
+NUON table output such as:
+
+```nuon
+{versions: [[name, latest, overrides]; [dev, false, {sources: {ocm_go: {path: "../opencloudmesh-go"}}}]]}
+```
+
+Use this JSONC-style form instead:
+
 ```nuon
 {
   "versions": [
