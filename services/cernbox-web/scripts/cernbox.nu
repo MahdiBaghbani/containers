@@ -173,12 +173,4 @@ def main [] {
         let idp_pattern = "your-idp.org:your-idp-port"
         ^sed -i $"s|($idp_pattern)|($idp_host_port)|g" $config_dest
     }
-    
-    # Replace mesh directory endpoint in built JS files
-    let meshdir_original = "sciencemesh.cesnet.cz/iop"
-    let meshdir_replacement = (try { $env.MESHDIR_DOMAIN } catch { "meshdir.docker" })
-    let find_result = (^find /var/www/web -name "web-app-science*.mjs" -type f 2>/dev/null | complete)
-    if $find_result.exit_code == 0 and ($find_result.stdout | str trim | str length) > 0 {
-        ^find /var/www/web -name "web-app-science*.mjs" -type f -exec sed -i $"s|($meshdir_original)|($meshdir_replacement)|g" {} \;
-    }
 }
