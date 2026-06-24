@@ -29,7 +29,10 @@ const CONFIG_DIR = "/configs/revad"
 # Initialize dataprovider configuration for the specified type
 # Copies config template, processes placeholders, and sets up TLS based on environment
 # Preserves existing config files to allow user modifications
-export def init_dataprovider [dataprovider_type: string] {
+export def init_dataprovider [
+  dataprovider_type: string
+  --source-config-dir: string = $CONFIG_DIR
+] {
   print $"Initializing dataprovider configuration for type: ($dataprovider_type)"
   
   # Validate that dataprovider type is one of the supported types
@@ -42,8 +45,8 @@ export def init_dataprovider [dataprovider_type: string] {
   # Get config directory from environment (default: /etc/revad)
   let revad_config_dir = (get_env_or_default "REVAD_CONFIG_DIR" "/etc/revad")
   
-  if not ($CONFIG_DIR | path exists) { 
-    error make {msg: $"Config dir not found: ($CONFIG_DIR)"} 
+  if not ($source_config_dir | path exists) { 
+    error make {msg: $"Config dir not found: ($source_config_dir)"} 
   }
   
   create_directory $revad_config_dir
@@ -59,14 +62,14 @@ export def init_dataprovider [dataprovider_type: string] {
     print $"Dataprovider config not found - copying and templating from image..."
     
     # Copy dataprovider config template
-    let source_config = $"($CONFIG_DIR)/($config_file)"
+    let source_config = $"($source_config_dir)/($config_file)"
     if not ($source_config | path exists) {
       error make { msg: $"Dataprovider config template not found: ($source_config)" }
     }
     ^cp $source_config $config_path
     
     # Copy all JSON files (users, groups, providers, etc.) if needed by dataprovider config
-    copy_json_files $CONFIG_DIR $revad_config_dir
+    copy_json_files $source_config_dir $revad_config_dir
   } else {
     print $"Dataprovider config found - will process placeholders..."
   }
@@ -98,7 +101,7 @@ export def init_dataprovider [dataprovider_type: string] {
   # Get gateway address for gRPC communication
   # Dataproviders need to communicate with gateway via gRPC for storage registry
   let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
-  let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "19000")
+  let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   
   # Get shared configuration variables
