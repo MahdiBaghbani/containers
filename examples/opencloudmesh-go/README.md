@@ -18,6 +18,9 @@ mkdir -p .dockypody.local/services/opencloudmesh-go
 
 2. Add a versions fragment (git-ignored; sample only):
 
+Write it in the same JSONC-style form as tracked manifests. Do not save compact
+Nushell `to nuon` output or NUON table syntax for this file.
+
 ```nuon
 {
   "versions": [
