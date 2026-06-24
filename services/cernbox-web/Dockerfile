@@ -70,6 +70,7 @@ ARG CACHEBUST="default"
 ARG WEB_EXTENSIONS_URL=https://github.com/cernbox/web-extensions
 ARG WEB_EXTENSIONS_REF=main
 ARG PNPM_RETRY_COUNT="10"
+ARG WEB_EXT_SKIP="codimd,data-repositories,draw-io,ms-tracing"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=cernbox-web-web-git-${CACHEBUST:-${WEB_REF}},target=/src/web-git-cache,sharing=shared \
@@ -126,7 +127,14 @@ WORKDIR /build
 RUN --mount=type=cache,id=cernbox-web-web-extensions-git-${CACHEBUST:-${WEB_EXTENSIONS_REF}},target=/src/web-extensions-git-cache,sharing=shared \
     mkdir -p /src/web-extensions-git-cache && \
     if [ ! -d /src/web-extensions-git-cache/.git ]; then \
+    if echo "${WEB_EXTENSIONS_REF}" | grep -Eq '^[0-9a-fA-F]{40}$'; then \
+    git -C /src/web-extensions-git-cache init && \
+    git -C /src/web-extensions-git-cache remote add origin "${WEB_EXTENSIONS_URL}" && \
+    git -C /src/web-extensions-git-cache fetch --depth 1 origin "${WEB_EXTENSIONS_REF}" && \
+    git -C /src/web-extensions-git-cache checkout FETCH_HEAD; \
+    else \
     git clone --depth 1 --branch "${WEB_EXTENSIONS_REF}" ${WEB_EXTENSIONS_URL} /src/web-extensions-git-cache; \
+    fi; \
     fi && \
     cp -a /src/web-extensions-git-cache/. /build/web-extensions
 
@@ -138,7 +146,7 @@ COPY --chmod=755 ./scripts/build-extensions.nu /usr/local/bin/build-extensions.n
 # Build all packages with retry logic and BuildKit cache mount
 RUN --mount=type=cache,id=cernbox-web-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
     --mount=type=cache,id=cernbox-web-pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
-    nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_RETRY_COUNT
+    nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_RETRY_COUNT --skip "$WEB_EXT_SKIP"
 
 ###############################
 ###   Common Tools Runtime  ###
