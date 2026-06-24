@@ -1,3 +1,6 @@
+# Dev-only CERNBox example stack. Validates the master-band Reva + web flow
+# (OCM share creation, webapp protocol negotiation, open remotely). No
+# production variant in this example.
 name: cernbox-1-test
 
 networks:
@@ -65,6 +68,8 @@ services:
       WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
       IDP_DOMAIN: "${IDP_HOST}"
       IDP_URL: "${IDP_URL}"
+      # Backend ScienceMesh mesh_directory_url only (revad-base init-gateway.nu).
+      # Not used by cernbox-web; the removed frontend JS rewrite path is gone.
       MESHDIR_DOMAIN: "${MESHDIR_DOMAIN:-meshdir.docker}"
       MESHDIR_URL: "${MESHDIR_URL:-}"
       OCM_DIRECTORY_SERVICE_URLS: "${OCM_DIRECTORY_SERVICE_URLS:-}"

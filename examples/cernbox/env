@@ -1,7 +1,12 @@
+# Dev-only CERNBox example stack (no production variant in this example).
+#
 # Image versions for this example stack.
+# - cernbox-revad: master-development (Reva master band, development platform)
+# - cernbox-web: master (default tracked web lane; web-extensions pin in
+#   services/cernbox-web/versions.nuon)
 # Override locally if you need older milestone tags or experimental branches.
 IMAGE_CERNBOX_REVAD=master-development
-IMAGE_CERNBOX_WEB=v1.0.13
+IMAGE_CERNBOX_WEB=master
 IMAGE_IDP=v26.4.2
 
 # CERNBox Settings
@@ -113,7 +118,9 @@ REVAD_JWT_SECRET=reva-secret
 # Optional: OCM shares JSON file path (default: /var/tmp/reva/shares.json)
 # REVAD_OCMSHARES_JSON_FILE=/var/tmp/reva/shares.json
 
-# Optional: Mesh Directory configuration (for ScienceMesh)
+# Optional: Mesh Directory configuration for the Reva gateway only.
+# Consumed by revad-base init-gateway.nu as mesh_directory_url in ScienceMesh
+# config. Not passed to cernbox-web; no frontend JS rewrite is involved.
 # MESHDIR_DOMAIN=meshdir.docker
 # MESHDIR_URL=https://meshdir.docker/meshdir
 
