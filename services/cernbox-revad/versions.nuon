@@ -34,7 +34,7 @@
   "versions": [
     {
       "name": "master",
-      "latest": true,
+      "latest": false,
       "overrides": {
         "sources": {
           "revad": {
@@ -53,6 +53,36 @@
             "dependencies": {
               "revad-base": {
                 "version": "master-development"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "v3.10.1",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "revad": {
+            "ref": "v3.10.1"
+          },
+          "revad_plugins": {
+            "ref": "39c4d38a5761629473fe553524f4c2bbb27c0b1b"
+          }
+        },
+        "platforms": {
+          "production": {
+            "dependencies": {
+              "revad-base": {
+                "version": "v3.10.1-production"
+              }
+            }
+          },
+          "development": {
+            "dependencies": {
+              "revad-base": {
+                "version": "v3.10.1-development"
               }
             }
           }
