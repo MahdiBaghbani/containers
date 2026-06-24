@@ -17,8 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Unit tests for merge-partials.nu functions
-# Tests partial configuration merge functionality
+# Unit tests for merge-partials.nu and resolve-configs.nu
 
 use ../scripts/lib/merge-partials.nu [
   parse_partial_file,
@@ -28,6 +27,39 @@ use ../scripts/lib/merge-partials.nu [
   merge_partial_with_marker,
   merge_partial_without_marker
 ]
+
+use ../scripts/lib/resolve-configs.nu [resolve_configs]
+
+const SERVICE_ROOT = (path self | path dirname | path join '..' | path expand)
+
+const GATEWAY_ENABLE_CODE_FLOW_CORE = "enable_code_flow = {{placeholder:enable-code-flow:false}}"
+const GATEWAY_ENABLE_CODE_FLOW_MASTER = "enable_code_flow = true"
+const SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE = 'webapp_template = "{{placeholder:external-reva-endpoint}}/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"'
+const SHAREPROVIDERS_WEBAPP_ENDPOINT_MASTER = 'webapp_endpoint = "{{placeholder:external-reva-endpoint}}/external/sciencemesh"'
+const SHAREPROVIDERS_PROVIDER_DOMAIN = 'provider_domain = "{{placeholder:provider-domain}}"'
+const SHAREPROVIDERS_WEBDAV_ENDPOINT = 'webdav_endpoint = "{{placeholder:external-reva-endpoint}}"'
+
+def extract_assignment_line [content: string, key: string] {
+  $content
+  | lines
+  | where {|line|
+      let trimmed = ($line | str trim)
+      ($trimmed | str starts-with $"($key) =") or ($trimmed | str starts-with $"($key)=")
+    }
+  | first
+}
+
+def normalize_gateway_overlay_contract [content: string] {
+  $content
+  | str replace -a $GATEWAY_ENABLE_CODE_FLOW_CORE "ENABLE_CODE_FLOW_SLOT"
+  | str replace -a $GATEWAY_ENABLE_CODE_FLOW_MASTER "ENABLE_CODE_FLOW_SLOT"
+}
+
+def normalize_shareproviders_overlay_contract [content: string] {
+  $content
+  | str replace -a $SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE "WEBAPP_SLOT"
+  | str replace -a $SHAREPROVIDERS_WEBAPP_ENDPOINT_MASTER "WEBAPP_SLOT"
+}
 
 mut tests_passed = 0
 mut tests_failed = 0
@@ -254,9 +286,250 @@ value = 3"
   return false
 }
 
+def test_resolve_configs_missing_core_dir [] {
+  print "Testing resolve_configs missing core dir..."
+
+  let dest = "/tmp/test-resolve-configs-missing-core"
+  rm -rf $dest
+
+  let result = (try {
+    resolve_configs "/nonexistent/core/dir" "/tmp/overlays" "master" $dest
+    false
+  } catch {|err|
+    ($err.msg | str contains "Core config directory not found")
+  })
+
+  if $result {
+    print "  [PASS] resolve_configs missing core dir: PASSED (error as expected)"
+    return true
+  } else {
+    print "  [FAIL] resolve_configs missing core dir: FAILED (should have errored)"
+    return false
+  }
+}
+
+def test_resolve_configs_unknown_band [] {
+  print "Testing resolve_configs unknown band errors..."
+
+  let root = $SERVICE_ROOT
+  let core_dir = ($root | path join "configs")
+  let overlays_root = ($root | path join "configs-overlays")
+  let dest = "/tmp/test-resolve-configs-unknown-band"
+  rm -rf $dest
+
+  let result = (try {
+    resolve_configs $core_dir $overlays_root "not-a-real-band" $dest
+    false
+  } catch {|err|
+    ($err.msg | str contains "Unknown or missing config overlay band")
+  })
+
+  rm -rf $dest
+
+  if $result {
+    print "  [PASS] resolve_configs unknown band: PASSED (error as expected)"
+    return true
+  } else {
+    print "  [FAIL] resolve_configs unknown band: FAILED (should have errored)"
+    return false
+  }
+}
+
+def test_resolve_configs_empty_band [] {
+  print "Testing resolve_configs empty band errors..."
+
+  let root = $SERVICE_ROOT
+  let core_dir = ($root | path join "configs")
+  let overlays_root = ($root | path join "configs-overlays")
+  let dest = "/tmp/test-resolve-configs-empty-band"
+  rm -rf $dest
+
+  let result = (try {
+    resolve_configs $core_dir $overlays_root "" $dest
+    false
+  } catch {|err|
+    ($err.msg | str contains "must not be empty")
+  })
+
+  rm -rf $dest
+
+  if $result {
+    print "  [PASS] resolve_configs empty band: PASSED (error as expected)"
+    return true
+  } else {
+    print "  [FAIL] resolve_configs empty band: FAILED (should have errored)"
+    return false
+  }
+}
+
+def test_overlay_gateway_contract [] {
+  print "Testing master gateway overlay contract (pinned diffs only)..."
+
+  let root = $SERVICE_ROOT
+  let core_path = ($root | path join "configs" "gateway.toml")
+  let overlay_path = ($root | path join "configs-overlays" "master" "gateway.toml")
+
+  let core = (open --raw $core_path)
+  let overlay = (open --raw $overlay_path)
+  let normalized_core = (normalize_gateway_overlay_contract $core)
+  let normalized_overlay = (normalize_gateway_overlay_contract $overlay)
+
+  if $normalized_core != $normalized_overlay {
+    print "  [FAIL] master gateway overlay contract: FAILED (unexpected drift)"
+    return false
+  }
+
+  let core_line = (extract_assignment_line $core "enable_code_flow")
+  let overlay_line = (extract_assignment_line $overlay "enable_code_flow")
+  let diff_ok = ($core_line == $GATEWAY_ENABLE_CODE_FLOW_CORE) and ($overlay_line == $GATEWAY_ENABLE_CODE_FLOW_MASTER)
+
+  if $diff_ok {
+    print "  [PASS] master gateway overlay contract: PASSED"
+    return true
+  } else {
+    print "  [FAIL] master gateway overlay contract: FAILED (allowed diff changed)"
+    return false
+  }
+}
+
+def test_overlay_shareproviders_contract [] {
+  print "Testing master shareproviders overlay contract (pinned diffs only)..."
+
+  let root = $SERVICE_ROOT
+  let core_path = ($root | path join "configs" "shareproviders.toml")
+  let overlay_path = ($root | path join "configs-overlays" "master" "shareproviders.toml")
+
+  let core = (open --raw $core_path)
+  let overlay = (open --raw $overlay_path)
+  let normalized_core = (normalize_shareproviders_overlay_contract $core)
+  let normalized_overlay = (normalize_shareproviders_overlay_contract $overlay)
+
+  if $normalized_core != $normalized_overlay {
+    print "  [FAIL] master shareproviders overlay contract: FAILED (unexpected drift)"
+    return false
+  }
+
+  let core_has_template = ((extract_assignment_line $core "webapp_template") == $SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE)
+  let overlay_has_endpoint = ((extract_assignment_line $overlay "webapp_endpoint") == $SHAREPROVIDERS_WEBAPP_ENDPOINT_MASTER)
+  let preserved = (
+    (extract_assignment_line $core "provider_domain") == $SHAREPROVIDERS_PROVIDER_DOMAIN
+    and (extract_assignment_line $overlay "provider_domain") == $SHAREPROVIDERS_PROVIDER_DOMAIN
+    and (extract_assignment_line $core "webdav_endpoint") == $SHAREPROVIDERS_WEBDAV_ENDPOINT
+    and (extract_assignment_line $overlay "webdav_endpoint") == $SHAREPROVIDERS_WEBDAV_ENDPOINT
+  )
+
+  if $core_has_template and $overlay_has_endpoint and $preserved {
+    print "  [PASS] master shareproviders overlay contract: PASSED"
+    return true
+  } else {
+    print "  [FAIL] master shareproviders overlay contract: FAILED (allowed diff changed)"
+    return false
+  }
+}
+
+def test_resolve_configs_v3_10_1_core_only [] {
+  print "Testing resolve_configs v3.10.1 band uses core only..."
+
+  let root = $SERVICE_ROOT
+  let core_dir = ($root | path join "configs")
+  let overlays_root = ($root | path join "configs-overlays")
+  let dest = "/tmp/test-resolve-configs-v3-10-1"
+  rm -rf $dest
+
+  resolve_configs $core_dir $overlays_root "v3.10.1" $dest
+
+  let shareproviders = (open --raw ($dest | path join "shareproviders.toml"))
+  let gateway = (open --raw ($dest | path join "gateway.toml"))
+  let core_groupuserproviders = (open --raw ($core_dir | path join "groupuserproviders.toml"))
+  let resolved_groupuserproviders = (open --raw ($dest | path join "groupuserproviders.toml"))
+
+  let share_ok = (
+    (extract_assignment_line $shareproviders "webapp_template") == $SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE
+    and (extract_assignment_line $shareproviders "webapp_endpoint" | is-empty)
+    and (extract_assignment_line $shareproviders "provider_domain") == $SHAREPROVIDERS_PROVIDER_DOMAIN
+    and (extract_assignment_line $shareproviders "webdav_endpoint") == $SHAREPROVIDERS_WEBDAV_ENDPOINT
+  )
+  let gateway_ok = (
+    (extract_assignment_line $gateway "enable_code_flow") == $GATEWAY_ENABLE_CODE_FLOW_CORE
+    and (extract_assignment_line $gateway "enable_webapp") == "enable_webapp = true"
+  )
+  let copied_ok = $core_groupuserproviders == $resolved_groupuserproviders
+
+  rm -rf $dest
+
+  if $share_ok and $gateway_ok and $copied_ok {
+    print "  [PASS] resolve_configs v3.10.1 core only: PASSED"
+    return true
+  } else {
+    print "  [FAIL] resolve_configs v3.10.1 core only: FAILED"
+    return false
+  }
+}
+
+def test_resolve_configs_master_shareproviders_webapp_endpoint [] {
+  print "Testing resolve_configs master band shareproviders overlay..."
+
+  let root = $SERVICE_ROOT
+  let core_dir = ($root | path join "configs")
+  let overlays_root = ($root | path join "configs-overlays")
+  let dest = "/tmp/test-resolve-configs-master-shareproviders"
+  rm -rf $dest
+
+  resolve_configs $core_dir $overlays_root "master" $dest
+
+  let shareproviders = (open --raw ($dest | path join "shareproviders.toml"))
+  let ok = (
+    (extract_assignment_line $shareproviders "webapp_endpoint") == $SHAREPROVIDERS_WEBAPP_ENDPOINT_MASTER
+    and (extract_assignment_line $shareproviders "webapp_template" | is-empty)
+    and (extract_assignment_line $shareproviders "provider_domain") == $SHAREPROVIDERS_PROVIDER_DOMAIN
+    and (extract_assignment_line $shareproviders "webdav_endpoint") == $SHAREPROVIDERS_WEBDAV_ENDPOINT
+  )
+
+  rm -rf $dest
+
+  if $ok {
+    print "  [PASS] resolve_configs master shareproviders: PASSED"
+    return true
+  } else {
+    print "  [FAIL] resolve_configs master shareproviders: FAILED"
+    return false
+  }
+}
+
+def test_resolve_configs_master_gateway_enable_code_flow [] {
+  print "Testing resolve_configs master band gateway overlay..."
+
+  let root = $SERVICE_ROOT
+  let core_dir = ($root | path join "configs")
+  let overlays_root = ($root | path join "configs-overlays")
+  let dest = "/tmp/test-resolve-configs-master-gateway"
+  rm -rf $dest
+
+  resolve_configs $core_dir $overlays_root "master" $dest
+
+  let gateway = (open --raw ($dest | path join "gateway.toml"))
+  let core_groupuserproviders = (open --raw ($core_dir | path join "groupuserproviders.toml"))
+  let resolved_groupuserproviders = (open --raw ($dest | path join "groupuserproviders.toml"))
+  let ok = (
+    (extract_assignment_line $gateway "enable_code_flow") == $GATEWAY_ENABLE_CODE_FLOW_MASTER
+    and (extract_assignment_line $gateway "enable_webapp") == "enable_webapp = true"
+    and $core_groupuserproviders == $resolved_groupuserproviders
+  )
+
+  rm -rf $dest
+
+  if $ok {
+    print "  [PASS] resolve_configs master gateway: PASSED"
+    return true
+  } else {
+    print "  [FAIL] resolve_configs master gateway: FAILED"
+    return false
+  }
+}
+
 # Main test runner
 def main [--verbose] {
-  print "Running merge-partials.nu tests...\n"
+  print "Running merge-partials.nu and resolve-configs.nu tests...\n"
   
   mut results = []
   
@@ -267,7 +540,15 @@ def main [--verbose] {
   $results = ($results | append (test_merge_partial_with_marker))
   $results = ($results | append (test_merge_partial_without_marker))
   $results = ($results | append (test_find_partials_for_target))
-  
+  $results = ($results | append (test_resolve_configs_missing_core_dir))
+  $results = ($results | append (test_resolve_configs_unknown_band))
+  $results = ($results | append (test_resolve_configs_empty_band))
+  $results = ($results | append (test_overlay_gateway_contract))
+  $results = ($results | append (test_overlay_shareproviders_contract))
+  $results = ($results | append (test_resolve_configs_v3_10_1_core_only))
+  $results = ($results | append (test_resolve_configs_master_shareproviders_webapp_endpoint))
+  $results = ($results | append (test_resolve_configs_master_gateway_enable_code_flow))
+
   let passed = ($results | where $it == true | length)
   let failed = ($results | where $it == false | length)
   

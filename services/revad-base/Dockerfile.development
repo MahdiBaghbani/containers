@@ -32,6 +32,9 @@ ARG SSH_DEFAULT_USER="root"
 ARG SSH_PORT="22"
 ARG SSH_LISTEN="0.0.0.0"
 
+ARG REVAD_REF="master"
+ARG REVA_CONFIG_BAND="master"
+
 ################################
 ###  Build Reva from source  ###
 ################################
@@ -59,12 +62,13 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /
 
 ARG REVAD_URL="https://github.com/cs3org/reva"
-ARG REVAD_REF="v3.3.3"
+ARG REVAD_REF
 ARG REVAD_SHA=""
 ARG REVAD_PATH=""
 ARG REVAD_MODE=""
 ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
+ARG REVA_CONFIG_BAND
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=revad-base-revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
@@ -124,6 +128,7 @@ ARG TLS_MODE
 ARG TLS_CERT_NAME
 ARG TLS_CA_NAME
 ARG COMMON_TOOLS_IMAGE
+ARG REVA_CONFIG_BAND
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=common-tools-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
@@ -179,7 +184,8 @@ RUN mkdir -p /etc/revad /revad /var/run /var/tmp/reva && \
 
 COPY --chmod=755 --from=compress /tmp/binaries/revad /revad-git/cmd/revad
 
-COPY ./configs /configs/revad
+COPY ./configs /tmp/revad-core
+COPY ./configs-overlays /tmp/configs-overlays
 
 COPY ./configs/partial /tmp/revad-partials
 RUN if [ -d /tmp/revad-partials ] && [ -n "$(find /tmp/revad-partials -name '*.toml' 2>/dev/null)" ]; then \
@@ -195,6 +201,9 @@ RUN mkdir -p /usr/bin/lib && \
     cp -r /tmp/scripts/lib/* /usr/bin/lib/ && \
     find /tmp/scripts -maxdepth 1 -type f \( -name '*.nu' -o -name '*.sh' \) -exec cp {} /usr/bin/ \; && \
     rm -rf /tmp/scripts
+
+RUN nu -c "use /usr/bin/lib/resolve-configs.nu [resolve_configs]; resolve_configs '/tmp/revad-core' '/tmp/configs-overlays' '$REVA_CONFIG_BAND' '/configs/revad'" && \
+    rm -rf /tmp/revad-core /tmp/configs-overlays
 
 RUN if [ -d /configs/partial ] && [ -n "$(find /configs/partial -name '*.toml' 2>/dev/null)" ]; then \
     nu -c "use /usr/bin/lib/merge-partials.nu [merge_partial_configs_build]; merge_partial_configs_build '/configs/revad' '/configs/partial'"; \
