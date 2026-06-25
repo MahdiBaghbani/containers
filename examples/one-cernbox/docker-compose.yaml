@@ -1,55 +1,51 @@
 # Dev-only CERNBox example stack. Validates the master-band Reva + web flow
 # (OCM share creation, webapp protocol negotiation, open remotely). No
 # production variant in this example.
-name: cernbox-1-test
+name: one-cernbox
 
 networks:
-  traefik-net:
-    external: true
+  one-cernbox-net:
+    name: one-cernbox-net
 
 services:
-  cernbox-1-test-idp:
+  one-cernbox-idp:
     image: "idp:${IMAGE_IDP}"
-    container_name: cernbox-1-test-idp
+    container_name: one-cernbox-idp
     restart: "unless-stopped"
+    cap_add:
+      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.2
+      one-cernbox-net:
+        aliases:
+          - idp.docker
     environment:
-      KC_PROXY_HEADERS: "xforwarded"
-      KC_HTTP_ENABLED: "true"
-      KC_HOSTNAME: "${IDP_URL}"
-      KC_HOSTNAME_ADMIN: "${IDP_URL}"
       KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
       KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
+      KC_PROXY_HEADERS: "xforwarded"
+      KC_HOSTNAME: "${IDP_URL}"
+      KC_HOSTNAME_ADMIN: "${IDP_URL}"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_PORT: "${IDP_PORT:-443}"
+      KC_HTTPS_CERTIFICATE_FILE: "/tls/idp.crt"
+      KC_HTTPS_CERTIFICATE_KEY_FILE: "/tls/idp.key"
+      IDP_DOMAIN: "${IDP_DOMAIN}"
+      IDP_URL: "${IDP_URL}"
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
       # - "${PWD}/volumes/data/idp:/opt/keycloak/data"
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.cernbox-1-test-idp-redirect.entrypoints=http"
-      - "traefik.http.routers.cernbox-1-test-idp-redirect.rule=Host(`${IDP_DOMAIN}`)"
-      - "traefik.http.routers.cernbox-1-test-idp-redirect.middlewares=force-https@file"
-      - "traefik.http.routers.cernbox-1-test-idp-redirect.service=noop@internal"
-      - "traefik.http.routers.cernbox-1-test-idp.entrypoints=https"
-      - "traefik.http.routers.cernbox-1-test-idp.rule=Host(`${IDP_DOMAIN}`)"
-      - "traefik.http.routers.cernbox-1-test-idp.tls.certResolver=letsencrypt-cloudflare-global"
-      - "traefik.http.services.cernbox-1-test-idp.loadbalancer.server.port=8080"
 
-  # Gateway container - handles all HTTP services (ocdav, ocs, appprovider, etc.)
-  cernbox-1-test-revad-gateway:
+  # Gateway container - handles HTTP services (ocdav, ocs, appprovider, etc.)
+  one-cernbox-1-revad-gateway:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-gateway
+    container_name: one-cernbox-1-revad-gateway
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.3
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "gateway"
       DOMAIN: "${REVAD_DOMAIN}"
@@ -66,7 +62,7 @@ services:
       REVAD_OCMSHARES_JSON_FILE: "${REVAD_OCMSHARES_JSON_FILE:-/var/tmp/reva/shares.json}"
       WEB_DOMAIN: "${CERNBOX_DOMAIN}"
       WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
-      IDP_DOMAIN: "${IDP_HOST}"
+      IDP_DOMAIN: "${IDP_DOMAIN}"
       IDP_URL: "${IDP_URL}"
       # Backend ScienceMesh mesh_directory_url only (revad-base init-gateway.nu).
       # Not used by cernbox-web; the removed frontend JS rewrite path is gone.
@@ -100,7 +96,7 @@ services:
       REVAD_GROUPUSERPROVIDERS_HOST: "${REVAD_GROUPUSERPROVIDERS_HOST}"
       REVAD_GROUPUSERPROVIDERS_GRPC_PORT: "${REVAD_GROUPUSERPROVIDERS_GRPC_PORT}"
     depends_on:
-      cernbox-1-test-idp:
+      one-cernbox-idp:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -108,23 +104,21 @@ services:
       - "${PWD}/volumes/config/reva-gateway:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # OIDC auth provider container
-  cernbox-1-test-revad-authprovider-oidc:
+  one-cernbox-1-revad-authprovider-oidc:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-authprovider-oidc
+    container_name: one-cernbox-1-revad-authprovider-oidc
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.4
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "authprovider-oidc"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_AUTHPROVIDER_OIDC_HOST: "cernbox-1-test-revad-authprovider-oidc"
+      REVAD_AUTHPROVIDER_OIDC_HOST: "${REVAD_AUTHPROVIDER_OIDC_HOST}"
       REVAD_AUTHPROVIDER_OIDC_GRPC_PORT: "${REVAD_AUTHPROVIDER_OIDC_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -134,7 +128,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
       IDP_URL: "${IDP_URL}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -142,23 +136,21 @@ services:
       - "${PWD}/volumes/config/reva-authprovider-oidc:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # Machine auth provider container
-  cernbox-1-test-revad-authprovider-machine:
+  one-cernbox-1-revad-authprovider-machine:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-authprovider-machine
+    container_name: one-cernbox-1-revad-authprovider-machine
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.5
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "authprovider-machine"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_AUTHPROVIDER_MACHINE_HOST: "cernbox-1-test-revad-authprovider-machine"
+      REVAD_AUTHPROVIDER_MACHINE_HOST: "${REVAD_AUTHPROVIDER_MACHINE_HOST}"
       REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT: "${REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -167,7 +159,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -175,23 +167,21 @@ services:
       - "${PWD}/volumes/config/reva-authprovider-machine:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # OCM Shares auth provider container
-  cernbox-1-test-revad-authprovider-ocmshares:
+  one-cernbox-1-revad-authprovider-ocmshares:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-authprovider-ocmshares
+    container_name: one-cernbox-1-revad-authprovider-ocmshares
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.6
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "authprovider-ocmshares"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_AUTHPROVIDER_OCMSHARES_HOST: "cernbox-1-test-revad-authprovider-ocmshares"
+      REVAD_AUTHPROVIDER_OCMSHARES_HOST: "${REVAD_AUTHPROVIDER_OCMSHARES_HOST}"
       REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -200,7 +190,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -208,23 +198,21 @@ services:
       - "${PWD}/volumes/config/reva-authprovider-ocmshares:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # OCM Share Code auth provider container (validates exchange codes for /ocm/token)
-  cernbox-1-test-revad-authprovider-ocmsharecode:
+  one-cernbox-1-revad-authprovider-ocmsharecode:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-authprovider-ocmsharecode
+    container_name: one-cernbox-1-revad-authprovider-ocmsharecode
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.14
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "authprovider-ocmsharecode"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "cernbox-1-test-revad-authprovider-ocmsharecode"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "${REVAD_AUTHPROVIDER_OCMSHARECODE_HOST}"
       REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -233,7 +221,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -241,23 +229,21 @@ services:
       - "${PWD}/volumes/config/reva-authprovider-ocmsharecode:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # OCM Exchanged Token auth provider container (validates exchanged JWTs for DAV access)
-  cernbox-1-test-revad-authprovider-ocmexchangedtoken:
+  one-cernbox-1-revad-authprovider-ocmexchangedtoken:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-authprovider-ocmexchangedtoken
+    container_name: one-cernbox-1-revad-authprovider-ocmexchangedtoken
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.15
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "authprovider-ocmexchangedtoken"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "cernbox-1-test-revad-authprovider-ocmexchangedtoken"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST}"
       REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -266,7 +252,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -274,23 +260,21 @@ services:
       - "${PWD}/volumes/config/reva-authprovider-ocmexchangedtoken:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # Public Shares auth provider container
-  cernbox-1-test-revad-authprovider-publicshares:
+  one-cernbox-1-revad-authprovider-publicshares:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-authprovider-publicshares
+    container_name: one-cernbox-1-revad-authprovider-publicshares
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.7
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "authprovider-publicshares"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_AUTHPROVIDER_PUBLICSHARES_HOST: "cernbox-1-test-revad-authprovider-publicshares"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_HOST: "${REVAD_AUTHPROVIDER_PUBLICSHARES_HOST}"
       REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -299,7 +283,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -307,23 +291,21 @@ services:
       - "${PWD}/volumes/config/reva-authprovider-publicshares:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # Share providers container
-  cernbox-1-test-revad-shareproviders:
+  one-cernbox-1-revad-shareproviders:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-shareproviders
+    container_name: one-cernbox-1-revad-shareproviders
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.8
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "shareproviders"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_SHAREPROVIDERS_HOST: "cernbox-1-test-revad-shareproviders"
+      REVAD_SHAREPROVIDERS_HOST: "${REVAD_SHAREPROVIDERS_HOST}"
       REVAD_SHAREPROVIDERS_GRPC_PORT: "${REVAD_SHAREPROVIDERS_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -335,7 +317,7 @@ services:
       WEB_DOMAIN: "${CERNBOX_DOMAIN}"
       WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -343,23 +325,21 @@ services:
       - "${PWD}/volumes/config/reva-shareproviders:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # User/Group providers container
-  cernbox-1-test-revad-groupuserproviders:
+  one-cernbox-1-revad-groupuserproviders:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-groupuserproviders
+    container_name: one-cernbox-1-revad-groupuserproviders
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.9
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "groupuserproviders"
       DOMAIN: "${REVAD_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
       REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
       REVAD_PORT: "${REVAD_PORT:-80}"
-      REVAD_GROUPUSERPROVIDERS_HOST: "cernbox-1-test-revad-groupuserproviders"
+      REVAD_GROUPUSERPROVIDERS_HOST: "${REVAD_GROUPUSERPROVIDERS_HOST}"
       REVAD_GROUPUSERPROVIDERS_GRPC_PORT: "${REVAD_GROUPUSERPROVIDERS_GRPC_PORT}"
       REVAD_GATEWAY_HOST: "${REVAD_GATEWAY_HOST}"
       REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
@@ -368,7 +348,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -376,16 +356,14 @@ services:
       - "${PWD}/volumes/config/reva-groupuserproviders:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # Localhome dataprovider container
-  cernbox-1-test-revad-dataprovider-localhome:
+  one-cernbox-1-revad-dataprovider-localhome:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-dataprovider-localhome
+    container_name: one-cernbox-1-revad-dataprovider-localhome
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.10
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "dataprovider-localhome"
       DOMAIN: "${REVAD_DOMAIN}"
@@ -403,7 +381,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -412,16 +390,14 @@ services:
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
       # - "${PWD}/volumes/data/reva/localhome:/revalocalstorage"
 
-  # OCM dataprovider container
-  cernbox-1-test-revad-dataprovider-ocm:
+  one-cernbox-1-revad-dataprovider-ocm:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-dataprovider-ocm
+    container_name: one-cernbox-1-revad-dataprovider-ocm
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.11
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "dataprovider-ocm"
       DOMAIN: "${REVAD_DOMAIN}"
@@ -439,7 +415,7 @@ services:
       REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -447,16 +423,14 @@ services:
       - "${PWD}/volumes/config/reva-dataprovider-ocm:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  # ScienceMesh dataprovider container
-  cernbox-1-test-revad-dataprovider-sciencemesh:
+  one-cernbox-1-revad-dataprovider-sciencemesh:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
-    container_name: cernbox-1-test-revad-dataprovider-sciencemesh
+    container_name: one-cernbox-1-revad-dataprovider-sciencemesh
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.12
+      - one-cernbox-net
     environment:
       REVAD_CONTAINER_MODE: "dataprovider-sciencemesh"
       DOMAIN: "${REVAD_DOMAIN}"
@@ -476,7 +450,7 @@ services:
       OCM_TIMEOUT: "${OCM_TIMEOUT:-10}"
       OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-false}"
     depends_on:
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
@@ -484,15 +458,16 @@ services:
       - "${PWD}/volumes/config/reva-dataprovider-sciencemesh:/etc/revad"
       - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 
-  cernbox-1-test-web:
+  one-cernbox-1-web:
     image: "cernbox-web:${IMAGE_CERNBOX_WEB}"
-    container_name: cernbox-1-test-web
+    container_name: one-cernbox-1-web
     restart: "unless-stopped"
     security_opt:
       - no-new-privileges:true
     networks:
-      traefik-net:
-        ipv4_address: 172.16.85.13
+      one-cernbox-net:
+        aliases:
+          - cernbox1.docker
     environment:
       CERNBOX_WEB_HOSTNAME: "${CERNBOX_DOMAIN}"
       REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
@@ -504,29 +479,41 @@ services:
       WEB_DOMAIN: "${CERNBOX_DOMAIN}"
       WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
       WEB_TLS_ENABLED: "${WEB_TLS_ENABLED:-false}"
+      TLS_CRT: "/tls/cernbox.crt"
+      TLS_KEY: "/tls/cernbox.key"
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "${PWD}/volumes/data/cernbox-web:/var/www"
     depends_on:
-      cernbox-1-test-idp:
+      one-cernbox-idp:
         condition: service_started
-      cernbox-1-test-revad-gateway:
+      one-cernbox-1-revad-gateway:
         condition: service_started
-      cernbox-1-test-revad-dataprovider-localhome:
+      one-cernbox-1-revad-dataprovider-localhome:
         condition: service_started
-      cernbox-1-test-revad-dataprovider-ocm:
+      one-cernbox-1-revad-dataprovider-ocm:
         condition: service_started
-      cernbox-1-test-revad-dataprovider-sciencemesh:
+      one-cernbox-1-revad-dataprovider-sciencemesh:
         condition: service_started
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-net"
-      - "traefik.http.routers.cernbox-redirect.entrypoints=http"
-      - "traefik.http.routers.cernbox-redirect.rule=Host(`${CERNBOX_DOMAIN}`)"
-      - "traefik.http.routers.cernbox-redirect.middlewares=force-https@file"
-      - "traefik.http.routers.cernbox-redirect.service=noop@internal"
-      - "traefik.http.routers.cernbox.entrypoints=https"
-      - "traefik.http.routers.cernbox.rule=Host(`${CERNBOX_DOMAIN}`)"
-      - "traefik.http.routers.cernbox.tls.certResolver=letsencrypt-cloudflare-global"
-      - "traefik.http.services.cernbox.loadbalancer.server.port=80"
+
+  one-cernbox-firefox:
+    image: "${FIREFOX_IMAGE:-firefox:v150.0.0}"
+    container_name: one-cernbox-firefox.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    networks:
+      one-cernbox-net:
+        aliases:
+          - one-cernbox-firefox.docker
+    ports:
+      - "${FIREFOX_UI_PORT:-5802}:6901"
+    environment:
+      OCM_FIREFOX_START_URL: "${FIREFOX_START_URL:-https://cernbox1.docker/}"
+    depends_on:
+      one-cernbox-idp:
+        condition: service_started
+      one-cernbox-1-web:
+        condition: service_started
