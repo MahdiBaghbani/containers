@@ -4,7 +4,12 @@ This document describes the configuration system, placeholder processing, and co
 
 ## Configuration Files
 
-Configuration files are TOML format and located in `/configs/revad` (image) and `/etc/revad` (runtime).
+Configuration files are TOML format. Development images (`Dockerfile.development`)
+hold resolved templates in `/configs/revad` (image) and process them to
+`/etc/revad` (runtime). Production images (`Dockerfile.production`) create
+the empty `/etc/revad` directory layout in the image but do not copy resolved
+configs into it; runtime configs come from host volume mounts or from volumes
+pre-populated by development containers.
 
 ### Configuration File Names
 
@@ -144,10 +149,36 @@ OCM_CLIENT_INSECURE=false
 
 ## Configuration Directory Structure
 
-### Image Structure
+### Source Layout (Build Time)
+
+Maintainer config sources live under the service tree, not directly in the
+image path:
 
 ```text
-/configs/revad/          # Source templates (image)
+services/revad-base/
+├── configs/                    # Core templates (all bands)
+│   ├── gateway.toml
+│   ├── shareproviders.toml
+│   └── ...
+└── configs-overlays/
+    └── master/                 # Band-specific whole-file overlays
+        ├── gateway.toml
+        └── shareproviders.toml
+```
+
+During the development image build, `resolve_configs` copies core top-level
+files into `/configs/revad`, then replaces same-named files from
+`configs-overlays/<band>` when that band directory exists. Build-time
+partials merge afterward (see below).
+
+### Image Structure
+
+Development images only (`Dockerfile.development`). Production images
+(`Dockerfile.production`) ship an empty `/etc/revad` tree only; populated
+configs arrive at runtime via volume mounts (see Runtime Structure).
+
+```text
+/configs/revad/          # Resolved templates (development image)
 ├── gateway.toml
 ├── dataprovider-localhome.toml
 ├── dataprovider-ocm.toml
@@ -201,9 +232,50 @@ volumes:
   - "${PWD}/volumes/data/reva/jsons:/var/tmp/reva"
 ```
 
+## Config Band Resolver
+
+Version and structural differences between Reva release lines are handled
+during the development image build by the config band resolver, not by
+partials.
+
+### Model
+
+During the development image build, `resolve_configs` (see
+`services/revad-base/scripts/lib/resolve-configs.nu`) implements:
+
+1. Copy every top-level file from `configs/` (core) into the destination.
+2. If `configs-overlays/<band>` exists, copy same-named overlay files over
+   the core copies (whole-file replacement, not field merge).
+3. **Empty band string** (`""`): error `Config overlay band must not be
+   empty`.
+4. **Core-only band** (listed in `CORE_ONLY_BANDS`, currently `v3.10.1`)
+   with no overlay directory: allowed; core files only.
+5. **Any other band** with no overlay directory: error
+   `Unknown or missing config overlay band: <band> ...`.
+
+The development image build arg `REVA_CONFIG_BAND` selects the band.
+`versions.nuon` sets it per published `revad-base` version (`master` or
+`v3.10.1`). Production image builds do not invoke `resolve_configs`.
+
+### Example: master vs v3.10.1
+
+Core `shareproviders.toml` uses `webapp_template`. The `master` overlay
+replaces that file with `webapp_endpoint` instead. The `v3.10.1` band has no
+overlay directory, so it keeps `webapp_template` from core.
+
+Core `gateway.toml` already sets `enable_webapp = true` and
+`enable_code_flow` via a placeholder defaulting to `false`. The `master`
+overlay replaces that file with `enable_code_flow = true`; `enable_webapp`
+stays `true` in both bands.
+
+Use `configs/` plus `configs-overlays/<band>/` for structural drift between
+Reva versions. Do not encode version-band differences as partials.
+
 ## Partial Configuration System
 
-Partial configs allow you to extend base configurations without duplicating entire files. This is useful for adding services or modifying specific sections while keeping base configs intact.
+Partials are an append-only layering mechanism for adding sections to an
+already-resolved config. They are not the path for version or band structural
+differences; those go through the band resolver above.
 
 ### Overview
 
@@ -217,10 +289,12 @@ Partial configs are TOML files that contain:
 **Build-Time Partials**:
 
 - Location: `services/{name}/configs/partial/*.toml`
-- Merged during Dockerfile build
-- Baked into image at `/configs/revad/`
+- Merged during Dockerfile build, after band resolution
+- Baked into development image at `/configs/revad/` (`Dockerfile.development`
+  only; production images use `/etc/revad`)
 - No markers (content directly merged)
-- Use case: Maintainer adds features to base service
+- Use case: Service-specific append-only extensions (for example CERNBox
+  extras on top of resolved `revad-base` configs)
 
 **Runtime Partials**:
 
@@ -281,7 +355,7 @@ On restart, old marked sections are removed before fresh partials are re-merged.
 
 ### Example
 
-**Partial file** (`configs/partial/thumbnails.toml`):
+**Partial file** (`services/cernbox-revad/configs/partial/thumbnails.toml`):
 
 ```toml
 [target]
@@ -305,6 +379,7 @@ For complete documentation on partial configs:
 
 ## Related Documentation
 
+- [Architecture](architecture.md) - Build tuple and config bands
 - [Initialization](initialization.md) - Initialization process and config processing
 - [Development Workflow](development-workflow.md) - Development -> production workflow
 - [Container Modes](container-modes.md) - Container mode system

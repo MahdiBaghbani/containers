@@ -48,7 +48,22 @@ Partial configs allow you to:
 - **Extend base configs** without duplicating entire configuration files
 - **Add services** (e.g., thumbnail service) to existing configs
 - **Maintain separation** between base configs and service-specific additions
-- **Support both maintainers and end users** (build-time and runtime partials)
+- **Support both downstream service authors and end users** (build-time and
+  runtime partials)
+
+## What Partials Are Not For
+
+Partials append content to an existing target file. They do not replace whole
+files and they do not switch fields between Reva version lines.
+
+**Version and band structural differences** (for example `webapp_template` in
+core vs `webapp_endpoint` on the `master` overlay) are resolved during the
+development image build by `resolve_configs`: core files from `configs/` plus
+whole-file overlays from `configs-overlays/<band>/`. See
+[configuration.md](configuration.md#config-band-resolver).
+
+Use partials only for append-only layering on top of the already-resolved
+config set.
 
 ## File Structure
 
@@ -110,18 +125,21 @@ Given these partials for `gateway.toml`:
 
 ## Build-Time vs Runtime Partials
 
-### Build-Time Partials (Maintainers)
+### Build-Time Partials (Downstream Service Authors)
 
 **Location**: `services/{name}/configs/partial/*.toml`
 
-**When**: Merged during Dockerfile build
+**When**: Merged during Dockerfile build, after band resolution
 
-**Use Case**: Maintainers adding features to base services
+**Use Case**: Downstream services (for example `cernbox-revad`) append
+service-specific sections on top of resolved `revad-base` configs without
+duplicating whole files
 
-**Example**: CERNBox maintainer adds thumbnail service to `revad-base`
+**Example**: `cernbox-revad` adds a thumbnail service on top of resolved
+`revad-base` output
 
 ```toml
-# services/revad-base/configs/partial/thumbnails.toml
+# services/cernbox-revad/configs/partial/thumbnails.toml
 [target]
 file = "gateway.toml"
 order = 1
@@ -130,7 +148,8 @@ order = 1
 cache = "lru"
 ```
 
-**Result**: Merged into image at `/configs/revad/gateway.toml` during build
+**Result**: Merged into development image at `/configs/revad/gateway.toml`
+during build (`Dockerfile.development` only)
 
 ### Runtime Partials (End Users)
 
@@ -284,6 +303,7 @@ Partials are merged in mode-specific initialization scripts:
 
 ## See Also
 
-- [Configuration System](configuration.md) - Reva configuration system overview
+- [Configuration System](configuration.md) - Band resolver and partial overview
+- [Architecture](architecture.md) - reva + reva-plugins + revad-base tuple
 - [Schema File](../schemas/partial-config.nuon) - Authoritative schema definition
 - [CERNBox Partials](../../cernbox-revad/docs/configuration.md#partial-configurations) - CERNBox-specific partials

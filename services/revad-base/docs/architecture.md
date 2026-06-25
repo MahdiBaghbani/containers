@@ -2,6 +2,36 @@
 
 This document describes the generic Reva service architecture and multi-container deployment patterns.
 
+## Build Tuple and Config Bands
+
+DockyPody images for CERNBox-style stacks are built from a version-aligned
+tuple:
+
+- **reva** (`revad` source ref, for example `master` or `v3.10.1`)
+- **reva-plugins** (CERNBox plugin tree; pinned per release band)
+- **revad-base** (generic Reva configs, init scripts, and image layers)
+
+`revad-base` publishes `master` and `v3.10.1` image versions. Downstream
+services such as `cernbox-revad` depend on matching `revad-base` platform
+tags (for example `v3.10.1-production`) and matching source refs.
+
+During the development image build (`Dockerfile.development`), config shape
+is selected by the `REVA_CONFIG_BAND` build arg via `resolve_configs`,
+writing resolved templates to `/configs/revad`. Production image builds do
+not invoke `resolve_configs` and ship no config templates; production
+containers read pre-processed configs from `/etc/revad` volumes populated by
+development containers. See [Development Workflow](development-workflow.md).
+Neither image type re-runs band resolution at runtime.
+
+| Band      | Overlay dir              | Typical use                          |
+|-----------|--------------------------|--------------------------------------|
+| `master`  | `configs-overlays/master`| Latest Reva line; overlay replaces   |
+|           |                          | core files (e.g. `webapp_endpoint`)  |
+| `v3.10.1` | none (core-only)         | Released line; core `configs/` only  |
+
+The legacy `v3.3.3` version line is no longer published. Use `v3.10.1` for
+the stable release band or `master` for the development line.
+
 ## Architecture Overview
 
 Reva services can be deployed in a microservices architecture pattern, with services split across multiple containers for isolation, scalability, and maintainability.
