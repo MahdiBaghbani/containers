@@ -1,0 +1,1032 @@
+# Dev-only two-cernbox example stack. Validates a two-node CERNBox sender /
+# receiver flow on one local Docker network. No production variant in this
+# example.
+name: two-cernbox
+
+networks:
+  two-cernbox-net:
+    name: two-cernbox-net
+
+services:
+  mitm:
+    image: "${MITMPROXY_IMAGE:-mitmproxy:v12.2.2}"
+    container_name: mitmproxy.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      two-cernbox-net:
+        aliases:
+          - mitmproxy.docker
+    environment:
+      MITM_UI: "true"
+      MITM_UI_SERVER_NAME: "mitmproxy.docker"
+      MITM_UI_TLS_TERMINATION: "true"
+      MITM_UI_TLS_CRT: "/tls/mitmproxy.crt"
+      MITM_UI_TLS_KEY: "/tls/mitmproxy.key"
+      MITM_CA_NAME: "${MITM_CA_NAME:-dockypody}"
+
+  two-cernbox-idp:
+    image: "idp:${IMAGE_IDP}"
+    container_name: two-cernbox-idp
+    restart: "unless-stopped"
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      two-cernbox-net:
+        aliases:
+          - idp.docker
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"
+      KC_PROXY_HEADERS: "xforwarded"
+      KC_HOSTNAME: "${IDP_URL}"
+      KC_HOSTNAME_ADMIN: "${IDP_URL}"
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_PORT: "${IDP_PORT:-443}"
+      KC_HTTPS_CERTIFICATE_FILE: "/tls/idp.crt"
+      KC_HTTPS_CERTIFICATE_KEY_FILE: "/tls/idp.key"
+      IDP_DOMAIN: "${IDP_DOMAIN}"
+      IDP_URL: "${IDP_URL}"
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      # - "${PWD}/volumes/data/idp:/opt/keycloak/data"
+
+  # Gateway container - handles HTTP services (ocdav, ocs, appprovider, etc.)
+  two-cernbox-1-revad-gateway:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-gateway
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "gateway"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_PORT: "${REVAD_GATEWAY_PORT}"
+      REVAD_GATEWAY_PROTOCOL: "${REVAD_GATEWAY_PROTOCOL:-http}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_OCMSHARES_JSON_FILE: "${REVAD_OCMSHARES_JSON_FILE:-/var/tmp/reva/shares.json}"
+      WEB_DOMAIN: "${CERNBOX1_DOMAIN}"
+      WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
+      IDP_DOMAIN: "${IDP_DOMAIN}"
+      IDP_URL: "${IDP_URL}"
+      MESHDIR_DOMAIN: "${MESHDIR_DOMAIN:-meshdir.docker}"
+      MESHDIR_URL: "${MESHDIR_URL:-}"
+      OCM_DIRECTORY_SERVICE_URLS: "${OCM_DIRECTORY_SERVICE_URLS:-}"
+      RCLONE_ENDPOINT: "${RCLONE_ENDPOINT:-http://rclone.docker}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      REVAD_DATAPROVIDER_LOCALHOME_HOST: "${CERNBOX1_REVAD_DATAPROVIDER_LOCALHOME_HOST}"
+      REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT: "${REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT}"
+      REVAD_DATAPROVIDER_OCM_HOST: "${CERNBOX1_REVAD_DATAPROVIDER_OCM_HOST}"
+      REVAD_DATAPROVIDER_OCM_GRPC_PORT: "${REVAD_DATAPROVIDER_OCM_GRPC_PORT}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_HOST: "${CERNBOX1_REVAD_DATAPROVIDER_SCIENCEMESH_HOST}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT: "${REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OIDC_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OIDC_HOST}"
+      REVAD_AUTHPROVIDER_OIDC_GRPC_PORT: "${REVAD_AUTHPROVIDER_OIDC_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_MACHINE_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_MACHINE_HOST}"
+      REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT: "${REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMSHARES_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OCMSHARES_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OCMSHARECODE_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_PUBLICSHARES_HOST}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT}"
+      OCM_ENABLE_CODE_FLOW: "${OCM_ENABLE_CODE_FLOW:-false}"
+      OCM_TIMEOUT: "${OCM_TIMEOUT:-10}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      REVAD_SHAREPROVIDERS_HOST: "${CERNBOX1_REVAD_SHAREPROVIDERS_HOST}"
+      REVAD_SHAREPROVIDERS_GRPC_PORT: "${REVAD_SHAREPROVIDERS_GRPC_PORT}"
+      REVAD_GROUPUSERPROVIDERS_HOST: "${CERNBOX1_REVAD_GROUPUSERPROVIDERS_HOST}"
+      REVAD_GROUPUSERPROVIDERS_GRPC_PORT: "${REVAD_GROUPUSERPROVIDERS_GRPC_PORT}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX1_NO_PROXY}"
+    depends_on:
+      two-cernbox-idp:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-gateway:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-authprovider-oidc:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-authprovider-oidc
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-oidc"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OIDC_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OIDC_HOST}"
+      REVAD_AUTHPROVIDER_OIDC_GRPC_PORT: "${REVAD_AUTHPROVIDER_OIDC_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      IDP_URL: "${IDP_URL}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-authprovider-oidc:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-authprovider-machine:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-authprovider-machine
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-machine"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_MACHINE_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_MACHINE_HOST}"
+      REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT: "${REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-authprovider-machine:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-authprovider-ocmshares:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-authprovider-ocmshares
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmshares"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMSHARES_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OCMSHARES_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-authprovider-ocmshares:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-authprovider-ocmsharecode:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-authprovider-ocmsharecode
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmsharecode"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OCMSHARECODE_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-authprovider-ocmsharecode:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-authprovider-ocmexchangedtoken:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-authprovider-ocmexchangedtoken
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmexchangedtoken"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-authprovider-ocmexchangedtoken:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-authprovider-publicshares:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-authprovider-publicshares
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-publicshares"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_HOST: "${CERNBOX1_REVAD_AUTHPROVIDER_PUBLICSHARES_HOST}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-authprovider-publicshares:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-shareproviders:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-shareproviders
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "shareproviders"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_SHAREPROVIDERS_HOST: "${CERNBOX1_REVAD_SHAREPROVIDERS_HOST}"
+      REVAD_SHAREPROVIDERS_GRPC_PORT: "${REVAD_SHAREPROVIDERS_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      REVAD_OCMSHARES_JSON_FILE: "${REVAD_OCMSHARES_JSON_FILE:-/var/tmp/reva/shares.json}"
+      WEB_DOMAIN: "${CERNBOX1_DOMAIN}"
+      WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX1_NO_PROXY}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-shareproviders:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-groupuserproviders:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-groupuserproviders
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "groupuserproviders"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_GROUPUSERPROVIDERS_HOST: "${CERNBOX1_REVAD_GROUPUSERPROVIDERS_HOST}"
+      REVAD_GROUPUSERPROVIDERS_GRPC_PORT: "${REVAD_GROUPUSERPROVIDERS_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-groupuserproviders:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-dataprovider-localhome:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-dataprovider-localhome
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "dataprovider-localhome"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_DATAPROVIDER_LOCALHOME_HOST: "${CERNBOX1_REVAD_DATAPROVIDER_LOCALHOME_HOST}"
+      REVAD_DATAPROVIDER_LOCALHOME_PORT: "${REVAD_DATAPROVIDER_LOCALHOME_PORT}"
+      REVAD_DATAPROVIDER_LOCALHOME_PROTOCOL: "${REVAD_DATAPROVIDER_LOCALHOME_PROTOCOL:-http}"
+      REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT: "${REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-dataprovider-localhome:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+      # - "${PWD}/volumes/cernbox1/data/reva/localhome:/revalocalstorage"
+
+  two-cernbox-1-revad-dataprovider-ocm:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-dataprovider-ocm
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "dataprovider-ocm"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_DATAPROVIDER_OCM_HOST: "${CERNBOX1_REVAD_DATAPROVIDER_OCM_HOST}"
+      REVAD_DATAPROVIDER_OCM_PORT: "${REVAD_DATAPROVIDER_OCM_PORT}"
+      REVAD_DATAPROVIDER_OCM_PROTOCOL: "${REVAD_DATAPROVIDER_OCM_PROTOCOL:-http}"
+      REVAD_DATAPROVIDER_OCM_GRPC_PORT: "${REVAD_DATAPROVIDER_OCM_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX1_NO_PROXY}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-dataprovider-ocm:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-revad-dataprovider-sciencemesh:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-1-revad-dataprovider-sciencemesh
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "dataprovider-sciencemesh"
+      DOMAIN: "${CERNBOX1_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_HOST: "${CERNBOX1_REVAD_DATAPROVIDER_SCIENCEMESH_HOST}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_PORT: "${REVAD_DATAPROVIDER_SCIENCEMESH_PORT}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_PROTOCOL: "${REVAD_DATAPROVIDER_SCIENCEMESH_PROTOCOL:-http}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT: "${REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      OCM_TIMEOUT: "${OCM_TIMEOUT:-10}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX1_NO_PROXY}"
+    depends_on:
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/config/reva-dataprovider-sciencemesh:/etc/revad"
+      - "${PWD}/volumes/cernbox1/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-1-web:
+    image: "cernbox-web:${IMAGE_CERNBOX_WEB}"
+    container_name: two-cernbox-1-web
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      two-cernbox-net:
+        aliases:
+          - cernbox1.docker
+    environment:
+      CERNBOX_WEB_HOSTNAME: "${CERNBOX1_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_GATEWAY_HOST: "${CERNBOX1_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_PORT: "${REVAD_GATEWAY_PORT}"
+      IDP_URL: "${IDP_URL}"
+      WEB_DOMAIN: "${CERNBOX1_DOMAIN}"
+      WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
+      WEB_TLS_ENABLED: "${WEB_TLS_ENABLED:-false}"
+      TLS_CRT: "/tls/cernbox.crt"
+      TLS_KEY: "/tls/cernbox.key"
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox1/data/cernbox-web:/var/www"
+    depends_on:
+      two-cernbox-idp:
+        condition: service_started
+      two-cernbox-1-revad-gateway:
+        condition: service_started
+      two-cernbox-1-revad-dataprovider-localhome:
+        condition: service_started
+      two-cernbox-1-revad-dataprovider-ocm:
+        condition: service_started
+      two-cernbox-1-revad-dataprovider-sciencemesh:
+        condition: service_started
+
+  two-cernbox-2-revad-gateway:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-gateway
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "gateway"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_PORT: "${REVAD_GATEWAY_PORT}"
+      REVAD_GATEWAY_PROTOCOL: "${REVAD_GATEWAY_PROTOCOL:-http}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_OCMSHARES_JSON_FILE: "${REVAD_OCMSHARES_JSON_FILE:-/var/tmp/reva/shares.json}"
+      WEB_DOMAIN: "${CERNBOX2_DOMAIN}"
+      WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
+      IDP_DOMAIN: "${IDP_DOMAIN}"
+      IDP_URL: "${IDP_URL}"
+      MESHDIR_DOMAIN: "${MESHDIR_DOMAIN:-meshdir.docker}"
+      MESHDIR_URL: "${MESHDIR_URL:-}"
+      OCM_DIRECTORY_SERVICE_URLS: "${OCM_DIRECTORY_SERVICE_URLS:-}"
+      RCLONE_ENDPOINT: "${RCLONE_ENDPOINT:-http://rclone.docker}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      REVAD_DATAPROVIDER_LOCALHOME_HOST: "${CERNBOX2_REVAD_DATAPROVIDER_LOCALHOME_HOST}"
+      REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT: "${REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT}"
+      REVAD_DATAPROVIDER_OCM_HOST: "${CERNBOX2_REVAD_DATAPROVIDER_OCM_HOST}"
+      REVAD_DATAPROVIDER_OCM_GRPC_PORT: "${REVAD_DATAPROVIDER_OCM_GRPC_PORT}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_HOST: "${CERNBOX2_REVAD_DATAPROVIDER_SCIENCEMESH_HOST}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT: "${REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OIDC_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OIDC_HOST}"
+      REVAD_AUTHPROVIDER_OIDC_GRPC_PORT: "${REVAD_AUTHPROVIDER_OIDC_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_MACHINE_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_MACHINE_HOST}"
+      REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT: "${REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMSHARES_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OCMSHARES_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OCMSHARECODE_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_PUBLICSHARES_HOST}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT}"
+      OCM_ENABLE_CODE_FLOW: "${OCM_ENABLE_CODE_FLOW:-false}"
+      OCM_TIMEOUT: "${OCM_TIMEOUT:-10}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      REVAD_SHAREPROVIDERS_HOST: "${CERNBOX2_REVAD_SHAREPROVIDERS_HOST}"
+      REVAD_SHAREPROVIDERS_GRPC_PORT: "${REVAD_SHAREPROVIDERS_GRPC_PORT}"
+      REVAD_GROUPUSERPROVIDERS_HOST: "${CERNBOX2_REVAD_GROUPUSERPROVIDERS_HOST}"
+      REVAD_GROUPUSERPROVIDERS_GRPC_PORT: "${REVAD_GROUPUSERPROVIDERS_GRPC_PORT}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX2_NO_PROXY}"
+    depends_on:
+      two-cernbox-idp:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-gateway:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-authprovider-oidc:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-authprovider-oidc
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-oidc"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OIDC_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OIDC_HOST}"
+      REVAD_AUTHPROVIDER_OIDC_GRPC_PORT: "${REVAD_AUTHPROVIDER_OIDC_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      IDP_URL: "${IDP_URL}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-authprovider-oidc:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-authprovider-machine:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-authprovider-machine
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-machine"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_MACHINE_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_MACHINE_HOST}"
+      REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT: "${REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-authprovider-machine:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-authprovider-ocmshares:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-authprovider-ocmshares
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmshares"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMSHARES_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OCMSHARES_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-authprovider-ocmshares:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-authprovider-ocmsharecode:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-authprovider-ocmsharecode
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmsharecode"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OCMSHARECODE_HOST}"
+      REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-authprovider-ocmsharecode:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-authprovider-ocmexchangedtoken:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-authprovider-ocmexchangedtoken
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-ocmexchangedtoken"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST}"
+      REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT: "${REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-authprovider-ocmexchangedtoken:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-authprovider-publicshares:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-authprovider-publicshares
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "authprovider-publicshares"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_HOST: "${CERNBOX2_REVAD_AUTHPROVIDER_PUBLICSHARES_HOST}"
+      REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT: "${REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-authprovider-publicshares:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-shareproviders:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-shareproviders
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "shareproviders"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_SHAREPROVIDERS_HOST: "${CERNBOX2_REVAD_SHAREPROVIDERS_HOST}"
+      REVAD_SHAREPROVIDERS_GRPC_PORT: "${REVAD_SHAREPROVIDERS_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      REVAD_OCMSHARES_JSON_FILE: "${REVAD_OCMSHARES_JSON_FILE:-/var/tmp/reva/shares.json}"
+      WEB_DOMAIN: "${CERNBOX2_DOMAIN}"
+      WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX2_NO_PROXY}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-shareproviders:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-groupuserproviders:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-groupuserproviders
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "groupuserproviders"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_GROUPUSERPROVIDERS_HOST: "${CERNBOX2_REVAD_GROUPUSERPROVIDERS_HOST}"
+      REVAD_GROUPUSERPROVIDERS_GRPC_PORT: "${REVAD_GROUPUSERPROVIDERS_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-groupuserproviders:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-dataprovider-localhome:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-dataprovider-localhome
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "dataprovider-localhome"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_DATAPROVIDER_LOCALHOME_HOST: "${CERNBOX2_REVAD_DATAPROVIDER_LOCALHOME_HOST}"
+      REVAD_DATAPROVIDER_LOCALHOME_PORT: "${REVAD_DATAPROVIDER_LOCALHOME_PORT}"
+      REVAD_DATAPROVIDER_LOCALHOME_PROTOCOL: "${REVAD_DATAPROVIDER_LOCALHOME_PROTOCOL:-http}"
+      REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT: "${REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-dataprovider-localhome:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+      # - "${PWD}/volumes/cernbox2/data/reva/localhome:/revalocalstorage"
+
+  two-cernbox-2-revad-dataprovider-ocm:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-dataprovider-ocm
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "dataprovider-ocm"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_DATAPROVIDER_OCM_HOST: "${CERNBOX2_REVAD_DATAPROVIDER_OCM_HOST}"
+      REVAD_DATAPROVIDER_OCM_PORT: "${REVAD_DATAPROVIDER_OCM_PORT}"
+      REVAD_DATAPROVIDER_OCM_PROTOCOL: "${REVAD_DATAPROVIDER_OCM_PROTOCOL:-http}"
+      REVAD_DATAPROVIDER_OCM_GRPC_PORT: "${REVAD_DATAPROVIDER_OCM_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX2_NO_PROXY}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-dataprovider-ocm:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-revad-dataprovider-sciencemesh:
+    image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
+    container_name: two-cernbox-2-revad-dataprovider-sciencemesh
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - two-cernbox-net
+    environment:
+      REVAD_CONTAINER_MODE: "dataprovider-sciencemesh"
+      DOMAIN: "${CERNBOX2_REVAD_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_HOST: "${CERNBOX2_REVAD_DATAPROVIDER_SCIENCEMESH_HOST}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_PORT: "${REVAD_DATAPROVIDER_SCIENCEMESH_PORT}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_PROTOCOL: "${REVAD_DATAPROVIDER_SCIENCEMESH_PROTOCOL:-http}"
+      REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT: "${REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_GRPC_PORT: "${REVAD_GATEWAY_GRPC_PORT}"
+      REVAD_LOG_LEVEL: "${REVAD_LOG_LEVEL}"
+      REVAD_LOG_OUTPUT: "${REVAD_LOG_OUTPUT:-/var/log/revad.log}"
+      REVAD_JWT_SECRET: "${REVAD_JWT_SECRET}"
+      REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
+      OCM_TIMEOUT: "${OCM_TIMEOUT:-10}"
+      OCM_CLIENT_INSECURE: "${OCM_CLIENT_INSECURE:-true}"
+      HTTP_PROXY: "${CERNBOX_HTTP_PROXY:-http://mitm:8080}"
+      HTTPS_PROXY: "${CERNBOX_HTTPS_PROXY:-http://mitm:8080}"
+      NO_PROXY: "${CERNBOX2_NO_PROXY}"
+    depends_on:
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/config/reva-dataprovider-sciencemesh:/etc/revad"
+      - "${PWD}/volumes/cernbox2/data/reva/jsons:/var/tmp/reva"
+
+  two-cernbox-2-web:
+    image: "cernbox-web:${IMAGE_CERNBOX_WEB}"
+    container_name: two-cernbox-2-web
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      two-cernbox-net:
+        aliases:
+          - cernbox2.docker
+    environment:
+      CERNBOX_WEB_HOSTNAME: "${CERNBOX2_DOMAIN}"
+      REVAD_TLS_ENABLED: "${REVAD_TLS_ENABLED:-false}"
+      REVAD_PROTOCOL: "${REVAD_PROTOCOL:-http}"
+      REVAD_PORT: "${REVAD_PORT:-80}"
+      REVAD_GATEWAY_HOST: "${CERNBOX2_REVAD_GATEWAY_HOST}"
+      REVAD_GATEWAY_PORT: "${REVAD_GATEWAY_PORT}"
+      IDP_URL: "${IDP_URL}"
+      WEB_DOMAIN: "${CERNBOX2_DOMAIN}"
+      WEB_PROTOCOL: "${WEB_PROTOCOL:-https}"
+      WEB_TLS_ENABLED: "${WEB_TLS_ENABLED:-false}"
+      TLS_CRT: "/tls/cernbox.crt"
+      TLS_KEY: "/tls/cernbox.key"
+    volumes:
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "${PWD}/volumes/cernbox2/data/cernbox-web:/var/www"
+    depends_on:
+      two-cernbox-idp:
+        condition: service_started
+      two-cernbox-2-revad-gateway:
+        condition: service_started
+      two-cernbox-2-revad-dataprovider-localhome:
+        condition: service_started
+      two-cernbox-2-revad-dataprovider-ocm:
+        condition: service_started
+      two-cernbox-2-revad-dataprovider-sciencemesh:
+        condition: service_started
+
+  two-cernbox-firefox:
+    image: "${FIREFOX_IMAGE:-firefox:v150.0.0}"
+    container_name: two-cernbox-firefox.docker
+    restart: "unless-stopped"
+    security_opt:
+      - no-new-privileges:true
+    shm_size: "2g"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    networks:
+      two-cernbox-net:
+        aliases:
+          - two-cernbox-firefox.docker
+    ports:
+      - "${FIREFOX_UI_PORT:-5803}:6901"
+    environment:
+      OCM_FIREFOX_START_URL: "${FIREFOX_START_URL:-https://cernbox1.docker/}"
+    depends_on:
+      mitm:
+        condition: service_started
+      two-cernbox-idp:
+        condition: service_started
+      two-cernbox-1-web:
+        condition: service_started
+      two-cernbox-2-web:
+        condition: service_started
