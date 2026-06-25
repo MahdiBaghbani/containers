@@ -4,18 +4,13 @@
   "defaults": {
     "sources": {
       "web": {
-        "url": "https://github.com/cernbox/web",
-        "ref": "cernbox"
+        "url": "https://github.com/cernbox/web"
       },
       "web_extensions": {
-        "url": "https://github.com/cernbox/web-extensions",
-        "ref": "dffaad6cecf755782c7ce4289f21b4f155c35e7c"
+        "url": "https://github.com/cernbox/web-extensions"
       }
     },
     "external_images": {
-      "build": {
-        "tag": "20-trixie-slim"
-      },
       "runtime": {
         "tag": "1.29-alpine3.22-slim"
       }
@@ -45,6 +40,15 @@
           "web_extensions": {
             "ref": "dffaad6cecf755782c7ce4289f21b4f155c35e7c"
           }
+        },
+        "external_images": {
+          "build": {
+            "tag": "20-trixie-slim"
+          }
+        },
+        "build_args": {
+          "PNPM_VERSION": "9.12.3",
+          "WEB_EXT_ALLOW": "cernbox-integration,ifc-js,jupyter,lightweight-accounts,ndmspc-reader,old-web-redirector,open-in-swan,otg,rootjs,search-in-folder,tours,theme-cernbox,tours-cernbox"
         }
       }
     },
@@ -59,6 +63,15 @@
           "web_extensions": {
             "ref": "dffaad6cecf755782c7ce4289f21b4f155c35e7c"
           }
+        },
+        "external_images": {
+          "build": {
+            "tag": "20-trixie-slim"
+          }
+        },
+        "build_args": {
+          "PNPM_VERSION": "9.12.3",
+          "WEB_EXT_ALLOW": "cernbox-integration,ifc-js,jupyter,lightweight-accounts,ndmspc-reader,old-web-redirector,open-in-swan,otg,rootjs,search-in-folder,tours,theme-cernbox,tours-cernbox"
         }
       }
     }

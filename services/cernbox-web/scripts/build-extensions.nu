@@ -37,15 +37,88 @@ def has-eagain-error [] {
   ($text | str contains "eagain") or ($text | str contains "err_pnpm_eagain")
 }
 
-# Parse comma-separated skip list from CLI or Dockerfile ARG
-def parse-skip-list [skip: string] {
-  if ($skip | str trim | is-empty) {
+# Parse comma-separated package names from CLI or Dockerfile ARG
+export def parse-comma-list [raw: string] {
+  if ($raw | str trim | is-empty) {
     return []
   }
-  $skip
+  $raw
   | split row ","
   | each {|name| $name | str trim }
   | where {|name| not ($name | is-empty) }
+}
+
+export def reserved-package-names [] {
+  [".", "..", ".git", ".github"]
+}
+
+def find-duplicate-names [names: list<string>] {
+  mut seen = []
+  mut dupes = []
+  for name in $names {
+    if $name in $seen {
+      if not ($name in $dupes) {
+        $dupes = ($dupes | append $name)
+      }
+    } else {
+      $seen = ($seen | append $name)
+    }
+  }
+  $dupes
+}
+
+export def discover-packages [extensions_dir: string] {
+  let exclude_dirs = (reserved-package-names)
+  ls -a $extensions_dir
+  | where type == "dir"
+  | where {|item| not ($item.name in $exclude_dirs)}
+  | get name
+}
+
+# Returns {valid, reason} for unit tests and plan-packages
+export def check-only-list [names: list<string>, extensions_dir: string] {
+  let dupes = (find-duplicate-names $names)
+  if ($dupes | length) > 0 {
+    return {valid: false, reason: $"duplicate package names: ($dupes | str join ', ')"}
+  }
+
+  let reserved = (reserved-package-names)
+  for name in $names {
+    if $name in $reserved {
+      return {valid: false, reason: $"reserved package name: ($name)"}
+    }
+    let pkg_path = $"($extensions_dir)/($name)"
+    if not ($pkg_path | path exists) {
+      return {valid: false, reason: $"missing package: ($name)"}
+    }
+    if (($pkg_path | path type) != "dir") {
+      return {valid: false, reason: $"not a directory: ($name)"}
+    }
+  }
+
+  {valid: true, reason: ""}
+}
+
+# Resolve build order; allowlist mode ignores skip
+export def plan-packages [
+  only_list: list<string>,
+  skip_list: list<string>,
+  extensions_dir: string
+] {
+  if ($only_list | length) > 0 {
+    let check = (check-only-list $only_list $extensions_dir)
+    if not $check.valid {
+      return {ok: false, error: $check.reason, packages: [], skip_list: []}
+    }
+    return {ok: true, error: "", packages: $only_list, skip_list: []}
+  }
+
+  {
+    ok: true,
+    error: "",
+    packages: (discover-packages $extensions_dir),
+    skip_list: $skip_list
+  }
 }
 
 # Build all web extensions with retry logic for pnpm install
@@ -208,25 +281,25 @@ def main [
   extensions_dir: string = ".",
   output_dir: string = "/build/cernbox",
   --retry-count: int = 10,
-  --skip: string = ""
+  --skip: string = "",
+  --only: string = ""
 ] {
-  let skip_list = (parse-skip-list $skip)
+  let only_list = (parse-comma-list $only)
+  let skip_list = (parse-comma-list $skip)
+
+  let plan = (plan-packages $only_list $skip_list $extensions_dir)
+  if not $plan.ok {
+    print $"Error: ($plan.error)"
+    exit 1
+  }
 
   mkdir $output_dir
   cd $extensions_dir
-  
-  let exclude_dirs = [".", "..", ".git", ".github"]
-  let packages = (
-    ls -a
-    | where type == "dir"
-    | where {|item| not ($item.name in $exclude_dirs)}
-    | get name
-  )
 
-  for package in $packages {
-    build-package $package $output_dir $retry_count $skip_list
+  for package in $plan.packages {
+    build-package $package $output_dir $retry_count $plan.skip_list
   }
-  
+
   cd ..
   print "Finished building all packages"
 }

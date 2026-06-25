@@ -70,6 +70,8 @@ ARG CACHEBUST="default"
 ARG WEB_EXTENSIONS_URL=https://github.com/cernbox/web-extensions
 ARG WEB_EXTENSIONS_REF=main
 ARG PNPM_RETRY_COUNT="10"
+ARG PNPM_VERSION="9.12.3"
+ARG WEB_EXT_ALLOW=""
 ARG WEB_EXT_SKIP="codimd,data-repositories,draw-io,ms-tracing"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
@@ -90,7 +92,7 @@ RUN --mount=type=cache,id=cernbox-web-web-git-${CACHEBUST:-${WEB_REF}},target=/s
 
 WORKDIR /build/web
 
-RUN corepack prepare pnpm@9 --activate
+RUN corepack prepare pnpm@${PNPM_VERSION} --activate
 
 # Configure pnpm for better network reliability and caching
 # This is needed for places that have bad internet connection.
@@ -146,7 +148,10 @@ COPY --chmod=755 ./scripts/build-extensions.nu /usr/local/bin/build-extensions.n
 # Build all packages with retry logic and BuildKit cache mount
 RUN --mount=type=cache,id=cernbox-web-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
     --mount=type=cache,id=cernbox-web-pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
-    nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_RETRY_COUNT --skip "$WEB_EXT_SKIP"
+    nu /usr/local/bin/build-extensions.nu . /build/cernbox \
+      --retry-count $PNPM_RETRY_COUNT \
+      --only "$WEB_EXT_ALLOW" \
+      --skip "$WEB_EXT_SKIP"
 
 ###############################
 ###   Common Tools Runtime  ###
