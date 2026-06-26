@@ -41,6 +41,10 @@ COPY ./configs/keycloak.json /tmp/keycloak.json
 # Import the realm non-interactive
 RUN /opt/keycloak/bin/kc.sh import --file /tmp/keycloak.json --override true
 
+# Enable the management health endpoints (/health/ready) for optimized builds.
+# Must be set before kc.sh build so the baked, --optimized runtime exposes them.
+ENV KC_HEALTH_ENABLED=true
+
 # Pre-compile Keycloak for optimized startup
 RUN /opt/keycloak/bin/kc.sh build
 
