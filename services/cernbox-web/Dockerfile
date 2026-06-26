@@ -172,7 +172,8 @@ ARG TLS_CA_NAME
 
 RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
     apk add \
-    bash;
+    bash \
+    curl;
 
 RUN mkdir -p /etc/ssl/certs /tmp
 COPY --from=common-tools-runtime /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
