@@ -51,8 +51,25 @@ services:
       KC_HTTPS_PORT: "${IDP_PORT:-443}"
       KC_HTTPS_CERTIFICATE_FILE: "/tls/idp.crt"
       KC_HTTPS_CERTIFICATE_KEY_FILE: "/tls/idp.key"
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_MANAGEMENT_SCHEME: "http"
       IDP_DOMAIN: "${IDP_DOMAIN}"
       IDP_URL: "${IDP_URL}"
+    # Keycloak exposes /health/ready on the management interface (port 9000),
+    # which inherits the main HTTPS settings by default; force plain HTTP with
+    # KC_HTTP_MANAGEMENT_SCHEME=http and probe with nu (no curl in this image).
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/usr/local/bin/nu",
+          "-c",
+          "http get http://127.0.0.1:9000/health/ready | ignore",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -120,7 +137,7 @@ services:
       NO_PROXY: "${CERNBOX1_NO_PROXY}"
     depends_on:
       two-cernbox-idp:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -519,9 +536,15 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "${PWD}/volumes/cernbox1/data/cernbox-web:/var/www"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/ >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
     depends_on:
       two-cernbox-idp:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-1-revad-gateway:
         condition: service_started
       two-cernbox-1-revad-dataprovider-localhome:
@@ -592,7 +615,7 @@ services:
       NO_PROXY: "${CERNBOX2_NO_PROXY}"
     depends_on:
       two-cernbox-idp:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -991,9 +1014,15 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "${PWD}/volumes/cernbox2/data/cernbox-web:/var/www"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/ >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 90s
     depends_on:
       two-cernbox-idp:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-2-revad-gateway:
         condition: service_started
       two-cernbox-2-revad-dataprovider-localhome:
@@ -1025,8 +1054,8 @@ services:
       mitm:
         condition: service_started
       two-cernbox-idp:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-1-web:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-2-web:
-        condition: service_started
+        condition: service_healthy
