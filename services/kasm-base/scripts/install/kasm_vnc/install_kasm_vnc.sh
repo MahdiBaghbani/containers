@@ -122,13 +122,41 @@ mkdir -p "${KASMVNC_CACHE_KEY_DIR}"
 
 
 prepare_rpm_repo_dependencies
+if [[ -z "${BUILD_URL:-}" ]]; then
+  echo "BUILD_URL not set for DISTRO=${DISTRO} BUILD_ARCH=${BUILD_ARCH}" >&2
+  exit 1
+fi
 ARTIFACT_BASENAME="$(basename "${BUILD_URL}")"
 ARTIFACT_PATH="${KASMVNC_CACHE_KEY_DIR}/${ARTIFACT_BASENAME}"
 
+validate_cached_artifact() {
+    case "${ARTIFACT_PATH}" in
+        *.deb)
+            dpkg-deb --info "${ARTIFACT_PATH}" >/dev/null 2>&1
+            ;;
+        *.rpm)
+            rpm -qp "${ARTIFACT_PATH}" >/dev/null 2>&1
+            ;;
+        *.apk)
+            tar -tzf "${ARTIFACT_PATH}" >/dev/null 2>&1 || tar -tf "${ARTIFACT_PATH}" >/dev/null 2>&1
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+}
+
+if [ -s "${ARTIFACT_PATH}" ] && ! validate_cached_artifact; then
+    rm -f "${ARTIFACT_PATH}"
+fi
+
 if [ ! -s "${ARTIFACT_PATH}" ]; then
     tmp="${ARTIFACT_PATH}.part.$$"
-    wget "${BUILD_URL}" -O "${tmp}"
+    trap 'rm -f "${tmp}"' EXIT
+    rm -f "${tmp}"
+    curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600 -o "${tmp}" "${BUILD_URL}"
     mv "${tmp}" "${ARTIFACT_PATH}"
+    trap - EXIT
 fi
 
 if [[ "${DISTRO}" == @(oracle8|oracle9|rhel9|rockylinux9|rockylinux8|almalinux8|almalinux9) ]] ; then

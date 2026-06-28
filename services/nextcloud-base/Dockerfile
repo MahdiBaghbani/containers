@@ -306,7 +306,11 @@ RUN echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf; \
 
 # Install Composer
 RUN --mount=type=cache,id=nextcloud-composer-cache,target=/root/.composer/cache,sharing=locked \
-    curl --silent --show-error https://getcomposer.org/installer -o /root/composer-setup.php && \
+    set -eu; \
+    tmp="/root/composer-setup.php.tmp"; \
+    rm -f "$tmp"; \
+    curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600 -o "$tmp" https://getcomposer.org/installer && \
+    mv "$tmp" /root/composer-setup.php && \
     php /root/composer-setup.php --install-dir=/usr/local/bin --filename=composer && \
     rm /root/composer-setup.php
 

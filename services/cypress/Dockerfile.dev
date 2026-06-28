@@ -88,14 +88,21 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN --mount=type=cache,id=cypress-dl-node-v1-${NODE_VERSION}-linux-x64,target=/var/cache/dockypody/node,sharing=locked \
-    if command -v node >/dev/null 2>&1; then rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx || true; fi && \
-    node_tar="/var/cache/dockypody/node/node-v${NODE_VERSION}-linux-x64.tar.xz" && \
+    set -eux; \
+    if command -v node >/dev/null 2>&1; then rm -f /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/npx || true; fi; \
+    node_tar="/var/cache/dockypody/node/node-v${NODE_VERSION}-linux-x64.tar.xz"; \
+    if [ -s "$node_tar" ]; then \
+      tar -tJf "$node_tar" >/dev/null 2>&1 || rm -f "$node_tar"; \
+    fi; \
     if [ ! -s "$node_tar" ]; then \
-      curl -fsSL --retry 3 --retry-delay 2 -o "$node_tar" \
+      tmp="${node_tar}.tmp"; \
+      rm -f "$tmp"; \
+      curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600 -o "$tmp" \
         "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"; \
-    fi && \
-    tar -xJf "$node_tar" -C /usr/local --strip-components=1 && \
-    node --version | grep -F "v${NODE_VERSION}" >/dev/null 2>&1 || (echo "Node install failed" && exit 1) && \
+      mv "$tmp" "$node_tar"; \
+    fi; \
+    tar -xJf "$node_tar" -C /usr/local --strip-components=1; \
+    node --version | grep -F "v${NODE_VERSION}" >/dev/null 2>&1 || (echo "Node install failed" && exit 1); \
     npm --version >/dev/null
 
 RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sharing=locked \
@@ -104,9 +111,13 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     set -eux; \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     chrome_deb="/var/cache/dockypody/chrome/google-chrome-stable_${CHROME_VERSION}_amd64.deb"; \
+    if [ -s "$chrome_deb" ]; then \
+      dpkg-deb --info "$chrome_deb" >/dev/null 2>&1 || rm -f "$chrome_deb"; \
+    fi; \
     if [ ! -s "$chrome_deb" ]; then \
       tmp="${chrome_deb}.tmp"; \
-      curl -fsSL --retry 3 --retry-delay 2 -o "$tmp" \
+      rm -f "$tmp"; \
+      curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600 -o "$tmp" \
         "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${CHROME_VERSION}_amd64.deb"; \
       mv "$tmp" "$chrome_deb"; \
     fi; \
@@ -120,7 +131,19 @@ RUN --mount=type=cache,id=cypress-npm-cache,target=/root/.npm,sharing=locked \
     --mount=type=cache,id=cypress-dl-cypress-v1-${CYPRESS_VERSION}-linux-x64,target=/var/cache/dockypody/cypress,sharing=locked \
     set -eux; \
     export CYPRESS_CACHE_FOLDER="/var/cache/dockypody/cypress"; \
-    npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}"; \
+    export NPM_CONFIG_FETCH_RETRIES=5; \
+    export NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000; \
+    export NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=60000; \
+    export NPM_CONFIG_FETCH_TIMEOUT=300000; \
+    for attempt in 1 2 3; do \
+      if npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}"; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 3 ]; then \
+        echo "Cypress npm install failed after 3 attempts" && exit 1; \
+      fi; \
+      sleep $((attempt * 2)); \
+    done; \
     cypress --version | grep -F "${CYPRESS_VERSION}" >/dev/null 2>&1 || \
       (echo "Cypress version mismatch after install (expected ${CYPRESS_VERSION})" && exit 1); \
     mkdir -p /home/ocm-user/.cache/Cypress; \

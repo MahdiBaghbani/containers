@@ -1,5 +1,6 @@
 # Firefox installer for Docker builds.
-# Runs as root; expects curl, tar, and dpkg-architecture or uname.
+# Downloads via curl (temp write + atomic rename); validates cached tarballs
+# with tar before reuse. Expects curl, tar, and dpkg-architecture or uname.
 
 def resolve-multiarch []: nothing -> string {
     let result = try {
@@ -20,6 +21,39 @@ def resolve-multiarch []: nothing -> string {
             $other    => (error make {msg: $"unsupported arch: ($other)"})
         }
     }
+}
+
+def is-nonempty-file [path: string]: nothing -> bool {
+    ($path | path exists) and ((ls $path | get 0.size | into int) > 0)
+}
+
+def probe-cached-tarball [path: string, list_flags: list<string>]: nothing -> bool {
+    if not (is-nonempty-file $path) {
+        return false
+    }
+    let probe = (^tar ...$list_flags $path | complete)
+    if $probe.exit_code == 0 {
+        return true
+    }
+    print $"Invalid cached tarball; re-downloading: ($path)"
+    rm -f $path
+    false
+}
+
+def download-to-cache [url: string, dest: string]: nothing -> bool {
+    let tmp = $"($dest).tmp"
+    rm -f $tmp
+    let dl = (
+        ^curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600
+            -o $tmp $url
+        | complete
+    )
+    if $dl.exit_code != 0 {
+        rm -f $tmp
+        return false
+    }
+    ^mv -f $tmp $dest
+    true
 }
 
 def main [
@@ -64,28 +98,20 @@ def main [
     }
 
     # Resolve which tarball to use: prefer xz from cache, then bz2, then download.
-    let is_nonempty = {|p| ($p | path exists) and ((ls $p | get 0.size | into int) > 0)}
-
-    let tarball_info = if (do $is_nonempty $cache_xz) {
+    let tarball_info = if (probe-cached-tarball $cache_xz [-tJf]) {
         print $"Using cached tarball: ($cache_xz)"
         {path: $cache_xz, flags: "-xJf"}
-    } else if (do $is_nonempty $cache_bz2) {
+    } else if (probe-cached-tarball $cache_bz2 [-tjf]) {
         print $"Using cached tarball: ($cache_bz2)"
         {path: $cache_bz2, flags: "-xjf"}
     } else {
         print $"Downloading Firefox ($version) [($locale)]..."
-        let dl_xz = (^curl -fsSL --retry 3 --retry-delay 2 -o $cache_xz $url_xz | complete)
-        if $dl_xz.exit_code == 0 {
+        if (download-to-cache $url_xz $cache_xz) {
             {path: $cache_xz, flags: "-xJf"}
-        } else {
-            # xz not available for this version; clean up empty file and try bz2
-            rm -f $cache_xz
-            let dl_bz2 = (^curl -fsSL --retry 3 --retry-delay 2 -o $cache_bz2 $url_bz2 | complete)
-            if $dl_bz2.exit_code != 0 {
-                rm -f $cache_bz2
-                error make {msg: $"Firefox download failed for both formats.\n  xz:  ($url_xz)\n  bz2: ($url_bz2)"}
-            }
+        } else if (download-to-cache $url_bz2 $cache_bz2) {
             {path: $cache_bz2, flags: "-xjf"}
+        } else {
+            error make {msg: $"Firefox download failed for both formats.\n  xz:  ($url_xz)\n  bz2: ($url_bz2)"}
         }
     }
 

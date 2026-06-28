@@ -77,7 +77,7 @@ RUN if command -v google-chrome >/dev/null 2>&1; then \
 
 RUN --mount=type=cache,id=cypress-npm-cache,target=/root/.npm,sharing=locked \
     --mount=type=cache,id=cypress-dl-cypress-v1-${CYPRESS_VERSION}-linux-x64,target=/var/cache/dockypody/cypress,sharing=locked \
-    set -eu; \
+    set -eux; \
     if command -v cypress >/dev/null 2>&1 && cypress --version | grep -F "${CYPRESS_VERSION}" >/dev/null 2>&1; then \
       echo "OK: Cypress already present and matches pin"; \
       exit 0; \
@@ -88,7 +88,19 @@ RUN --mount=type=cache,id=cypress-npm-cache,target=/root/.npm,sharing=locked \
       echo "Error: npm not found in base image ${CYPRESS_FACTORY_IMAGE}" && exit 1; \
     fi; \
     export CYPRESS_CACHE_FOLDER="/var/cache/dockypody/cypress"; \
-    npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}"; \
+    export NPM_CONFIG_FETCH_RETRIES=5; \
+    export NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000; \
+    export NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=60000; \
+    export NPM_CONFIG_FETCH_TIMEOUT=300000; \
+    for attempt in 1 2 3; do \
+      if npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}"; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 3 ]; then \
+        echo "Cypress npm install failed after 3 attempts" && exit 1; \
+      fi; \
+      sleep $((attempt * 2)); \
+    done; \
     cypress --version | grep -F "${CYPRESS_VERSION}" >/dev/null 2>&1 || \
       (echo "Cypress version mismatch after install (expected ${CYPRESS_VERSION})" && exit 1); \
     mkdir -p /root/.cache/Cypress; \
