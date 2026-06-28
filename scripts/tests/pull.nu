@@ -197,9 +197,9 @@ def main [--verbose] {
       github_registry: "ghcr.io",
       github_path: "owner/repo"
     }
-    let ref = (compute-canonical-image-ref "revad-base:v3.3.3:production" $registry_info false)
-    if $ref != "ghcr.io/owner/repo/revad-base:v3.3.3-production" {
-      error make {msg: $"Expected 'ghcr.io/owner/repo/revad-base:v3.3.3-production', got: ($ref)"}
+    let ref = (compute-canonical-image-ref "service-b:v2.0.0:production" $registry_info false)
+    if $ref != "ghcr.io/owner/repo/service-b:v2.0.0-production" {
+      error make {msg: $"Expected 'ghcr.io/owner/repo/service-b:v2.0.0-production', got: ($ref)"}
     }
     true
   } $verbose_flag)

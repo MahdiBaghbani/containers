@@ -19,8 +19,8 @@
 
 # Comprehensive tests for top-level defaults feature
 
-use ../lib/manifest/core.nu [apply-version-defaults get-version-spec load-versions-manifest]
-use ../lib/platforms/core.nu [apply-platform-defaults get-platform-spec load-platforms-manifest expand-version-to-platforms get-default-platform]
+use ../lib/manifest/core.nu [apply-version-defaults get-version-spec]
+use ../lib/platforms/core.nu [apply-platform-defaults get-platform-spec expand-version-to-platforms get-default-platform]
 use ../lib/validate/core.nu [validate-version-manifest validate-platforms-manifest]
 use ./lib.nu [run-test print-test-summary]
 
@@ -498,18 +498,44 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test16)
   
-  # Test 17: Backward compatibility - existing service without defaults
-  let test17 = (run-test "Backward compatibility: existing service without defaults" {
-    let versions = (load-versions-manifest "revad-base")
-    let platforms = (load-platforms-manifest "revad-base")
-    let v_validation = (validate-version-manifest $versions $platforms)
+  # Test 17: Backward compatibility - manifest without defaults
+  let test17 = (run-test "Backward compatibility: manifest without defaults validates and resolves version spec" {
+    let manifest = {
+      default: "v1.0.0",
+      versions: [
+        {
+          name: "v1.0.0",
+          overrides: {
+            sources: {
+              app: { ref: "v1.0.0" }
+            }
+          }
+        }
+      ]
+    }
+    let platforms = {
+      default: "production",
+      platforms: [
+        {
+          name: "production",
+          dockerfile: "Dockerfile.production",
+          external_images: {
+            build: { name: "golang", build_arg: "BASE_BUILD_IMAGE" }
+          }
+        }
+      ]
+    }
+    let v_validation = (validate-version-manifest $manifest $platforms)
     let p_validation = (validate-platforms-manifest $platforms)
     if not ($v_validation.valid and $p_validation.valid) {
-      error make {msg: "Existing service should validate without defaults"}
+      error make {msg: "Manifest without defaults should validate"}
     }
-    let version_spec = (get-version-spec $versions "v3.3.3")
+    let version_spec = (get-version-spec $manifest "v1.0.0")
     if not ("overrides" in ($version_spec | columns)) {
       error make {msg: "Version spec should have overrides field"}
+    }
+    if ($version_spec.overrides.sources.app.ref) != "v1.0.0" {
+      error make {msg: "Version spec overrides should remain unchanged without defaults"}
     }
     true
   } $verbose_flag)

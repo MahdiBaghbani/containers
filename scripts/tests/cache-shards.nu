@@ -54,12 +54,12 @@ def main [--verbose] {
     # ------------------------------------------------------------------
 
     let t_shard_name_single = (run-test "make-shard-name single-platform uses 'single' suffix" {
-        (make-shard-name "common-tools" "v1.0.0" "") == "shard-common-tools-v1.0.0-single"
+        (make-shard-name "dep-tools" "v1.0.0" "") == "shard-dep-tools-v1.0.0-single"
     } $verbose_flag)
     $results = ($results | append $t_shard_name_single)
 
     let t_shard_name_platform = (run-test "make-shard-name multi-platform uses platform suffix" {
-        (make-shard-name "revad-base" "v3.3.3" "production") == "shard-revad-base-v3.3.3-production"
+        (make-shard-name "parent-svc" "v2.0.0" "production") == "shard-parent-svc-v2.0.0-production"
     } $verbose_flag)
     $results = ($results | append $t_shard_name_platform)
 
