@@ -123,7 +123,10 @@ export def generate-cert [
         }) == 0
         
         if $sudo_available {
-            ^sudo chown 1000:root ($cert_dir | path join "idp.*") | ignore
+            let idp_targets = [$cert_file $key_file] | where {|p| $p | path exists}
+            if ($idp_targets | length) > 0 {
+                ^sudo chown 1000:root ...$idp_targets | ignore
+            }
         } else {
             print "Warning: sudo not available, skipping ownership change for idp"
         }
