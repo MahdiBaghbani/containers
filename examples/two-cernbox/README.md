@@ -4,7 +4,8 @@ This example runs two CERNBox stacks on one Docker network with:
 
 - local-network HTTPS on `https://cernbox1.docker/`
 - local-network HTTPS on `https://cernbox2.docker/`
-- shared local-network Keycloak on `https://idp.docker/`
+- per-instance local-network Keycloak on `https://idp1.docker/` (cernbox1) and
+  `https://idp2.docker/` (cernbox2)
 - shared Firefox desktop UI exposed on the host
 - mitmproxy on the same Docker network for best-effort server-to-server capture
 - Reva master-band behavior with the `master-development` cernbox-revad image
@@ -15,7 +16,8 @@ Hostnames inside the compose network:
 
 - cernbox1: `https://cernbox1.docker/`
 - cernbox2: `https://cernbox2.docker/`
-- idp: `https://idp.docker/`
+- idp1 (cernbox1): `https://idp1.docker/`
+- idp2 (cernbox2): `https://idp2.docker/`
 - MITM proxy transport: `http://mitm:8080`
 - mitmweb UI: `https://mitmproxy.docker/`
 
@@ -52,12 +54,13 @@ Important defaults:
 - `FIREFOX_START_URL=https://cernbox1.docker/`
 - `CERNBOX1_DOMAIN=cernbox1.docker`
 - `CERNBOX2_DOMAIN=cernbox2.docker`
-- `IDP_URL=https://idp.docker`
+- `IDP1_URL=https://idp1.docker`
+- `IDP2_URL=https://idp2.docker`
 - `CERNBOX_HTTP_PROXY=http://mitm:8080`
 - `CERNBOX_HTTPS_PROXY=http://mitm:8080`
 
 The example keeps Reva microservices on internal HTTP while both `cernbox-web`
-instances and the IdP serve HTTPS directly on the compose network.
+instances and both IdPs serve HTTPS directly on the compose network.
 
 ### Important MITM note
 
@@ -122,9 +125,9 @@ that for normal CERNBox sender / receiver testing.
 1. Open Firefox at `https://localhost:5803`.
 2. It should auto-open `https://cernbox1.docker/`.
 3. Log into `cernbox1.docker` as one user and confirm the OIDC redirect reaches
-   `https://idp.docker/`.
+   `https://idp1.docker/`.
 4. Open `https://cernbox2.docker/` in a second tab and log into it as the other
-   user.
+   user; its OIDC redirect reaches `https://idp2.docker/`.
 5. Keep `https://mitmproxy.docker/` open in a third tab when you want
    to inspect mitmweb.
 6. Validate the two-node OCM flow you care about:
