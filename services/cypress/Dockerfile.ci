@@ -93,7 +93,7 @@ RUN --mount=type=cache,id=cypress-npm-cache,target=/root/.npm,sharing=locked \
     export NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=60000; \
     export NPM_CONFIG_FETCH_TIMEOUT=300000; \
     for attempt in 1 2 3; do \
-      if npm install --global --unsafe-perm "cypress@${CYPRESS_VERSION}"; then \
+      if npm install --global "cypress@${CYPRESS_VERSION}"; then \
         break; \
       fi; \
       if [ "$attempt" -eq 3 ]; then \
