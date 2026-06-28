@@ -20,6 +20,8 @@
 ARG BASE_RUNTIME_IMAGE="alpine:3.22"
 ARG NUSHELL_REF="0.108.0"
 ARG NUSHELL_URL="https://github.com/nushell/nushell"
+ARG TINI_REF="v0.19.0"
+ARG TINI_URL="https://github.com/krallin/tini"
 ARG UPX_REF="v5.0.2"
 ARG UPX_URL="https://github.com/upx/upx"
 ARG TLS_ENABLED="false"
@@ -58,6 +60,8 @@ FROM ${BASE_RUNTIME_IMAGE} AS tools
 
 ARG NUSHELL_REF
 ARG NUSHELL_URL
+ARG TINI_REF
+ARG TINI_URL
 ARG TLS_ENABLED
 ARG TLS_CA_NAME
 ARG CACHEBUST="default"
@@ -70,32 +74,49 @@ RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sh
     ca-certificates \
     curl \
     git \
-    make \
-    tini-static;
+    make;
 
-# Create symlink for consistent path across platforms
-RUN ln -s /sbin/tini-static /usr/bin/tini-static
+# Download tini-static once and expose a stable common-tools path for consumers.
+RUN --mount=type=cache,id=common-tools-tini-dl-${TINI_REF},target=/var/cache/dockypody/tini,sharing=locked \
+    set -eu; \
+    cached="/var/cache/dockypody/tini/tini-static"; \
+    if [ -s "$cached" ]; then \
+      "$cached" --version >/dev/null 2>&1 || rm -f "$cached"; \
+    fi; \
+    if [ ! -s "$cached" ]; then \
+      tmp="${cached}.tmp"; \
+      rm -f "$tmp"; \
+      curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600 -o "$tmp" \
+        "${TINI_URL}/releases/download/${TINI_REF}/tini-static"; \
+      mv "$tmp" "$cached"; \
+    fi; \
+    install -m 0755 "$cached" /usr/bin/tini-static
 
 # Copy UPX and verify
 COPY --from=upx-build /src/upx/build/upx /usr/local/bin/upx
 RUN upx --version || (echo "UPX verification failed" && exit 1)
 
 # Download and minify nushell
-# Use musl build (statically linked) for all platforms, works everywhere, enables shared cache
-# Cache ID includes NUSHELL_REF so cache invalidates when version changes
-RUN --mount=type=cache,id=nushell-${CACHEBUST:-${NUSHELL_REF}},target=/tmp/cache,sharing=shared \
-    curl -fsSL --retry 3 --retry-delay 2 -o /tmp/cache/nu.tar.gz \
-    ${NUSHELL_URL}/releases/download/${NUSHELL_REF}/nu-${NUSHELL_REF}-x86_64-unknown-linux-musl.tar.gz \
-    || (echo "Nushell download failed" && exit 1) \
-    && tar -xzf /tmp/cache/nu.tar.gz -C /tmp --strip-components=1 \
-    || (echo "Nushell extraction failed" && exit 1) \
-    && strip -s /tmp/nu \
-    && upx -qq --best --lzma /tmp/nu \
-    || (echo "UPX compression failed" && exit 1) \
-    && upx -t /tmp/nu \
-    || (echo "UPX verification failed" && exit 1) \
-    && mv /tmp/nu /usr/local/bin/nu \
-    && chmod +x /usr/local/bin/nu
+# Use musl build (statically linked) for all platforms.
+RUN --mount=type=cache,id=common-tools-nushell-dl-${NUSHELL_REF},target=/var/cache/dockypody/nushell,sharing=locked \
+    set -eu; \
+    tarball="/var/cache/dockypody/nushell/nu-${NUSHELL_REF}-x86_64-unknown-linux-musl.tar.gz"; \
+    if [ -s "$tarball" ]; then \
+      tar -tzf "$tarball" >/dev/null 2>&1 || rm -f "$tarball"; \
+    fi; \
+    if [ ! -s "$tarball" ]; then \
+      tmp="${tarball}.tmp"; \
+      rm -f "$tmp"; \
+      curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600 -o "$tmp" \
+        "${NUSHELL_URL}/releases/download/${NUSHELL_REF}/nu-${NUSHELL_REF}-x86_64-unknown-linux-musl.tar.gz"; \
+      mv "$tmp" "$tarball"; \
+    fi; \
+    tar -xzf "$tarball" -C /tmp --strip-components=1; \
+    strip -s /tmp/nu; \
+    upx -qq --best --lzma /tmp/nu; \
+    upx -t /tmp/nu; \
+    mv /tmp/nu /usr/local/bin/nu; \
+    chmod +x /usr/local/bin/nu
 
 # Verify all tools
 RUN nu --version || (echo "Nushell verification failed" && exit 1) \
