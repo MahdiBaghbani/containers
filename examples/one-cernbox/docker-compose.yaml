@@ -19,7 +19,7 @@ services:
     networks:
       one-cernbox-net:
         aliases:
-          - idp.docker
+          - idp1.docker
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
       KC_BOOTSTRAP_ADMIN_PASSWORD: "admin"

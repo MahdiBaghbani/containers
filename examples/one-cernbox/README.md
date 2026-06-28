@@ -3,7 +3,7 @@
 This example runs a single CERNBox stack on one Docker network with:
 
 - local-network HTTPS on `https://cernbox1.docker/`
-- local-network Keycloak on `https://idp.docker/`
+- local-network Keycloak on `https://idp1.docker/`
 - direct in-network browser access through Kasm Firefox
 - Reva master-band behavior with the `master-development` cernbox-revad image
 
@@ -33,7 +33,7 @@ The tracked `.env` file is the source of truth for local defaults.
 Important defaults:
 
 - `CERNBOX_DOMAIN=cernbox1.docker`
-- `IDP_URL=https://idp.docker`
+- `IDP_URL=https://idp1.docker`
 - `IMAGE_CERNBOX_REVAD=master-development`
 - `IMAGE_CERNBOX_WEB=master`
 - `FIREFOX_UI_PORT=5802`
@@ -73,7 +73,7 @@ The Firefox container serves the desktop UI on port 6901; compose maps it to
 
 1. Open Firefox at `https://localhost:5802`.
 2. It should auto-open `https://cernbox1.docker/`.
-3. Log into CERNBox and confirm the OIDC redirect reaches `https://idp.docker/`.
+3. Log into CERNBox and confirm the OIDC redirect reaches `https://idp1.docker/`.
 4. Confirm login returns to `https://cernbox1.docker/`.
 5. Validate the master-band OCM flow you care about:
    - OCM share creation
