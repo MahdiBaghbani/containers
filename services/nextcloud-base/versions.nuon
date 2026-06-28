@@ -2,6 +2,12 @@
   "default": "8.3-apache",
 
   "defaults": {
+    "sources": {
+      "composer": {
+        "url": "https://github.com/composer/composer",
+        "ref": "2.10.1"
+      }
+    },
     "external_images": {
       "runtime": {
         "tag": "8.3-apache-trixie"
