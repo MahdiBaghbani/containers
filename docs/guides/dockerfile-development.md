@@ -699,6 +699,11 @@ paths to repo-root SSH material or assume it is always present.
 - [ ] If `tls.enabled=true`, the service declares a direct `common-tools`
       dependency for the platform being built (transitive deps do not satisfy TLS
       validation).
+- [ ] If `tls.enabled=true` and the effective runtime process that reads
+      `/tls/*.key` is not `root`, the `copy-tls.nu` call passes
+      `--runtime-owner` matching that process (no inline `chown -R ... /tls`
+      after the call). This applies even when the Dockerfile keeps
+      `USER root` but drops privileges later (for example `su-exec`).
 - [ ] tini is copied from common-tools, not installed per-service.
 - [ ] Package lists are alphabetically sorted.
 - [ ] ENTRYPOINT uses JSON form with tini as PID 1.
