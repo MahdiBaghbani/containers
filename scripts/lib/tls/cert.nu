@@ -110,28 +110,7 @@ export def generate-cert [
             print $"Keeping intermediate files: ($csr_file), ($cnf_file)"
         }
     }
-    
-    # Adjust ownership for idp certificates (requires sudo)
-    if $cert_hostname == "idp" {
-        if $verbose {
-            print "Changing ownership for idp certificates."
-        }
-        let sudo_available = (try {
-            (^which sudo | complete | get exit_code)
-        } catch {
-            1
-        }) == 0
-        
-        if $sudo_available {
-            let idp_targets = [$cert_file $key_file] | where {|p| $p | path exists}
-            if ($idp_targets | length) > 0 {
-                ^sudo chown 1000:root ...$idp_targets | ignore
-            }
-        } else {
-            print "Warning: sudo not available, skipping ownership change for idp"
-        }
-    }
-    
+
     print $"Certificate generated successfully: ($cert_dir)/($cert_hostname).{{crt,key}}"
     if $verbose {
         print $"  Subject: ($subject)"
