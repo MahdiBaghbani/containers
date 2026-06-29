@@ -205,8 +205,8 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
     --ca-name "'$TLS_CA_NAME'" \
     --cert-name "'$TLS_CERT_NAME'" \
     --source-certs /tmp/tls-source/certificates/ \
-    --dest /tls/ && \
-    if [ -d /tls ]; then chown -R nginx:nginx /tls/; fi && \
+    --dest /tls/ \
+    --runtime-owner "'nginx:nginx'" && \
     rm -rf /tmp/tls-source /tmp/copy-tls.nu; \
     else \
     rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
