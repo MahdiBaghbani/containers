@@ -24,6 +24,7 @@ use ../lib/tls/lib.nu [get-services-dir get-shared-ca-dir build-subject build-sa
 use ../lib/build/context.nu [detect-ca-requirements prepare-ca-context cleanup-ca-context]
 use ../lib/validate/tls.nu [validate-tls-config-merged]
 use ../lib/tls/validation.nu [validate-ca cert-matches-ca]
+use ../lib/tls/copy.nu [copy-tls]
 use ./lib.nu [run-test print-test-summary]
 
 # ---------------------------------------------------------------------------
@@ -38,6 +39,16 @@ def make-temp-context [] {
 
 def rm-temp-context [dir: string] {
     try { rm -rf $dir } catch { }
+}
+
+# Detect shell RUN chown lines that target /tls (stale pre-copy-tls pattern).
+# COPY --chown=... is unrelated and is ignored.
+def find-stale-inline-tls-chown [content: string] {
+    $content
+    | lines
+    | where {|line|
+        ($line | str contains "chown") and ($line | str contains "/tls") and (not ($line | str contains "--chown="))
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -833,6 +844,192 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $test_va_malformed_certs)
+
+    # ------------------------------------------------------------------
+    # copy-tls: permission finalization and runtime-owner
+    # ------------------------------------------------------------------
+
+    let test_copy_tls_modes = (run-test "copy-tls: no runtime-owner -> key 0600, crt 0644, no chown" {
+        let src = (^mktemp -d | str trim)
+        let dest = (^mktemp -d | str trim)
+        let cert_dir = ($src | path join "certificates")
+        mkdir $cert_dir
+        "FAKE CRT" | save -f ($cert_dir | path join "svc.crt")
+        "FAKE KEY" | save -f ($cert_dir | path join "svc.key")
+
+        let expected_owner = $"((^id -u | str trim)):((^id -g | str trim))"
+        copy-tls --enabled "true" --mode "ca-and-cert" --ca-name "dockypody" --cert-name "svc" --source-certs $"($cert_dir)/" --dest $"($dest)/"
+
+        let dest_key = ($dest | path join "svc.key")
+        let dest_crt = ($dest | path join "svc.crt")
+        let key_owner = (^stat -c '%u:%g' $dest_key | str trim)
+        let crt_owner = (^stat -c '%u:%g' $dest_crt | str trim)
+        let key_mode = (^stat -c '%a' $dest_key | str trim)
+        let crt_mode = (^stat -c '%a' $dest_crt | str trim)
+        rm-temp-context $src
+        rm-temp-context $dest
+
+        if $key_owner != $expected_owner {
+            error make {msg: $"Without runtime-owner, key should stay ($expected_owner), got ($key_owner)"}
+        }
+        if $crt_owner != $expected_owner {
+            error make {msg: $"Without runtime-owner, crt should stay ($expected_owner), got ($crt_owner)"}
+        }
+        if $key_mode != "600" {
+            error make {msg: $"Expected key mode 600, got ($key_mode)"}
+        }
+        if $crt_mode != "644" {
+            error make {msg: $"Expected crt mode 644, got ($crt_mode)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_copy_tls_modes)
+
+    let test_copy_tls_owner = (run-test "copy-tls: runtime-owner set to current user -> chown succeeds, ownership matches, modes correct" {
+        let src = (^mktemp -d | str trim)
+        let dest = (^mktemp -d | str trim)
+        let cert_dir = ($src | path join "certificates")
+        mkdir $cert_dir
+        "FAKE CRT" | save -f ($cert_dir | path join "svc.crt")
+        "FAKE KEY" | save -f ($cert_dir | path join "svc.key")
+
+        let owner = $"((^id -u | str trim)):((^id -g | str trim))"
+        copy-tls --enabled "true" --mode "ca-and-cert" --ca-name "dockypody" --cert-name "svc" --source-certs $"($cert_dir)/" --dest $"($dest)/" --runtime-owner $owner
+
+        let dest_key = ($dest | path join "svc.key")
+        let dest_crt = ($dest | path join "svc.crt")
+        let key_owner = (^stat -c '%u:%g' $dest_key | str trim)
+        let key_mode = (^stat -c '%a' $dest_key | str trim)
+        let crt_mode = (^stat -c '%a' $dest_crt | str trim)
+        rm-temp-context $src
+        rm-temp-context $dest
+
+        if $key_owner != $owner {
+            error make {msg: $"Expected owner ($owner), got ($key_owner)"}
+        }
+        if $key_mode != "600" {
+            error make {msg: $"Expected key mode 600, got ($key_mode)"}
+        }
+        if $crt_mode != "644" {
+            error make {msg: $"Expected crt mode 644, got ($crt_mode)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_copy_tls_owner)
+
+    let test_copy_tls_quoted_owner = (run-test "copy-tls: Docker-style quoted runtime-owner is normalized" {
+        let src = (^mktemp -d | str trim)
+        let dest = (^mktemp -d | str trim)
+        let cert_dir = ($src | path join "certificates")
+        mkdir $cert_dir
+        "FAKE CRT" | save -f ($cert_dir | path join "svc.crt")
+        "FAKE KEY" | save -f ($cert_dir | path join "svc.key")
+
+        let owner = $"((^id -u | str trim)):((^id -g | str trim))"
+        let quoted_owner = $"'($owner)'"
+        copy-tls --enabled "true" --mode "ca-and-cert" --ca-name "dockypody" --cert-name "svc" --source-certs $"($cert_dir)/" --dest $"($dest)/" --runtime-owner $quoted_owner
+
+        let dest_key = ($dest | path join "svc.key")
+        let dest_crt = ($dest | path join "svc.crt")
+        let key_owner = (^stat -c '%u:%g' $dest_key | str trim)
+        let key_mode = (^stat -c '%a' $dest_key | str trim)
+        let crt_mode = (^stat -c '%a' $dest_crt | str trim)
+        rm-temp-context $src
+        rm-temp-context $dest
+
+        if $key_owner != $owner {
+            error make {msg: $"Quoted owner ($quoted_owner) should normalize to ($owner), got ($key_owner)"}
+        }
+        if $key_mode != "600" {
+            error make {msg: $"Expected key mode 600, got ($key_mode)"}
+        }
+        if $crt_mode != "644" {
+            error make {msg: $"Expected crt mode 644, got ($crt_mode)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_copy_tls_quoted_owner)
+
+    let test_copy_tls_main_subprocess = (run-test "copy.nu main: subprocess with Docker-style quoted user:group runtime-owner" {
+        let src = (^mktemp -d | str trim)
+        let dest = (^mktemp -d | str trim)
+        let cert_dir = ($src | path join "certificates")
+        mkdir $cert_dir
+        "FAKE CRT" | save -f ($cert_dir | path join "svc.crt")
+        "FAKE KEY" | save -f ($cert_dir | path join "svc.key")
+
+        let user_group = $"((^id -un | str trim)):((^id -gn | str trim))"
+        let quoted_owner = $"'($user_group)'"
+        let copy_script = (get-repo-root | path join "scripts" "lib" "tls" "copy.nu")
+        let result = (
+            ^nu $copy_script
+                --enabled "'true'"
+                --mode "'ca-and-cert'"
+                --ca-name "'dockypody'"
+                --cert-name "'svc'"
+                --source-certs $"($cert_dir)/"
+                --dest $"($dest)/"
+                --runtime-owner $quoted_owner
+            | complete
+        )
+
+        if $result.exit_code != 0 {
+            rm-temp-context $src
+            rm-temp-context $dest
+            error make {msg: $"copy.nu subprocess failed (exit ($result.exit_code)): ($result.stderr)"}
+        }
+
+        let dest_key = ($dest | path join "svc.key")
+        let dest_crt = ($dest | path join "svc.crt")
+        let key_owner = (^stat -c '%U:%G' $dest_key | str trim)
+        let crt_owner = (^stat -c '%U:%G' $dest_crt | str trim)
+        let key_mode = (^stat -c '%a' $dest_key | str trim)
+        let crt_mode = (^stat -c '%a' $dest_crt | str trim)
+        rm-temp-context $src
+        rm-temp-context $dest
+
+        if $key_owner != $user_group {
+            error make {msg: $"Expected key owner ($user_group), got ($key_owner)"}
+        }
+        if $crt_owner != $user_group {
+            error make {msg: $"Expected crt owner ($user_group), got ($crt_owner)"}
+        }
+        if $key_mode != "600" {
+            error make {msg: $"Expected key mode 600, got ($key_mode)"}
+        }
+        if $crt_mode != "644" {
+            error make {msg: $"Expected crt mode 644, got ($crt_mode)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_copy_tls_main_subprocess)
+
+    let test_dockerfile_runtime_owner = (run-test "Dockerfile drift: copy-tls services use expected --runtime-owner and no inline /tls chown" {
+        let repo_root = (get-repo-root)
+        let dockerfile_contracts = [
+            {path: "services/idp/Dockerfile", runtime_owner: "--runtime-owner \"'1000:1000'\""}
+            {path: "services/ocis/Dockerfile.alpine", runtime_owner: "--runtime-owner \"'1000:1000'\""}
+            {path: "services/opencloud/Dockerfile.alpine", runtime_owner: "--runtime-owner \"'1000:1000'\""}
+            {path: "services/cernbox-web/Dockerfile", runtime_owner: "--runtime-owner \"'nginx:nginx'\""}
+        ]
+        for contract in $dockerfile_contracts {
+            let df = $contract.path
+            let path = ($repo_root | path join $df)
+            if not ($path | path exists) {
+                error make {msg: $"Dockerfile not found: ($path)"}
+            }
+            let content = (open --raw $path | decode utf-8)
+            if not ($content | str contains $contract.runtime_owner) {
+                error make {msg: $"($df): expected exact ($contract.runtime_owner) in copy-tls invocation"}
+            }
+            let stale = (find-stale-inline-tls-chown $content)
+            if not ($stale | is-empty) {
+                error make {msg: $"($df): stale inline chown targeting /tls must be removed: ($stale | first | str trim)"}
+            }
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_dockerfile_runtime_owner)
 
     print-test-summary $results
 
