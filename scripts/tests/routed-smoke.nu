@@ -711,6 +711,66 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_smoke_local_only_version_inspect)
 
+    let test_smoke_tracked_miss_local_only_build = (run-test "smoke: routed build tracked plane miss for local-only version names guidance" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        {
+            versions: [{ name: "devlocal" }]
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let result = (run-dockypody-in-repo $repo [
+            build --show-build-order --service test-svc --version devlocal
+        ])
+        rm-temp-repo $repo
+        if $result.exit_code == 0 {
+            error make {msg: "Expected tracked-plane build miss for local-only version"}
+        }
+        let combined = ($result.stdout + $result.stderr)
+        if not ($combined | str contains "--plane local") {
+            error make {msg: $"Expected --plane local guidance, got: ($combined)"}
+        }
+        if not ($combined | str contains "local fragment") {
+            error make {msg: $"Expected local fragment mention, got: ($combined)"}
+        }
+        if not ($combined | str contains ".dockypody.local/services/test-svc/versions.nuon") {
+            error make {msg: $"Expected local fragment path suffix in output, got: ($combined)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_tracked_miss_local_only_build)
+
+    let test_smoke_tracked_miss_local_only_inspect = (run-test "smoke: routed inspect effective-config tracked plane miss for local-only version names guidance" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        {
+            versions: [{ name: "devlocal" }]
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let out = (run-dockypody-in-repo $repo [
+            inspect effective-config --service test-svc --version devlocal
+        ])
+        rm-temp-repo $repo
+        if $out.exit_code == 0 {
+            error make {msg: "Expected tracked-plane inspect miss for local-only version"}
+        }
+        let combined = ($out.stdout + $out.stderr)
+        if not ($combined | str contains "--plane local") {
+            error make {msg: $"Expected --plane local guidance, got: ($combined)"}
+        }
+        if not ($combined | str contains "local fragment") {
+            error make {msg: $"Expected local fragment mention, got: ($combined)"}
+        }
+        if not ($combined | str contains ".dockypody.local/services/test-svc/versions.nuon") {
+            error make {msg: $"Expected local fragment path suffix in output, got: ($combined)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_tracked_miss_local_only_inspect)
+
     let test_smoke_local_version_replace_inspect = (run-test "smoke: routed inspect effective-config local version replaces tracked same name" {
         let repo = (make-temp-repo)
         seed-service-with-git-source $repo
