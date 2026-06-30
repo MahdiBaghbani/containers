@@ -59,8 +59,12 @@ This clears generated `/etc/revad` mounts and the persisted cernbox web
 From this directory:
 
 ```bash
-docker compose up -d
+docker compose up -d --wait
 ```
+
+`--wait` blocks until services with baked image healthchecks (IdP, Reva dev
+images, cernbox-web) report healthy. Readiness is defined in the Dockerfiles,
+not duplicated in this compose file.
 
 ### Firefox UI
 

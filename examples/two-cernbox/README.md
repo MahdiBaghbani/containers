@@ -94,8 +94,12 @@ values.
 From this directory:
 
 ```bash
-docker compose up -d
+docker compose up -d --wait
 ```
+
+`--wait` blocks until services with baked image healthchecks (both IdPs, Reva
+dev images, both cernbox-web instances) report healthy. Readiness is defined in
+the Dockerfiles, not duplicated in this compose file.
 
 ### Firefox UI
 

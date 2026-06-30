@@ -59,21 +59,6 @@ services:
       KC_HTTP_MANAGEMENT_SCHEME: "http"
       IDP_DOMAIN: "${IDP1_DOMAIN}"
       IDP_URL: "${IDP1_URL}"
-    # Keycloak exposes /health/ready on the management interface (port 9000),
-    # which inherits the main HTTPS settings by default; force plain HTTP with
-    # KC_HTTP_MANAGEMENT_SCHEME=http and probe with nu (no curl in this image).
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "/usr/local/bin/nu",
-          "-c",
-          "http get http://127.0.0.1:9000/health/ready | ignore",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 36
-      start_period: 90s
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -105,21 +90,6 @@ services:
       KC_HTTP_MANAGEMENT_SCHEME: "http"
       IDP_DOMAIN: "${IDP2_DOMAIN}"
       IDP_URL: "${IDP2_URL}"
-    # Keycloak exposes /health/ready on the management interface (port 9000),
-    # which inherits the main HTTPS settings by default; force plain HTTP with
-    # KC_HTTP_MANAGEMENT_SCHEME=http and probe with nu (no curl in this image).
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "/usr/local/bin/nu",
-          "-c",
-          "http get http://127.0.0.1:9000/health/ready | ignore",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 36
-      start_period: 90s
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -219,7 +189,7 @@ services:
       IDP_URL: "${IDP1_URL}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -250,7 +220,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -281,7 +251,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -312,7 +282,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -343,7 +313,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -374,7 +344,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -412,7 +382,7 @@ services:
       NO_PROXY: "${CERNBOX1_NO_PROXY}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -443,7 +413,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -476,7 +446,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -514,7 +484,7 @@ services:
       NO_PROXY: "${CERNBOX1_NO_PROXY}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -552,7 +522,7 @@ services:
       NO_PROXY: "${CERNBOX1_NO_PROXY}"
     depends_on:
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -586,23 +556,17 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "${PWD}/volumes/cernbox1/data/cernbox-web:/var/www"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/ >/dev/null"]
-      interval: 5s
-      timeout: 5s
-      retries: 36
-      start_period: 90s
     depends_on:
       two-cernbox-idp1:
         condition: service_healthy
       two-cernbox-1-revad-gateway:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-1-revad-dataprovider-localhome:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-1-revad-dataprovider-ocm:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-1-revad-dataprovider-sciencemesh:
-        condition: service_started
+        condition: service_healthy
 
   two-cernbox-2-revad-gateway:
     image: "cernbox-revad:${IMAGE_CERNBOX_REVAD}"
@@ -697,7 +661,7 @@ services:
       IDP_URL: "${IDP2_URL}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -728,7 +692,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -759,7 +723,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -790,7 +754,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -821,7 +785,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -852,7 +816,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -890,7 +854,7 @@ services:
       NO_PROXY: "${CERNBOX2_NO_PROXY}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -921,7 +885,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -954,7 +918,7 @@ services:
       REVAD_CONFIG_DIR: "${REVAD_CONFIG_DIR:-/etc/revad}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -992,7 +956,7 @@ services:
       NO_PROXY: "${CERNBOX2_NO_PROXY}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -1030,7 +994,7 @@ services:
       NO_PROXY: "${CERNBOX2_NO_PROXY}"
     depends_on:
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
@@ -1064,23 +1028,17 @@ services:
       - "/etc/timezone:/etc/timezone:ro"
       - "/etc/localtime:/etc/localtime:ro"
       - "${PWD}/volumes/cernbox2/data/cernbox-web:/var/www"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/ >/dev/null"]
-      interval: 5s
-      timeout: 5s
-      retries: 36
-      start_period: 90s
     depends_on:
       two-cernbox-idp2:
         condition: service_healthy
       two-cernbox-2-revad-gateway:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-2-revad-dataprovider-localhome:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-2-revad-dataprovider-ocm:
-        condition: service_started
+        condition: service_healthy
       two-cernbox-2-revad-dataprovider-sciencemesh:
-        condition: service_started
+        condition: service_healthy
 
   two-cernbox-firefox:
     image: "${FIREFOX_IMAGE:-firefox:v150.0.0}"
