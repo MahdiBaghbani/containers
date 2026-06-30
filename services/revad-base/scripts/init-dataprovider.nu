@@ -23,6 +23,7 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/ports.nu [require-dataprovider-grpc-port resolve-gateway-grpc-port]
 
 const CONFIG_DIR = "/configs/revad"
 
@@ -92,16 +93,10 @@ export def init_dataprovider [
   let dataprovider_host = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_HOST" $"revad-dataprovider-($dataprovider_type)")
   let dataprovider_port = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PORT" "80")
   let dataprovider_protocol = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PROTOCOL" "http")
-  let dataprovider_grpc_port = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_GRPC_PORT" "")
+  let dataprovider_grpc_port = (require-dataprovider-grpc-port $dataprovider_type)
   
-  if ($dataprovider_grpc_port | str length) == 0 {
-    error make { msg: $"REVAD_DATAPROVIDER_($type_upper)_GRPC_PORT is required for dataprovider ($dataprovider_type)" }
-  }
-  
-  # Get gateway address for gRPC communication
-  # Dataproviders need to communicate with gateway via gRPC for storage registry
   let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
-  let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
+  let gateway_grpc_port = (resolve-gateway-grpc-port)
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   
   # Get shared configuration variables

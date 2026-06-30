@@ -23,6 +23,7 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/ports.nu [resolve-shareproviders-grpc-port resolve-gateway-grpc-port]
 
 const CONFIG_DIR = "/configs/revad"
 
@@ -79,13 +80,10 @@ export def init_shareproviders [] {
   # Get shareproviders-specific environment variables
   # Defaults use generic names (port matches common pattern: 9144)
   let shareproviders_host = (get_env_or_default "REVAD_SHAREPROVIDERS_HOST" "revad-shareproviders")
-  let shareproviders_grpc_port = (get_env_or_default "REVAD_SHAREPROVIDERS_GRPC_PORT" "9144")
+  let shareproviders_grpc_port = (resolve-shareproviders-grpc-port)
   
-  # Get gateway address for gRPC communication
-  # Share providers need to communicate with gateway via gRPC
-  # Default uses generic name (port matches common pattern: 9142)
   let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
-  let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
+  let gateway_grpc_port = (resolve-gateway-grpc-port)
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   
   # Get shared configuration variables

@@ -23,6 +23,7 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/ports.nu [resolve-authprovider-grpc-port resolve-gateway-grpc-port]
 
 const CONFIG_DIR = "/configs/revad"
 
@@ -89,27 +90,11 @@ export def init_authprovider [authprovider_type: string] {
   let type_upper = ($authprovider_type | str upcase)
   let authprovider_host = (get_env_or_default $"REVAD_AUTHPROVIDER_($type_upper)_HOST" $"revad-authprovider-($authprovider_type)")
   
-  # Set production-like default ports based on type
-  mut default_port = "9158"  # OIDC default
-  if $authprovider_type == "machine" {
-    $default_port = "9166"
-  } else if $authprovider_type == "publicshares" {
-    $default_port = "9160"
-  } else if $authprovider_type == "ocmshares" {
-    $default_port = "9278"
-  } else if $authprovider_type == "ocmsharecode" {
-    $default_port = "9280"
-  } else if $authprovider_type == "ocmexchangedtoken" {
-    $default_port = "9282"
-  }
-  
-  let authprovider_grpc_port = (get_env_or_default $"REVAD_AUTHPROVIDER_($type_upper)_GRPC_PORT" $default_port)
+  let authprovider_grpc_port = (resolve-authprovider-grpc-port $authprovider_type)
   
   # Get gateway address for gRPC communication
-  # Auth providers need to communicate with gateway via gRPC
-  # Default uses generic name (port matches common pattern: 9142)
   let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" "revad-gateway")
-  let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
+  let gateway_grpc_port = (resolve-gateway-grpc-port)
   let gateway_svc = $"($gateway_host):($gateway_grpc_port)"
   
   # Get shared configuration variables

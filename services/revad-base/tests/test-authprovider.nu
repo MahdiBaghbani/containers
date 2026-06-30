@@ -25,7 +25,7 @@
 def test_authprovider_type_validation [] {
   print "Testing authprovider type validation..."
   
-  let valid_types = ["oidc", "machine", "ocmshares", "publicshares"]
+  let valid_types = ["oidc", "machine", "ocmshares", "ocmsharecode", "ocmexchangedtoken", "publicshares"]
   let invalid_types = ["invalid", "oidc2", "machine-auth", "", "oidc "]
   
   mut passed = 0
@@ -73,7 +73,7 @@ def test_authprovider_config_copy [] {
   ^mkdir -p $test_config_dir $test_source_dir
   
   # Test each authprovider type
-  let types = ["oidc", "machine", "ocmshares", "publicshares"]
+  let types = ["oidc", "machine", "ocmshares", "ocmsharecode", "ocmexchangedtoken", "publicshares"]
   mut passed = 0
   mut failed = 0
   
