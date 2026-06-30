@@ -48,9 +48,9 @@ services:
       nextcloud-mitmproxy:
         condition: service_started
       nextcloud1:
-        condition: service_started
+        condition: service_healthy
       nextcloud2:
-        condition: service_started
+        condition: service_healthy
 
   nextcloud1-db:
     image: "mariadb:${IMAGE_MARIADB:-11.8}"
@@ -126,11 +126,17 @@ services:
       HTTP_PROXY: "${NEXTCLOUD_HTTP_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
       HTTPS_PROXY: "${NEXTCLOUD_HTTPS_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
       NO_PROXY: "${NEXTCLOUD1_NO_PROXY:-localhost,127.0.0.1,nextcloud-mitmproxy.docker,nextcloud1-db,nextcloud1-cache}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/status.php | grep -q '\"installed\":true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
     depends_on:
       nextcloud1-db:
         condition: service_started
       nextcloud1-cache:
-        condition: service_started
+        condition: service_healthy
 
   nextcloud2-db:
     image: "mariadb:${IMAGE_MARIADB:-11.8}"
@@ -206,8 +212,14 @@ services:
       HTTP_PROXY: "${NEXTCLOUD_HTTP_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
       HTTPS_PROXY: "${NEXTCLOUD_HTTPS_PROXY:-http://nextcloud-mitmproxy.docker:8080}"
       NO_PROXY: "${NEXTCLOUD2_NO_PROXY:-localhost,127.0.0.1,nextcloud-mitmproxy.docker,nextcloud2-db,nextcloud2-cache}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -skf https://127.0.0.1/status.php | grep -q '\"installed\":true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
     depends_on:
       nextcloud2-db:
         condition: service_started
       nextcloud2-cache:
-        condition: service_started
+        condition: service_healthy
