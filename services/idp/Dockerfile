@@ -44,6 +44,8 @@ RUN /opt/keycloak/bin/kc.sh import --file /tmp/keycloak.json --override true
 # Enable the management health endpoints (/health/ready) for optimized builds.
 # Must be set before kc.sh build so the baked, --optimized runtime exposes them.
 ENV KC_HEALTH_ENABLED=true
+# Plain HTTP on :9000 for baked HEALTHCHECK; must match runtime default below.
+ENV KC_HTTP_MANAGEMENT_SCHEME=http
 
 # Pre-compile Keycloak for optimized startup
 RUN /opt/keycloak/bin/kc.sh build
@@ -107,6 +109,12 @@ COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 # Switch back to Keycloak user (UID 1000) for security
 USER 1000
 
+# Baked default for management :9000; HEALTHCHECK probes http://127.0.0.1:9000/health/ready.
+ENV KC_HTTP_MANAGEMENT_SCHEME=http
+
 # Default command: already contains realm, optimized startup
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 CMD ["start", "--optimized", "--verbose"]
+
+HEALTHCHECK --interval=5s --timeout=5s --start-period=90s --retries=36 \
+    CMD ["/usr/local/bin/nu", "-c", "http get http://127.0.0.1:9000/health/ready | ignore"]
