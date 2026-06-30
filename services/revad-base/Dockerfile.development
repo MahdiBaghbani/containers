@@ -304,3 +304,9 @@ ENV PATH="/revad/cmd:${PATH}"
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 
 CMD ["tail", "-F", "/var/log/revad.log"]
+
+# Development images bake readiness so compose files can use service_healthy
+# without duplicating per-mode gRPC port probes. Production/distroless paths
+# intentionally omit HEALTHCHECK (no nu, no healthcheck.nu).
+HEALTHCHECK --interval=5s --timeout=5s --start-period=90s --retries=36 \
+    CMD ["/usr/local/bin/nu", "/usr/bin/healthcheck.nu"]
