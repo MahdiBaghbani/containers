@@ -37,17 +37,6 @@
       "overrides": {}
     },
     {
-      "name": "local",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "ocm_go": {
-            "path": "../opencloudmesh-go"
-          }
-        }
-      }
-    },
-    {
       "name": "v1.0.0",
       "latest": false,
       "overrides": {

@@ -19,6 +19,7 @@
 # See docs/concepts/build-system.md for architecture
 
 use ./config.nu [process-sources-to-build-args process-external-images-to-build-args]
+use ../plane/guard.nu [PLANE_LOCAL]
 
 # Generate build arguments (priority order documented in docs/concepts/build-system.md)
 export def generate-build-args [
@@ -32,7 +33,8 @@ export def generate-build-args [
     no_cache: bool = false,
     source_shas: record = {},
     source_types: record = {},
-    local_source_paths: record = {}
+    local_source_paths: record = {},
+    plane: string = "tracked"
 ] {
     let commit_sha = (if ($meta.sha | str length) > 0 { $meta.sha } else { "local" })
     let version = $version_tag
@@ -44,7 +46,7 @@ export def generate-build-args [
     
     let cfg_sources = (try { $cfg.sources } catch { {} })
     if not ($cfg_sources | is-empty) {
-        let source_args = (process-sources-to-build-args $cfg_sources $source_types)
+        let source_args = (process-sources-to-build-args $cfg_sources $source_types $plane)
         # Update local source paths if provided (from context preparation - Task 4.2)
         # For now, if local_source_paths has entries, update corresponding _PATH args
         let source_args_updated = (if not ($local_source_paths | is-empty) {
@@ -83,8 +85,14 @@ export def generate-build-args [
     let cfg_build_args = (try { $cfg.build_args } catch { {} })
     $build_args = ($build_args | merge $cfg_build_args)
     
-    # Apply env var overrides first (TLS_MODE excluded - system-managed)
+    # Apply env var overrides first (TLS_MODE excluded - system-managed).
+    # Under --plane local, source *_PATH and *_MODE args are guard-owned.
     for arg_name in ($build_args | columns) {
+        if $plane == $PLANE_LOCAL and (
+            ($arg_name | str ends-with "_PATH") or ($arg_name | str ends-with "_MODE")
+        ) {
+            continue
+        }
         let env_val = (try { ($env | get -o $arg_name) } catch { "" })
         if ($env_val != null) and ($env_val | str length) > 0 {
             $build_args = ($build_args | upsert $arg_name $env_val)

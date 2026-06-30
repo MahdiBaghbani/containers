@@ -22,6 +22,7 @@ use ./order.nu [build-dependency-graph topological-sort-dfs]
 use ./dependencies.nu [resolve-dep-node]
 use ./config.nu [load-service-config detect-all-source-types]
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest get-version-or-null]
+use ../plane/versions.nu [load-build-versions-manifest]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform strip-platform-suffix]
 use ../core/repo.nu [get-repo-root]
 
@@ -198,7 +199,9 @@ export def collect-dep-hashes [
 export def compute-service-def-hash-graph [
     build_order: list,
     registry_info: record,
-    sha_cache: record
+    sha_cache: record,
+    plane_ctx: any = null,
+    --root-nodes: list = []
 ] {
     use ./sources.nu [extract-source-shas]
     
@@ -215,8 +218,9 @@ export def compute-service-def-hash-graph [
             let platform = (if ($parts | length) > 2 { $parts | get 2 } else { "" })
             
             # Load service config
+            let root_scope = ($node in $root_nodes)
             let node_config = (try {
-                load-node-config $service $version_name $platform
+                load-node-config $service $version_name $platform $plane_ctx --root-scope=$root_scope
             } catch {|err|
                 print $"WARNING: Could not load config for ($node): (try { $err.msg } catch { 'Unknown error' })"
                 null
@@ -231,9 +235,14 @@ export def compute-service-def-hash-graph [
                 let platforms_manifest = $node_config.platforms_manifest
                 
                 # Extract source types
+                let plane = (if $plane_ctx != null {
+                    (try { $plane_ctx.plane } catch { "tracked" })
+                } else {
+                    "tracked"
+                })
                 let cfg_sources = (try { $cfg.sources } catch { {} })
                 let source_types = (if not ($cfg_sources | is-empty) {
-                    detect-all-source-types $cfg_sources
+                    detect-all-source-types $cfg_sources $plane
                 } else {
                     {}
                 })
@@ -298,14 +307,16 @@ export def compute-service-def-hash-graph [
 def load-node-config [
     service: string,
     version_name: string,
-    platform: string
+    platform: string,
+    plane_ctx: any = null,
+    --root-scope = false
 ] {
     # Load versions manifest
     if not (check-versions-manifest-exists $service) {
         error make { msg: $"Service '($service)' does not have a version manifest" }
     }
     
-    let versions_manifest = (load-versions-manifest $service)
+    let versions_manifest = (load-build-versions-manifest $service $plane_ctx $root_scope)
     
     # Check for platforms manifest
     let has_platforms = (check-platforms-manifest-exists $service)
@@ -334,7 +345,7 @@ def load-node-config [
     }
     
     # Load merged config
-    let cfg = (load-service-config $service $version_spec $platform $platforms_manifest)
+    let cfg = (load-service-config $service $version_spec $platform $platforms_manifest $plane_ctx)
     
     {
         cfg: $cfg,

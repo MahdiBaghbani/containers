@@ -468,6 +468,10 @@ open file.nuon
 {name: "value"} | to json | save file.json
 {name: "value"} | to nuon | save file.nuon
 
+# DockyPody manifest caveat
+# Manifests under services/, schemas/, and .dockypody.local/ are authored as
+# JSONC-style .nuon files. Do not use compact `to nuon` output for them.
+
 # List directory
 ls
 ls *.nu

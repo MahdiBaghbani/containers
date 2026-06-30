@@ -36,9 +36,21 @@ use ./hash.nu [compute-service-def-hash-graph]
 use ./pull.nu [run-pulls print-pull-summary compute-canonical-image-ref]
 use ./docker.nu [get-service-def-hash-from-image]
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest filter-versions get-version-or-null resolve-version-name get-version-spec apply-version-defaults get-default-version]
+use ../plane/versions.nu [load-effective-versions-manifest resolve-build-node-version-spec]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names expand-version-to-platforms strip-platform-suffix]
 use ../services/core.nu [list-service-names]
 use ../registries/info.nu [get-registry-info]
+
+def root-nodes-for-service [service: string, version_specs: list] {
+  $version_specs | each {|v|
+    let plat = (try { $v.platform } catch { "" })
+    if ($plat | str length) > 0 {
+      $"($service):($v.name):($plat)"
+    } else {
+      $"($service):($v.name)"
+    }
+  }
+}
 
 # Main build orchestration entrypoint
 # Routes to appropriate build path based on flags
@@ -62,6 +74,7 @@ def run-all-services-build [ctx: record] {
   let f = $ctx.flags
   let meta = $ctx.meta
   let info = $ctx.registry_info
+  let plane_ctx = $ctx.plane_ctx
   mut sha_cache = {}
   
   # Disk monitoring: pre phase (skip for metadata-only modes)
@@ -137,7 +150,7 @@ def run-all-services-build [ctx: record] {
       print $"WARNING: Service '($service_name)' has no versions manifest. Skipping."
       $acc
     } else {
-      let versions_manifest = (load-versions-manifest $service_name)
+      let versions_manifest = (load-effective-versions-manifest $service_name $plane_ctx)
       let has_platforms = (check-platforms-manifest-exists $service_name)
       let platforms_manifest = (if $has_platforms {
         try {
@@ -225,14 +238,14 @@ def run-all-services-build [ctx: record] {
     
     let graph = (if $f.show_build_order {
       try {
-        let cfg = (load-service-config $service $version_spec $plat $platforms_manifest)
-        build-dependency-graph $service $version_spec $cfg $plat $platforms_manifest false $info
+        let cfg = (load-service-config $service $version_spec $plat $platforms_manifest $plane_ctx)
+        build-dependency-graph $service $version_spec $cfg $plat $platforms_manifest false $info {} $plane_ctx
       } catch {|err|
         print $"WARNING: Could not build dependency graph for ($service):($version_spec.name): ($err.msg)"
         {nodes: [], edges: []}
       }
     } else {
-      let cfg = (load-service-config $service $version_spec $plat $platforms_manifest)
+      let cfg = (load-service-config $service $version_spec $plat $platforms_manifest $plane_ctx)
       build-dependency-graph $service $version_spec $cfg $plat $platforms_manifest false $info
     })
     
@@ -301,12 +314,20 @@ def run-all-services-build [ctx: record] {
   }
   print ""
   
+  let root_nodes = ($service_builds | each {|item|
+    if ($item.platform | str length) > 0 {
+      $"($item.service):($item.version_spec.name):($item.platform)"
+    } else {
+      $"($item.service):($item.version_spec.name)"
+    }
+  })
+
   # Compute service definition hash graph
-  let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+  let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
   
   # Pre-pull images if --pull flag is provided
   if not ($f.pull | is-empty) {
-    let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local)
+    let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
     print-pull-summary $pull_metrics
     print ""
   }
@@ -346,7 +367,11 @@ def run-all-services-build [ctx: record] {
           $item_node == $node
         })
         
-        let node_version_spec = (resolve-dependency-version-spec $node $node_platform)
+        let node_version_spec = (if $is_target_service {
+          resolve-build-node-version-spec $node $node_platform $plane_ctx true
+        } else {
+          resolve-dependency-version-spec $node $node_platform
+        })
         
         let node_has_platforms = (check-platforms-manifest-exists $node_service)
         let node_platforms_manifest = (if $node_has_platforms {
@@ -389,7 +414,7 @@ def run-all-services-build [ctx: record] {
         print $"\n--- Building ($build_label) ---"
         
         let build_result = (try {
-          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $f.provenance $f.progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $f.cache_bust $f.no_cache "strict" $f.push_deps $f.tag_deps $hash_graph $f.cache_match
+          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $f.provenance $f.progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $f.cache_bust $f.no_cache "strict" $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
           print $"ERROR: Failed to build ($build_label)"
@@ -463,10 +488,17 @@ def run-single-service-build [ctx: record] {
   let f = $ctx.flags
   let info = $ctx.registry_info
   let meta = $ctx.meta
+  let plane_ctx = $ctx.plane_ctx
   mut sha_cache = {}
   
-  # Load service manifests
+  # Load service manifests (root service uses effective versions under local plane)
   let manifests = (load-service-manifests $f.service)
+  let versions_manifest = (if $manifests.has_versions {
+    load-effective-versions-manifest $f.service $plane_ctx
+  } else {
+    null
+  })
+  let manifests = ($manifests | upsert versions_manifest $versions_manifest)
   
   # Validate platform if specified
   validate-platform-flag $f.platform $f.service $manifests.has_platforms $manifests.platforms_manifest
@@ -573,7 +605,7 @@ def run-single-service-build [ctx: record] {
       
       print "=== Build Order ==="
       print ""
-      show-build-order-for-version $f.service $version_spec $target_platform $platforms_manifest $info {}
+      show-build-order-for-version $f.service $version_spec $target_platform $platforms_manifest $info {} $plane_ctx
       return
     }
     
@@ -625,7 +657,7 @@ def run-single-service-build [ctx: record] {
       print $version_label
       
       try {
-        let result = (show-build-order-for-version $f.service $expanded_version $version_platform $platforms_manifest $info $graph_cache)
+        let result = (show-build-order-for-version $f.service $expanded_version $version_platform $platforms_manifest $info $graph_cache $plane_ctx)
         $graph_cache = $result.cache
       } catch {|err|
         let error_msg = (try { $err.msg } catch { "Unknown error" })
@@ -722,11 +754,12 @@ def run-single-service-build [ctx: record] {
         return
       }
       
-      let build_order = (compute-single-service-build-order $f.service $expanded_versions $platforms_manifest $info)
-      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+      let build_order = (compute-single-service-build-order $f.service $expanded_versions $platforms_manifest $info $plane_ctx)
+      let root_nodes = (root-nodes-for-service $f.service $expanded_versions)
+      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
       
       if not ($f.pull | is-empty) {
-        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local)
+        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
         print-pull-summary $pull_metrics
         print ""
       }
@@ -748,7 +781,7 @@ def run-single-service-build [ctx: record] {
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match)
+          let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -791,11 +824,12 @@ def run-single-service-build [ctx: record] {
       return
     } else {
       # Single-platform multi-version
-      let build_order = (compute-single-service-build-order $f.service $versions_to_build null $info)
-      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+      let build_order = (compute-single-service-build-order $f.service $versions_to_build null $info $plane_ctx)
+      let root_nodes = (root-nodes-for-service $f.service $versions_to_build)
+      let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
       
       if not ($f.pull | is-empty) {
-        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local)
+        let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
         print-pull-summary $pull_metrics
         print ""
       }
@@ -817,7 +851,7 @@ def run-single-service-build [ctx: record] {
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match)
+          let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -899,11 +933,12 @@ def run-single-service-build [ctx: record] {
       return
     }
     
-    let build_order = (compute-single-service-build-order $f.service $expanded_versions $platforms_manifest $info)
-    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+    let build_order = (compute-single-service-build-order $f.service $expanded_versions $platforms_manifest $info $plane_ctx)
+    let root_nodes = (root-nodes-for-service $f.service $expanded_versions)
+    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
     
     if not ($f.pull | is-empty) {
-      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local)
+      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
       print-pull-summary $pull_metrics
       print ""
     }
@@ -914,16 +949,17 @@ def run-single-service-build [ctx: record] {
     
     for expanded_version in $expanded_versions {
       let prev_cache = $sha_cache
-      let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match)
+      let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
       $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
     }
   } else {
     # Single-platform build (no platforms manifest)
-    let build_order = (compute-single-service-build-order $f.service [$version_spec] null $info)
-    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache)
+    let build_order = (compute-single-service-build-order $f.service [$version_spec] null $info $plane_ctx)
+    let root_nodes = (root-nodes-for-service $f.service [$version_spec])
+    let hash_graph = (compute-service-def-hash-graph $build_order $info $sha_cache $plane_ctx --root-nodes $root_nodes)
     
     if not ($f.pull | is-empty) {
-      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local)
+      let pull_metrics = (run-pulls $f.pull $build_order $info $meta.is_local $plane_ctx --root-nodes $root_nodes)
       print-pull-summary $pull_metrics
       print ""
     }
@@ -933,7 +969,7 @@ def run-single-service-build [ctx: record] {
     }
     
     let prev_cache = $sha_cache
-    let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match)
+    let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
     $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
   }
   

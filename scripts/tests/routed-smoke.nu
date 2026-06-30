@@ -25,10 +25,180 @@
 # openssl, temp repo) so it never writes a real CA.
 
 use ../lib/core/repo.nu [get-repo-root]
+use ../lib/plane/presence.nu [local-root-path local-services-path]
+use ../lib/plane/audit.nu [LOCAL_MIRROR_FILE]
 use ./lib.nu [run-test print-test-summary]
 
 def rm-temp-context [dir: string] {
     try { rm -rf $dir } catch { }
+}
+
+def make-temp-repo [] {
+    let tmp = (^mktemp -d | str trim)
+    mkdir $tmp
+    mkdir ($tmp | path join "services")
+    mkdir ($tmp | path join "scripts")
+    ^git -C $tmp init -q
+    $tmp
+}
+
+def rm-temp-repo [dir: string] {
+    try { rm -rf $dir } catch { }
+}
+
+def dockypody-entry [] {
+    "scripts/dockypody.nu" | path expand
+}
+
+def run-dockypody-in-repo [repo: string, args: list<string>] {
+    let entry = (dockypody-entry)
+    do -i { cd $repo; ^nu $entry ...$args } | complete
+}
+
+def seed-tracked-service [repo: string, name: string = "test-svc"] {
+    { name: $name } | save -f ($repo | path join $"services/($name).nuon")
+}
+
+def seed-service-with-git-source [
+    repo: string,
+    name: string = "test-svc",
+    fanout_capable: bool = false
+] {
+    seed-tracked-service $repo $name
+    mkdir ($repo | path join $"services/($name)")
+    mut version_entry = { name: "v1", overrides: {} }
+    if $fanout_capable {
+        $version_entry = ($version_entry | merge { latest: true, tags: ["extra"] })
+    }
+    {
+        default: "v1"
+        versions: [$version_entry]
+        defaults: {
+            sources: {
+                my_src: {
+                    url: "https://example.com/repo.git"
+                    ref: "main"
+                }
+            }
+        }
+    } | save -f ($repo | path join $"services/($name)/versions.nuon")
+}
+
+def assert-routed-failure-names-contract [
+    result: record,
+    contract: string,
+    forbidden: list<string> = []
+] {
+    if $result.exit_code == 0 {
+        error make {msg: $"Expected routed command to fail for contract '($contract)'"}
+    }
+    let combined = ($result.stdout + $result.stderr)
+    if not ($combined | str contains $contract) {
+        error make {msg: $"Expected routed failure to name contract '($contract)', got: ($combined)"}
+    }
+    for needle in $forbidden {
+        if ($combined | str contains $needle) {
+            error make {msg: $"Contract '($contract)' failure must not mention '($needle)', got: ($combined)"}
+        }
+    }
+    true
+}
+
+def inspect-suppressed-tag-fanout [] {
+    [
+        "manifest-latest"
+        "cli-latest"
+        "extra-tag"
+        "publish"
+        "dependency-tag-fanout"
+        "dependency-push-fanout"
+    ]
+}
+
+def assert-single-primary-tag-state [cfg: record, service: string, version: string] {
+    let tag_state = $cfg.single_primary_tag_state
+    if not $tag_state.active {
+        error make {msg: "Expected single_primary_tag_state.active true on local plane"}
+    }
+    if $tag_state.policy != "single-primary-non-publish" {
+        error make {msg: $"Expected single-primary policy, got: ($tag_state.policy)"}
+    }
+    let expected_primary = $"($service):($version)"
+    if ($tag_state.primary_tag? | default "") != $expected_primary {
+        error make {msg: $"Expected primary_tag ($expected_primary), got: ($tag_state.primary_tag)"}
+    }
+    let expected_suppressed = (inspect-suppressed-tag-fanout)
+    for item in $expected_suppressed {
+        if not ($item in $tag_state.suppressed) {
+            error make {msg: $"Expected suppressed fan-out item '($item)' in single_primary_tag_state"}
+        }
+    }
+    if ($tag_state.suppressed | length) != ($expected_suppressed | length) {
+        error make {msg: $"Unexpected suppressed fan-out entries: ($tag_state.suppressed | to json)"}
+    }
+    true
+}
+
+def assert-inspect-semantic-baseline [
+    cfg: record,
+    repo: string,
+    service: string,
+    version: string,
+    fragment_present: bool,
+    mirror_path: string = ""
+] {
+    for required_key in [
+        plane service version tracked_service tracked_version local_root
+        local_fragment_present local_mirror_path env_only env_keys_used
+        source_origin precedence_summary single_primary_tag_state
+    ] {
+        if not ($required_key in ($cfg | columns)) {
+            error make {msg: $"Missing required inspect semantic key: ($required_key)"}
+        }
+    }
+
+    if $cfg.plane != "local" {
+        error make {msg: $"Expected plane 'local', got: ($cfg.plane)"}
+    }
+    if $cfg.service != $service {
+        error make {msg: $"Expected service '($service)', got: ($cfg.service)"}
+    }
+    if $cfg.version != $version {
+        error make {msg: $"Expected version '($version)', got: ($cfg.version)"}
+    }
+    if $cfg.tracked_service != $service {
+        error make {msg: $"Expected tracked_service '($service)', got: ($cfg.tracked_service)"}
+    }
+    if $cfg.tracked_version != $version {
+        error make {msg: $"Expected tracked_version '($version)', got: ($cfg.tracked_version)"}
+    }
+
+    let expected_local_root = (local-root-path $repo | path expand)
+    let actual_local_root = (try { $cfg.local_root | path expand } catch { "" })
+    if $actual_local_root != $expected_local_root {
+        error make {msg: $"Expected local_root ($expected_local_root), got: ($actual_local_root)"}
+    }
+
+    if $cfg.local_fragment_present != $fragment_present {
+        error make {msg: $"Expected local_fragment_present ($fragment_present), got: ($cfg.local_fragment_present)"}
+    }
+
+    let expected_mirror = (if ($mirror_path | str length) > 0 {
+        $mirror_path | path expand
+    } else {
+        ""
+    })
+    let actual_mirror = (if ($cfg.local_mirror_path | str length) > 0 {
+        $cfg.local_mirror_path | path expand
+    } else {
+        ""
+    })
+    if $actual_mirror != $expected_mirror {
+        error make {msg: $"Expected local_mirror_path '($expected_mirror)', got: '($actual_mirror)'"}
+    }
+
+    assert-single-primary-tag-state $cfg $service $version
+    true
 }
 
 def parse-public-suite-block [help_output: string] {
@@ -188,6 +358,26 @@ def main [--verbose] {
     } $verbose_flag)
     $results = ($results | append $test_smoke_docs_help)
 
+    let test_smoke_inspect_help = (run-test "smoke: routed inspect help dispatches" {
+        let root = (get-repo-root)
+        let entry = ($root | path join "scripts" "dockypody.nu")
+        let out = (^nu $entry inspect help | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"inspect help exited ($out.exit_code): ($out.stderr)"}
+        }
+        if not ($out.stdout | str contains "inspect <subcommand>") {
+            error make {msg: "inspect help missing routed usage line"}
+        }
+        if not ($out.stdout | str contains "effective-config") {
+            error make {msg: "inspect help missing effective-config subcommand"}
+        }
+        if not ($out.stdout | str contains "--plane") {
+            error make {msg: "inspect help missing --plane option"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_inspect_help)
+
     let test_smoke_make_certs_filter = (run-test "smoke: make -n certs forwards FILTER to tls certs --filter" {
         let make_ok = ((try { ^which make | complete | get exit_code } catch { 1 }) == 0)
         if not $make_ok {
@@ -346,7 +536,8 @@ def main [--verbose] {
         let expected_public = [
             "all"
             "architecture" "manifests" "services" "tls" "ssh" "tag-generation"
-            "build-system" "defaults" "pull" "validate" "registries" "ci"
+            "build-system" "local-plane-build" "effective-versions" "defaults" "pull"
+            "validate" "registries" "ci"
             "ghcr-purge" "docs-lint" "routed-smoke" "cache-shards"
             "orchestration" "dep-contract" "service-def-hash"
         ]
@@ -364,6 +555,335 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $test_smoke_test_help_inventory)
+
+    let test_smoke_local_missing_root = (run-test "smoke: routed build --plane local missing root names presence contract" {
+        let repo = (make-temp-repo)
+        seed-tracked-service $repo
+        let result = (run-dockypody-in-repo $repo [build --plane local --show-build-order --service test-svc])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "requires local root directory" [
+            "Unsupported local root"
+            "Unknown local service mirror"
+            "Incomplete local service mirror"
+        ]
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_missing_root)
+
+    let test_smoke_local_empty_topology = (run-test "smoke: routed build --plane local passes guard on empty legal topology" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let result = (run-dockypody-in-repo $repo [build --plane local --show-build-order --service test-svc])
+        rm-temp-repo $repo
+        if $result.exit_code != 0 {
+            error make {msg: $"Expected guard pass on empty legal topology, exit ($result.exit_code): ($result.stderr)"}
+        }
+        let combined = ($result.stdout + $result.stderr)
+        if ($combined | str contains "requires local root directory") {
+            error make {msg: "Empty legal topology must not fail root presence guard"}
+        }
+        if ($combined | str contains "Unsupported local root") {
+            error make {msg: "Empty legal topology must not fail topology audit"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_empty_topology)
+
+    let test_smoke_local_baseline_inspect = (run-test "smoke: routed inspect effective-config baseline local-plane semantics" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo "test-svc" true
+        mkdir (local-root-path $repo)
+        let out = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
+        if $out.exit_code != 0 {
+            rm-temp-repo $repo
+            error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            rm-temp-repo $repo
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        assert-inspect-semantic-baseline $cfg $repo "test-svc" "v1" false ""
+        if $cfg.env_only {
+            error make {msg: "Baseline local inspect must not be classified as env_only"}
+        }
+        if ($cfg.env_keys_used | length) != 0 {
+            error make {msg: $"Expected empty env_keys_used for baseline local inspect, got: ($cfg.env_keys_used | to json)"}
+        }
+        if ($cfg.source_origin.my_src? | default "") != "tracked-git" {
+            error make {msg: $"Expected source_origin.my_src 'tracked-git', got: ($cfg.source_origin | to json)"}
+        }
+        if $cfg.precedence_summary != "tracked manifest" {
+            error make {msg: $"Expected precedence_summary 'tracked manifest', got: ($cfg.precedence_summary)"}
+        }
+        rm-temp-repo $repo
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_baseline_inspect)
+
+    let test_smoke_local_env_materialization = (run-test "smoke: routed inspect effective-config env-only path materialization" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        mkdir ($repo | path join "local-src")
+        let expected_path = ($repo | path join "local-src" | path expand)
+        let entry = (dockypody-entry)
+        let out = (do -i {||
+            cd $repo
+            $env.MY_SRC_PATH = ($env.PWD | path join "local-src")
+            ^nu $entry inspect effective-config --service test-svc --plane local
+        } | complete)
+        if $out.exit_code != 0 {
+            error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        assert-inspect-semantic-baseline $cfg $repo "test-svc" "v1" false ""
+        let materialized = (try { $cfg.sources.my_src.path | path expand } catch { "" })
+        if $materialized != $expected_path {
+            error make {msg: $"Expected env-only path ($expected_path), got: ($materialized)"}
+        }
+        if ("url" in ($cfg.sources.my_src | columns)) or ("ref" in ($cfg.sources.my_src | columns)) {
+            error make {msg: "Env-only materialization must replace git fields with path only"}
+        }
+        if not $cfg.env_only {
+            error make {msg: "Expected env_only true for env PATH materialization"}
+        }
+        if not ("MY_SRC_PATH" in $cfg.env_keys_used) {
+            error make {msg: $"Expected MY_SRC_PATH in env_keys_used, got: ($cfg.env_keys_used | to json)"}
+        }
+        if ($cfg.source_origin.my_src? | default "") != "env-only" {
+            error make {msg: $"Expected source_origin.my_src 'env-only', got: ($cfg.source_origin | to json)"}
+        }
+        if not ($cfg.precedence_summary | str contains "env PATH materialization") {
+            error make {msg: $"Expected precedence_summary to mention env PATH, got: ($cfg.precedence_summary)"}
+        }
+        rm-temp-repo $repo
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_env_materialization)
+
+    let test_smoke_local_only_version_inspect = (run-test "smoke: routed inspect effective-config local-only version from fragment versions array" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        mkdir ($repo | path join "local-only-src")
+        {
+            versions: [
+                {
+                    name: "local-only-v"
+                    overrides: {
+                        sources: {
+                            my_src: { path: "local-only-src" }
+                        }
+                    }
+                }
+            ]
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let out = (run-dockypody-in-repo $repo [
+            inspect effective-config --service test-svc --plane local --version local-only-v
+        ])
+        if $out.exit_code != 0 {
+            rm-temp-repo $repo
+            error make {msg: $"Expected inspect success for local-only version, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            rm-temp-repo $repo
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        assert-inspect-semantic-baseline $cfg $repo "test-svc" "local-only-v" true $mirror
+        if not ($cfg.precedence_summary | str contains "local-only version") {
+            error make {msg: $"Expected precedence_summary to mention local-only version, got: ($cfg.precedence_summary)"}
+        }
+        if ($cfg.sources.my_src.path? | default "") != "local-only-src" {
+            error make {msg: $"Expected local-only source path, got: ($cfg.sources.my_src.path)"}
+        }
+        rm-temp-repo $repo
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_only_version_inspect)
+
+    let test_smoke_local_version_replace_inspect = (run-test "smoke: routed inspect effective-config local version replaces tracked same name" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        mkdir ($repo | path join "replaced-src")
+        {
+            versions: [
+                {
+                    name: "v1"
+                    overrides: {
+                        sources: {
+                            my_src: { path: "replaced-src" }
+                        }
+                    }
+                }
+            ]
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let out = (run-dockypody-in-repo $repo [
+            inspect effective-config --service test-svc --plane local --version v1
+        ])
+        if $out.exit_code != 0 {
+            rm-temp-repo $repo
+            error make {msg: $"Expected inspect success for replaced version, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            rm-temp-repo $repo
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        assert-inspect-semantic-baseline $cfg $repo "test-svc" "v1" true $mirror
+        if not ($cfg.precedence_summary | str contains "local version (replace)") {
+            error make {msg: $"Expected precedence_summary to mention local version replace, got: ($cfg.precedence_summary)"}
+        }
+        if ($cfg.sources.my_src.path? | default "") != "replaced-src" {
+            error make {msg: $"Expected replaced local path 'replaced-src', got: ($cfg.sources.my_src.path)"}
+        }
+        if ("url" in ($cfg.sources.my_src | columns)) or ("ref" in ($cfg.sources.my_src | columns)) {
+            error make {msg: "Replaced local version must materialize path-only source, not git fields"}
+        }
+        if ($cfg.source_origin.my_src? | default "") != "fragment-local" {
+            error make {msg: $"Expected source_origin.my_src 'fragment-local', got: ($cfg.source_origin | to json)"}
+        }
+        rm-temp-repo $repo
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_version_replace_inspect)
+
+    let test_smoke_local_version_scoped_fragment_precedence = (run-test "smoke: routed inspect version-scoped fragment sources align precedence_summary with source_origin" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        mkdir ($repo | path join "version-scoped-src")
+        {
+            versions: [
+                {
+                    name: "v1"
+                    overrides: {
+                        sources: {
+                            my_src: { path: "version-scoped-src" }
+                        }
+                    }
+                }
+            ]
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let out = (run-dockypody-in-repo $repo [
+            inspect effective-config --service test-svc --plane local --version v1
+        ])
+        if $out.exit_code != 0 {
+            rm-temp-repo $repo
+            error make {msg: $"Expected inspect success, exit ($out.exit_code): ($out.stderr)"}
+        }
+        let cfg = (try {
+            $out.stdout | from json
+        } catch {
+            rm-temp-repo $repo
+            error make {msg: $"Expected JSON stdout, got: ($out.stdout)"}
+        })
+        if ($cfg.source_origin.my_src? | default "") != "fragment-local" {
+            rm-temp-repo $repo
+            error make {msg: $"Expected source_origin.my_src 'fragment-local', got: ($cfg.source_origin | to json)"}
+        }
+        if $cfg.precedence_summary == "tracked manifest" {
+            rm-temp-repo $repo
+            error make {
+                msg: $"precedence_summary must not be plain 'tracked manifest' when source_origin is fragment-local, got: ($cfg.precedence_summary)"
+            }
+        }
+        if not ($cfg.precedence_summary | str contains "local fragment overrides") {
+            rm-temp-repo $repo
+            error make {
+                msg: $"Expected precedence_summary to mention version-scoped fragment overrides, got: ($cfg.precedence_summary)"
+            }
+        }
+        rm-temp-repo $repo
+        true
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_version_scoped_fragment_precedence)
+
+    let test_smoke_local_bad_topology = (run-test "smoke: routed validate --plane local bad topology names unknown mirror contract" {
+        let repo = (make-temp-repo)
+        seed-tracked-service $repo
+        mkdir (local-root-path $repo)
+        mkdir (local-services-path $repo)
+        mkdir (local-services-path $repo | path join "shadow-svc")
+        let result = (run-dockypody-in-repo $repo [validate --plane local --service test-svc])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Unknown local service mirror" []
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_bad_topology)
+
+    let test_smoke_local_validate_additive_version_source = (run-test "smoke: routed validate --plane local rejects additive id in fragment versions" {
+        let repo = (make-temp-repo)
+        seed-service-with-git-source $repo
+        "FROM scratch" | save -f ($repo | path join "services/test-svc/Dockerfile")
+        {
+            name: "test-svc"
+            context: "services/test-svc"
+            dockerfile: "services/test-svc/Dockerfile"
+        } | save -f ($repo | path join "services/test-svc.nuon")
+        mkdir (local-root-path $repo)
+        let mirror = (local-services-path $repo | path join "test-svc")
+        mkdir $mirror
+        mkdir ($repo | path join "local-src")
+        {
+            versions: [
+                {
+                    name: "v1"
+                    overrides: {
+                        sources: {
+                            extra_src: { path: "local-src" }
+                        }
+                    }
+                }
+            ]
+        } | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+        let result = (run-dockypody-in-repo $repo [validate --plane local --service test-svc])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Additive source id" []
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_validate_additive_version_source)
+
+    let test_smoke_local_guard_ordering = (run-test "smoke: routed validate guard ordering manifest read before mirror audit" {
+        let repo = (make-temp-repo)
+        "not valid nuon {" | save -f ($repo | path join "services/test-svc.nuon")
+        mkdir (local-root-path $repo)
+        mkdir (local-services-path $repo)
+        mkdir (local-services-path $repo | path join "test-svc")
+        let result = (run-dockypody-in-repo $repo [validate --plane local --service test-svc])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Unable to read tracked service manifest" [
+            "Unknown local service mirror"
+        ]
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_guard_ordering)
+
+    let test_smoke_local_incomplete_mirror = (run-test "smoke: routed inspect bad topology names incomplete mirror contract before materialization" {
+        let repo = (make-temp-repo)
+        seed-tracked-service $repo
+        mkdir (local-root-path $repo)
+        mkdir (local-services-path $repo | path join "test-svc")
+        let result = (run-dockypody-in-repo $repo [inspect effective-config --service test-svc --plane local])
+        rm-temp-repo $repo
+        assert-routed-failure-names-contract $result "Incomplete local service mirror" [
+            "Additive source id"
+            "Partial git source is forbidden"
+        ]
+    } $verbose_flag)
+    $results = ($results | append $test_smoke_local_incomplete_mirror)
 
     let test_smoke_internal_suite_errors = (run-test "smoke: unsupported/internal suite name errors clearly" {
         let root = (get-repo-root)

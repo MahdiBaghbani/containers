@@ -87,6 +87,7 @@ export def generate-service-matrix [
   use ../manifest/core.nu [load-versions-manifest]
   use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest]
   
+  # Tracked-only: CI matrix generation must not load local-plane effective manifests.
   let manifest = (load-versions-manifest $service)
   
   let platforms = if (check-platforms-manifest-exists $service) {
@@ -110,6 +111,7 @@ export def generate-multi-service-matrix [
       return []
     }
     
+    # Tracked-only: multi-service matrix must not load local-plane effective manifests.
     let manifest = (load-versions-manifest $service)
     let versions = (try { $manifest.versions } catch { [] })
     

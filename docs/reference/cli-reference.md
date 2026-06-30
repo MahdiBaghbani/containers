@@ -134,11 +134,11 @@ Build-related: `--service`, `--all-services`, `--push`, `--latest`,
 `--latest-only`, `--platform`, `--matrix-json`, `--progress`, `--cache-bust`,
 `--no-cache`, `--show-build-order`, `--dep-cache`, `--push-deps`, `--tag-deps`,
 `--fail-fast`, `--pull`, `--cache-match`, `--disk-monitor`,
-`--prune-cache-mounts`.
+`--prune-cache-mounts`, `--plane`.
 
 Test: `--suite`, `--verbose`.
 
-Validate: `--service`, `--all-services`, `--manifests-only`.
+Validate: `--service`, `--all-services`, `--manifests-only`, `--plane`.
 
 TLS: `--service` (comma-separated service names passed to clean), `--filter`
 (comma list for cert generation subset), `--service-ca-only`, `--skip-shared-ca`,
@@ -176,11 +176,21 @@ nu scripts/dockypody.nu test [--suite <name>] [--verbose]
 ### validate
 
 ```bash
-nu scripts/dockypody.nu validate [--service <name>] [--all-services] [--manifests-only]
+nu scripts/dockypody.nu validate [--service <name>] [--all-services]
+     [--manifests-only] [--plane tracked|local]
 ```
 
 - `--all-services`: validate every discovered service (mutually exclusive with a
   single `--service`; see `validate-cli` behavior).
+- `--plane`: config plane for this invocation. `tracked` (default) uses
+  tracked manifests under `services/`. `local` activates the off-git local
+  plane at `.dockypody.local/` and merges optional
+  `.dockypody.local/services/<service>/versions.nuon` fragments; the command
+  hard-errors when that root directory is missing. An empty
+  `.dockypody.local/` root is valid. Service discovery still uses tracked
+  `services/*.nuon` only. Tracked CI generation consumes only tracked
+  versions; `--plane local` is rejected at `build --matrix-json`, `ci
+  workflow`, and `ci ghcr-purge`.
 
 ### tls
 
@@ -270,6 +280,50 @@ the changed files, and exits successfully only when the rescan is clean.
 ```bash
 nu scripts/dockypody.nu build --service <service-name> [options]
 ```
+
+## Config Plane Flag
+
+### `--plane <mode>`
+
+Select the config plane for this invocation. Accepted values: `tracked`
+(default) or `local`.
+
+```bash
+# Default: tracked manifests under services/
+nu scripts/dockypody.nu build --service gaia
+
+# Local plane: require .dockypody.local/ at repo root
+nu scripts/dockypody.nu build --service gaia --plane local
+```
+
+**Modes:**
+
+| Mode | Behavior |
+| ---- | -------- |
+| `tracked` | Use tracked service manifests under `services/` (default) |
+| `local` | Merge off-git version fragments from `.dockypody.local/services/<service>/versions.nuon` |
+
+**`local` requirements:**
+
+- `.dockypody.local/` must exist at the repository root; otherwise the
+  command hard-errors.
+- An empty `.dockypody.local/` directory is valid.
+- An optional `.dockypody.local/services/` directory with zero mirrors is
+  also valid.
+- If a service mirror directory exists, it must contain `versions.nuon`;
+  an empty mirror hard-errors ("Incomplete local service mirror").
+- Local fragments use the same `versions: [...]` schema as tracked manifests.
+- Local fragments use the same JSONC-style authoring rules as tracked
+  manifests. Do not use bare keys or NUON table syntax.
+  Same-name versions are fully replaced; new names are appended. Local-only
+  services and additive source ids are forbidden.
+- Service discovery still uses tracked `services/*.nuon` only.
+- Tracked CI generation consumes only tracked versions (never local).
+  `--plane local` is rejected at `build --matrix-json`, `ci workflow`, and
+  `ci ghcr-purge`. `ci list-deps` always operates on tracked manifests
+  (tracked-only by data; it does not reject the flag).
+
+`--plane` is also accepted on `validate` with the same modes and rules.
 
 ## Service Selection Flags
 

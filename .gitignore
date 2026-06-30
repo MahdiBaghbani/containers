@@ -173,6 +173,9 @@ volumes/
 # This directory is ignored by git but must be visible to Docker build contexts
 .build-sources/
 
+# DockyPody local config and state (offline development)
+.dockypody.local/
+
 # Service-local CA mirrors
 # The shared CA SSOT lives at: tls/certificate-authority/
 services/*/tls/certificate-authority/

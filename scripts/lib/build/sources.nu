@@ -17,6 +17,8 @@
 
 # Source handling: local source context preparation and SHA extraction
 # See docs/concepts/build-system.md for architecture
+# Under --plane local, env-only {SOURCE_KEY}_PATH materialization is guard-owned
+# in plane/effective-config.nu before configs reach this module.
 
 use ../validate/core.nu [validate-local-path]
 

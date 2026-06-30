@@ -20,6 +20,7 @@
 
 use ../services/core.nu [list-service-names]
 use ./core.nu [validate-service-complete validate-manifest-file print-validation-results]
+use ../plane/guard.nu [guard-plane parse-plane]
 
 # Show validate CLI help
 export def validate-help [] {
@@ -29,6 +30,8 @@ export def validate-help [] {
   print "  --service <name>   Validate specific service"
   print "  --all-services     Validate all services"
   print "  --manifests-only   Only validate version manifests"
+  print "  --plane <mode>     Config plane: tracked (default) or local"
+  print "                     local requires .dockypody.local/ at repo root"
   print ""
   print "Examples:"
   print "  nu scripts/dockypody.nu validate --all-services"
@@ -38,12 +41,25 @@ export def validate-help [] {
 
 # Validate CLI entrypoint - called from dockypody.nu
 export def validate-cli [
-  flags: record  # Flags: { service: string, all_services: bool, manifests_only: bool }
+  flags: record  # Flags: { service, all_services, manifests_only, plane }
 ] {
   let service = (try { $flags.service } catch { "" })
   let all_services = (try { $flags.all_services } catch { false })
   let manifests_only = (try { $flags.manifests_only } catch { false })
-  
+  let plane = (parse-plane (try { $flags.plane } catch { "tracked" }))
+
+  let no_validation_target = (
+    (not $all_services)
+    and (($service | str length) == 0)
+    and (not $manifests_only)
+  )
+  if $no_validation_target {
+    validate-help
+    return
+  }
+
+  let _plane_ctx = (guard-plane $plane)
+
   if $all_services {
     print "Validating all services...\n"
     let services = (list-service-names)
@@ -54,7 +70,7 @@ export def validate-cli [
       let result = (if $manifests_only {
         validate-manifest-file $svc
       } else {
-        validate-service-complete $svc
+        validate-service-complete $svc $_plane_ctx
       })
       print-validation-results $result
       print ""
@@ -77,7 +93,7 @@ export def validate-cli [
     let result = (if $manifests_only {
       validate-manifest-file $service
     } else {
-      validate-service-complete $service
+      validate-service-complete $service $_plane_ctx
     })
     print-validation-results $result
     if not $result.valid {

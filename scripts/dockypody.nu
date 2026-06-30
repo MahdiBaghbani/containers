@@ -27,6 +27,7 @@
 use ./lib/build/cli.nu [build-help]
 use ./lib/validate/cli.nu [validate-help]
 use ./lib/test/cli.nu [test-help]
+use ./lib/inspect/cli.nu [inspect-help]
 
 def show-help [] {
   print "dockypody - DockyPody unified CLI"
@@ -37,6 +38,7 @@ def show-help [] {
   print "  build              Build container images"
   print "  test               Run test suites"
   print "  validate           Validate configurations"
+  print "  inspect <subcommand> Inspect guard-owned effective config"
   print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean)"
   print "  ssh <subcommand>   Manage SSH keypair (key)"
   print "  ci <subcommand>    CI helper operations (list-deps, load-deps, images, ghcr-purge, etc.)"
@@ -60,7 +62,7 @@ def show-help [] {
 # `dockypody.nu build help`, `dockypody.nu tls help`. Nushell's auto-help
 # intercepts `--help`/`-h` before this body runs, so those are not DockyPody-owned.
 def main [
-  command?: string,           # Command: build, test, validate, tls, ssh, ci, docs, help
+  command?: string,           # Command: build, test, validate, inspect, tls, ssh, ci, docs, help
   subcommand?: string,        # Subcommand or "help" for command-specific help
   # Build flags
   --service: string = "",
@@ -91,6 +93,8 @@ def main [
   --suite: string = "all",
   # Validate flags
   --manifests-only,
+  # Plane (build, validate, inspect)
+  --plane: string = "tracked",
   # TLS/CI flags
   --filter: string = "",
   --service-ca-only,
@@ -152,7 +156,8 @@ def main [
         pull: $pull
         cache_match: $cache_match
         disk_monitor: $disk_monitor
-        prune_cache_mounts: $prune_cache_mounts
+        prune_cache_mounts: $prune_cache_mounts,
+        plane: $plane
       }
     }
     "test" => {
@@ -167,7 +172,15 @@ def main [
         validate-help
         return
       }
-      run-validate-command $service $all_services $manifests_only
+      run-validate-command $service $all_services $manifests_only $plane
+    }
+    "inspect" => {
+      let subcmd = if $subcommand == null { "help" } else { $subcommand }
+      if $subcmd == "help" {
+        inspect-help
+        return
+      }
+      run-inspect-command $subcmd $service $version $platform $plane
     }
     "tls" => {
       # Default missing subcommand to "help"; tls-cli handles it internally.
@@ -179,7 +192,7 @@ def main [
     "ci" => {
       # Default missing subcommand to "help"; ci-cli handles it internally.
       let subcmd = if $subcommand == null { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force $partial_success
+      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force $partial_success $plane
     }
     "docs" => {
       # Default missing subcommand to "help"; docs-cli handles it internally.
@@ -200,7 +213,7 @@ def main [
 def run-build-command [flags: record] {
   use ./lib/build/cli.nu [build-cli]
   
-  build-cli --service $flags.service --all-services=$flags.all_services --push=$flags.push --latest=$flags.latest --extra-tag $flags.extra_tag --provenance=$flags.provenance --version $flags.version --all-versions=$flags.all_versions --versions $flags.versions --latest-only=$flags.latest_only --platform $flags.platform --matrix-json=$flags.matrix_json --progress $flags.progress --cache-bust $flags.cache_bust --no-cache=$flags.no_cache --show-build-order=$flags.show_build_order --dep-cache $flags.dep_cache --push-deps=$flags.push_deps --tag-deps=$flags.tag_deps --fail-fast=$flags.fail_fast --pull $flags.pull --cache-match $flags.cache_match --disk-monitor $flags.disk_monitor --prune-cache-mounts=$flags.prune_cache_mounts
+  build-cli --service $flags.service --all-services=$flags.all_services --push=$flags.push --latest=$flags.latest --extra-tag $flags.extra_tag --provenance=$flags.provenance --version $flags.version --all-versions=$flags.all_versions --versions $flags.versions --latest-only=$flags.latest_only --platform $flags.platform --matrix-json=$flags.matrix_json --progress $flags.progress --cache-bust $flags.cache_bust --no-cache=$flags.no_cache --show-build-order=$flags.show_build_order --dep-cache $flags.dep_cache --push-deps=$flags.push_deps --tag-deps=$flags.tag_deps --fail-fast=$flags.fail_fast --pull $flags.pull --cache-match $flags.cache_match --disk-monitor $flags.disk_monitor --prune-cache-mounts=$flags.prune_cache_mounts --plane $flags.plane
 }
 
 def run-test-command [suite: string, verbose: bool] {
@@ -208,12 +221,29 @@ def run-test-command [suite: string, verbose: bool] {
   test-cli $suite $verbose
 }
 
-def run-validate-command [service: string, all_services: bool, manifests_only: bool] {
+def run-validate-command [service: string, all_services: bool, manifests_only: bool, plane: string] {
   use ./lib/validate/cli.nu [validate-cli]
   validate-cli {
     service: $service,
     all_services: $all_services,
-    manifests_only: $manifests_only
+    manifests_only: $manifests_only,
+    plane: $plane
+  }
+}
+
+def run-inspect-command [
+  subcommand: string,
+  service: string,
+  version: string,
+  platform: string,
+  plane: string
+] {
+  use ./lib/inspect/cli.nu [inspect-cli]
+  inspect-cli $subcommand {
+    service: $service,
+    version: $version,
+    platform: $platform,
+    plane: $plane
   }
 }
 
@@ -265,7 +295,8 @@ def run-ci-command [
   dry_run: bool,
   max_deletes: int,
   force: bool,
-  partial_success: bool
+  partial_success: bool,
+  plane: string
 ] {
   use ./lib/ci/cli.nu [ci-cli]
   ci-cli $subcommand {
@@ -281,7 +312,8 @@ def run-ci-command [
     dry_run: $dry_run,
     max_deletes: $max_deletes,
     force: $force,
-    partial_success: $partial_success
+    partial_success: $partial_success,
+    plane: $plane
   }
 }
 

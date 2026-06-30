@@ -24,6 +24,7 @@ use ./config.nu [parse-bool-flag]
 use ./cache.nu [parse-dep-cache-mode]
 use ./pull.nu [parse-pull-modes]
 use ./orchestrate.nu [run-build]
+use ../plane/guard.nu [guard-plane parse-plane reject-local-plane-for-tracked-generator]
 
 # Show build CLI help
 export def build-help [] {
@@ -60,6 +61,10 @@ export def build-help [] {
   print "  --pull <mode>          Pre-pull images (deps, externals, or deps,externals)"
   print "  --disk-monitor <mode>  Disk usage monitoring; off disables, any other value enables (e.g. basic; default off)"
   print "  --prune-cache-mounts   Prune BuildKit cache between versions"
+  print ""
+  print "Plane:"
+  print "  --plane <mode>         Config plane: tracked (default) or local"
+  print "                         local requires .dockypody.local/ at repo root"
 }
 
 # Build CLI entrypoint - called from dockypody.nu
@@ -88,8 +93,16 @@ export def build-cli [
   --pull: string = "",
   --cache-match: string = "",
   --disk-monitor: string = "off",
-  --prune-cache-mounts
+  --prune-cache-mounts,
+  --plane: string = "tracked"
 ] {
+  let plane = (parse-plane $plane)
+  let matrix_json_val = (parse-bool-flag ($matrix_json | default false))
+  if $matrix_json_val {
+    reject-local-plane-for-tracked-generator $plane "CI matrix JSON generation"
+  }
+  let plane_ctx = (guard-plane $plane)
+
   # Detect build environment (local vs CI)
   let meta = (detect-build)
   
@@ -103,7 +116,6 @@ export def build-cli [
   let provenance_val = (parse-bool-flag ($provenance | default false))
   let all_versions_val = (parse-bool-flag ($all_versions | default false))
   let latest_only_val = (parse-bool-flag ($latest_only | default false))
-  let matrix_json_val = (parse-bool-flag ($matrix_json | default false))
   let no_cache_val = (parse-bool-flag ($no_cache | default false))
   let show_build_order_val = (parse-bool-flag ($show_build_order | default false))
   let push_deps_val = (parse-bool-flag ($push_deps | default false))
@@ -141,10 +153,12 @@ export def build-cli [
       pull: $pull_modes,
       cache_match: $cache_match,
       disk_monitor: $disk_monitor,
-      prune_cache_mounts: $prune_cache_mounts_val
+      prune_cache_mounts: $prune_cache_mounts_val,
+      plane: $plane
     },
     meta: $meta,
-    registry_info: $info
+    registry_info: $info,
+    plane_ctx: $plane_ctx
   }
   
   # Delegate to orchestration layer

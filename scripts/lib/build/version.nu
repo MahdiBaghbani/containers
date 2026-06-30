@@ -38,6 +38,7 @@ use ./args.nu [generate-build-args]
 use ./order.nu [build-dependency-graph topological-sort-dfs]
 use ./pull.nu [compute-canonical-image-ref]
 use ./hash.nu [compute-service-def-hash-graph]
+use ../plane/guard.nu [PLANE_LOCAL]
 
 # Shorten a hash to at most 8 chars for diagnostic display.
 # Safe for any input including Docker sentinel strings like "<no value>".
@@ -136,7 +137,8 @@ export def build-single-version [
   push_deps: bool = false,
   tag_deps: bool = false,
   hash_graph: record = {},
-  cache_match: string = ""
+  cache_match: string = "",
+  plane_ctx: any = null
 ] {
   let current_platform = (try { $version_spec.platform } catch { $platform })
   
@@ -153,11 +155,16 @@ export def build-single-version [
       }
   }
   
-  let cfg = (load-service-config $service $version_spec $current_platform $platforms)
+  let cfg = (load-service-config $service $version_spec $current_platform $platforms $plane_ctx)
   
+  let plane = (if $plane_ctx != null {
+    (try { $plane_ctx.plane } catch { "tracked" })
+  } else {
+    "tracked"
+  })
   let cfg_sources = (try { $cfg.sources } catch { {} })
   let source_types = (if not ($cfg_sources | is-empty) {
-    detect-all-source-types $cfg_sources
+    detect-all-source-types $cfg_sources $plane
   } else {
     {}
   })
@@ -242,7 +249,9 @@ export def build-single-version [
   let source_shas = $source_shas_result.shas
   $current_cache = ($current_cache | merge $source_shas_result.cache)
 
-  let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform)
+  let is_local_plane = ($plane == $PLANE_LOCAL)
+  let effective_push = (if $is_local_plane { false } else { $push_val })
+  let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform $is_local_plane)
   
   let node_key = (if ($current_platform | str length) > 0 {
     $"($service):($version_tag):($current_platform)"
@@ -325,9 +334,9 @@ export def build-single-version [
           ""
         })
         
-        let dep_push = $push_deps
-        let dep_latest = (if $tag_deps { $latest_val } else { false })
-        let dep_extra_tag = (if $tag_deps { $extra_tag } else { "" })
+        let dep_push = (if $is_local_plane { false } else { $push_deps })
+        let dep_latest = (if $is_local_plane { false } else { (if $tag_deps { $latest_val } else { false }) })
+        let dep_extra_tag = (if $is_local_plane { "" } else { (if $tag_deps { $extra_tag } else { "" }) })
         
         let dep_label = (if ($dep_platform | str length) > 0 {
           $"($dep_service):($dep_version_spec.name)-($dep_platform)"
@@ -369,7 +378,7 @@ export def build-single-version [
         
         let prev_cache = $current_cache
         try {
-          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $cache_match)
+          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $cache_match $plane_ctx)
           $current_cache = (try { $build_result.sha_cache } catch { $prev_cache })
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
@@ -447,7 +456,7 @@ export def build-single-version [
     {}
   })
 
-  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths)
+  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths $plane)
 
   # Detect which CA files the Dockerfile actually needs, then stage them just-in-time.
   let ca_reqs = (if $tls_meta.enabled {
@@ -467,7 +476,7 @@ export def build-single-version [
   # Run docker build; ensure all staged material is cleaned up on both
   # success and failure paths.
   let build_error = (try {
-    build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $push_val $provenance_val $is_local
+    build --context $context --dockerfile $dockerfile --platforms $meta.platforms --tags $tags --build-args $build_args --labels $labels --progress $progress $effective_push $provenance_val $is_local
     null
   } catch {|err|
     $err.msg

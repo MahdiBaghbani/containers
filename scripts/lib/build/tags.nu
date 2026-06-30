@@ -25,15 +25,32 @@ export def generate-tags [
     is_local: bool,
     registry_info: record,
     platform: string = "",
-    default_platform: string = ""
+    default_platform: string = "",
+    local_plane: bool = false
 ] {
-    mut base_tags = []
-    
     let version_tag = (if ($platform | str length) > 0 {
         $"($version_spec.name)-($platform)"
     } else {
         $version_spec.name
     })
+
+    # Local plane: exactly one primary non-publish tag; suppress latest/extra fan-out.
+    if $local_plane {
+        if $is_local {
+            return [$"($service):($version_tag)"]
+        }
+        let ci_platform = (try { $registry_info.ci_platform } catch { "local" })
+        if $ci_platform == "github" {
+            let base_image_name = $"($registry_info.github_registry)/($registry_info.github_path)/($service)"
+            return [$"($base_image_name):($version_tag)"]
+        } else if $ci_platform == "forgejo" {
+            let base_image_name = $"($registry_info.forgejo_registry)/($registry_info.forgejo_path)/($service)"
+            return [$"($base_image_name):($version_tag)"]
+        }
+        return [$"($service):($version_tag)"]
+    }
+
+    mut base_tags = []
     $base_tags = ($base_tags | append $version_tag)
     
     # Default platform also gets unprefixed version name

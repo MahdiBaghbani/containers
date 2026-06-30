@@ -107,6 +107,7 @@ export def get-direct-dependency-services [service: string] {
         return []
     }
 
+    # Tracked-only: CI dependency resolution must not load local-plane effective manifests.
     let manifest = (load-versions-manifest $service)
     let mapping = (build-dep-id-mapping $service)
     mut all_deps = []

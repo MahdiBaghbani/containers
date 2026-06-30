@@ -28,6 +28,7 @@ use ../build/pull.nu [compute-canonical-image-ref]
 use ../registries/info.nu [get-registry-info]
 use ../registries/core.nu [login-default-registry]
 use ./ghcr/cli.nu [ghcr-purge-cli validate-force-flags]
+use ../plane/guard.nu [parse-plane reject-local-plane-for-tracked-generator]
 
 # Re-export for direct module usage
 export use ./deps.nu [get-direct-dependency-services get-all-dependency-services]
@@ -467,6 +468,7 @@ export def ci-cli [
   let partial_success = (try { $flags.partial_success } catch { false })
   let ref = (try { $flags.ref } catch { "" })
   let sha = (try { $flags.sha } catch { "" })
+  let plane = (parse-plane (try { $flags.plane } catch { "tracked" }))
   
   match $subcommand {
     "help" => {
@@ -491,6 +493,7 @@ export def ci-cli [
       }
     }
     "workflow" => {
+      reject-local-plane-for-tracked-generator $plane "CI workflow generation"
       use ./workflow.nu [get-workflows-for-target write-workflows]
 
       if ($target | str length) == 0 {
@@ -519,6 +522,7 @@ export def ci-cli [
       }
     }
     "ghcr-purge" => {
+      reject-local-plane-for-tracked-generator $plane "GHCR SSOT tag purge"
       ghcr-purge-cli $service $dry_run $max_deletes $debug $force --partial-success=$partial_success
     }
     _ => {

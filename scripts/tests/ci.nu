@@ -23,7 +23,97 @@ use ../lib/ci/deps.nu [get-direct-dependency-services get-all-dependency-service
 use ../lib/ci/workflow.nu [get-workflows-for-target]
 use ../lib/services/core.nu [list-service-names]
 use ../lib/build/dep-nodes.nu [get-dependency-node-candidates get-matching-dependency-shards]
+use ../lib/core/repo.nu [get-repo-root]
+use ../lib/plane/presence.nu [local-root-path local-services-path]
+use ../lib/plane/audit.nu [LOCAL_MIRROR_FILE]
 use ./lib.nu [run-test print-test-summary]
+
+const ISOLATION_SVC = "test-svc"
+const ISOLATION_TRACKED_V1 = "v1"
+const ISOLATION_TRACKED_V2 = "v2"
+const ISOLATION_LOCAL_ONLY = "dev-local-only"
+const ISOLATION_TRACKED_DEP = "tracked-dep"
+const ISOLATION_LEAK_DEP = "leak-dep"
+
+def make-temp-repo [] {
+  let tmp = (^mktemp -d | str trim)
+  mkdir $tmp
+  mkdir ($tmp | path join "services")
+  ^git -C $tmp init -q
+  $tmp
+}
+
+def rm-temp-repo [dir: string] {
+  try { rm -rf $dir } catch { }
+}
+
+def run-in-temp-repo [repo: string, block: closure] {
+  do -i { cd $repo; do $block }
+}
+
+def seed-tracked-versions [repo: string, versions_manifest: record, name: string] {
+  { name: $name } | save -f ($repo | path join $"services/($name).nuon")
+  mkdir ($repo | path join $"services/($name)")
+  $versions_manifest | save -f ($repo | path join $"services/($name)/versions.nuon")
+}
+
+def save-local-fragment [repo: string, name: string, fragment: record] {
+  let mirror = (local-services-path $repo | path join $name)
+  mkdir $mirror
+  $fragment | save -f ($mirror | path join $LOCAL_MIRROR_FILE)
+}
+
+def seed-tracked-plane-isolation-fixture [repo: string] {
+  { name: $ISOLATION_TRACKED_DEP } | save -f ($repo | path join $"services/($ISOLATION_TRACKED_DEP).nuon")
+  { name: $ISOLATION_LEAK_DEP } | save -f ($repo | path join $"services/($ISOLATION_LEAK_DEP).nuon")
+  {
+    name: $ISOLATION_SVC
+    dependencies: {
+      tracked_dep: { service: $ISOLATION_TRACKED_DEP }
+      leak_dep: { service: $ISOLATION_LEAK_DEP }
+    }
+  } | save -f ($repo | path join $"services/($ISOLATION_SVC).nuon")
+  mkdir ($repo | path join $"services/($ISOLATION_SVC)")
+  {
+    default: $ISOLATION_TRACKED_V1
+    versions: [
+      { name: $ISOLATION_TRACKED_V1, overrides: {} }
+      {
+        name: $ISOLATION_TRACKED_V2
+        overrides: {
+          dependencies: {
+            tracked_dep: { service: $ISOLATION_TRACKED_DEP }
+          }
+        }
+      }
+    ]
+  } | save -f ($repo | path join $"services/($ISOLATION_SVC)/versions.nuon")
+  mkdir (local-root-path $repo)
+  save-local-fragment $repo $ISOLATION_SVC {
+    versions: [
+      {
+        name: $ISOLATION_LOCAL_ONLY
+        overrides: {
+          dependencies: {
+            leak_dep: { service: $ISOLATION_LEAK_DEP }
+          }
+        }
+      }
+      {
+        name: $ISOLATION_TRACKED_V2
+        overrides: {
+          dependencies: {
+            leak_dep: { service: $ISOLATION_LEAK_DEP }
+          }
+        }
+      }
+    ]
+  }
+}
+
+def run-dockypody-in-repo [repo: string, entry: string, args: list<string>] {
+  do -i { cd $repo; ^nu $entry ...$args } | complete
+}
 
 # Build dep_id -> service_name mapping from infra manifests (independent of library).
 # Uses platforms.nuon (defaults + per-platform deps) when present,
@@ -557,6 +647,113 @@ def main [--verbose] {
     true
   } $verbose)
   $results = ($results | append $test13)
+
+  # Test 14: tracked-only generators reject --plane local at routed entrypoints.
+  let entry = ((get-repo-root) | path join "scripts" "dockypody.nu")
+
+  let test14a = (run-test "tracked-only: build --matrix-json --plane local is rejected" {
+    let out = (^nu $entry build --service revad-base --matrix-json --plane local | complete)
+    if $out.exit_code == 0 {
+      error make {msg: "Expected build --matrix-json --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for matrix-json; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test14a)
+
+  let test14b = (run-test "tracked-only: ci workflow --plane local is rejected" {
+    let out = (^nu $entry ci workflow --target build --plane local --dry-run | complete)
+    if $out.exit_code == 0 {
+      error make {msg: "Expected ci workflow --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for ci workflow; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test14b)
+
+  let test14c = (run-test "tracked-only: ci ghcr-purge --plane local is rejected" {
+    let out = (^nu $entry ci ghcr-purge --plane local --dry-run | complete)
+    if $out.exit_code == 0 {
+      error make {msg: "Expected ci ghcr-purge --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for ci ghcr-purge; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test14c)
+
+  let test15 = (run-test "tracked-only: CI deps ignore local fragment version and collision overrides" {
+    let repo = (make-temp-repo)
+    seed-tracked-plane-isolation-fixture $repo
+    let deps = (run-in-temp-repo $repo {||
+      get-direct-dependency-services $ISOLATION_SVC
+    })
+    rm-temp-repo $repo
+    if $ISOLATION_LEAK_DEP in $deps {
+      error make {msg: $"Local-only dependency leaked into CI deps: ($deps | str join ', ')"}
+    }
+    if not ($ISOLATION_TRACKED_DEP in $deps) {
+      error make {msg: $"Tracked dependency missing from CI deps: ($deps | str join ', ')"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test15)
+
+  let test16a = (run-test "tracked-only: build --matrix-json --plane local rejected with local fragment present" {
+    let repo = (make-temp-repo)
+    seed-tracked-plane-isolation-fixture $repo
+    let out = (run-dockypody-in-repo $repo $entry [
+      build --service $ISOLATION_SVC --matrix-json --plane local
+    ])
+    rm-temp-repo $repo
+    if $out.exit_code == 0 {
+      error make {msg: "Expected build --matrix-json --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for matrix-json; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test16a)
+
+  let test16b = (run-test "tracked-only: ci workflow --plane local rejected with local fragment present" {
+    let repo = (make-temp-repo)
+    seed-tracked-plane-isolation-fixture $repo
+    let out = (run-dockypody-in-repo $repo $entry [
+      ci workflow --target build --plane local --dry-run
+    ])
+    rm-temp-repo $repo
+    if $out.exit_code == 0 {
+      error make {msg: "Expected ci workflow --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for ci workflow; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test16b)
+
+  let test16c = (run-test "tracked-only: ci ghcr-purge --plane local rejected with local fragment present" {
+    let repo = (make-temp-repo)
+    seed-tracked-plane-isolation-fixture $repo
+    let out = (run-dockypody-in-repo $repo $entry [
+      ci ghcr-purge --plane local --dry-run
+    ])
+    rm-temp-repo $repo
+    if $out.exit_code == 0 {
+      error make {msg: "Expected ci ghcr-purge --plane local to exit non-zero"}
+    }
+    if not ($out.stderr | str contains "--plane local is not supported") {
+      error make {msg: $"Expected local-plane rejection for ci ghcr-purge; got: ($out.stderr)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test16c)
 
   print-test-summary $results
 
