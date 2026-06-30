@@ -310,7 +310,7 @@ export def merge_partial_configs [target_file: string] {
     merge_partial_with_marker $target_path $partial
   }
 
-  print $"Merged (($sorted_partials | length)) partial(s) into ($target_file)"
+  print $"Merged ($sorted_partials | length) partial\(s\) into ($target_file)"
 }
 
 # Main build-time merge function

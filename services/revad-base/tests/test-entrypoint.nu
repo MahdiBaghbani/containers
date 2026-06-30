@@ -65,7 +65,7 @@ def test_extract_dataprovider_type [] {
       print $"  [PASS] extract_dataprovider_type('($test_case.input)') = '($result)'"
       $passed = ($passed + 1)
     } else {
-      print $"  [FAIL] extract_dataprovider_type('($test_case.input)') = '($result)' (expected '($test_case.expected)')"
+      print $"  [FAIL] extract_dataprovider_type('($test_case.input)') = '($result)' \(expected '($test_case.expected)'\)"
       $failed = ($failed + 1)
     }
   }
@@ -124,7 +124,7 @@ def test_extract_authprovider_type [] {
       print $"  [PASS] extract_authprovider_type('($test_case.input)') = '($result)'"
       $passed = ($passed + 1)
     } else {
-      print $"  [FAIL] extract_authprovider_type('($test_case.input)') = '($result)' (expected '($test_case.expected)')"
+      print $"  [FAIL] extract_authprovider_type('($test_case.input)') = '($result)' \(expected '($test_case.expected)'\)"
       $failed = ($failed + 1)
     }
   }

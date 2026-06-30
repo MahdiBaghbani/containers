@@ -55,7 +55,7 @@ export def extract-source-sha [
 
     # Check git availability
     if not (check-git-available) {
-        print $"WARNING: [($service)] git not available, skipping SHA extraction for source '($source_key)' (ref: ($ref))"
+        print $"WARNING: [($service)] git not available, skipping SHA extraction for source '($source_key)' \(ref: ($ref)\)"
         let updated_cache = ($cache | upsert $cache_key "")
         return {sha: "", cache: $updated_cache}
     }
@@ -85,7 +85,7 @@ export def extract-source-sha [
         # Validate SHA format (must be 40 hex chars)
         let sha_validation = ($sha_full | str replace --regex '^[0-9a-f]{40}$' "VALID")
         if $sha_validation != "VALID" {
-            print $"WARNING: [($service)] Invalid SHA format from git ls-remote for source '($source_key)' (ref: ($ref)): ($sha_full)"
+            print $"WARNING: [($service)] Invalid SHA format from git ls-remote for source '($source_key)' \(ref: ($ref)\): ($sha_full)"
             let updated_cache = ($cache | upsert $cache_key "")
             return {sha: "", cache: $updated_cache}
         }
@@ -94,7 +94,7 @@ export def extract-source-sha [
         let updated_cache = ($cache | upsert $cache_key $short_sha)
         return {sha: $short_sha, cache: $updated_cache}
     } catch {|err|
-        print $"WARNING: [($service)] Failed to extract SHA for source '($source_key)' (($url)@($ref)): ($err.msg)"
+        print $"WARNING: [($service)] Failed to extract SHA for source '($source_key)' \(($url)@($ref)\): ($err.msg)"
         print $"  Source revision label will indicate missing revision."
         let updated_cache = ($cache | upsert $cache_key "")
         return {sha: "", cache: $updated_cache}

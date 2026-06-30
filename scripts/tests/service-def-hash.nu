@@ -78,7 +78,7 @@ def main [--verbose] {
       }
       
       if $verbose_flag {
-        print $"    Hash: ($hash) (length: ($hash | str length))"
+        print $"    Hash: ($hash) \(length: ($hash | str length)\)"
       }
       
       true

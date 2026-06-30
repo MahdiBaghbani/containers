@@ -172,7 +172,7 @@ export def process_placeholders [file: string, placeholder_map: record] {
         $replacement_value = $parsed.default
         $replacement_value_found = true
       } else {
-        print $"Warning: Placeholder ($placeholder_text_trimmed) not found in map (lookup_key: ($lookup_key)) and no default provided, keeping as-is"
+        print $"Warning: Placeholder ($placeholder_text_trimmed) not found in map \(lookup_key: ($lookup_key)\) and no default provided, keeping as-is"
         $skipped_count = ($skipped_count + 1)
         $skipped_placeholders = ($skipped_placeholders | append $placeholder_text_trimmed)
       }

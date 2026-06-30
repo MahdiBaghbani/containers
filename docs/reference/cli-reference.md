@@ -50,10 +50,11 @@ nu scripts/dockypody.nu tls clean --service-ca-only
 nu scripts/dockypody.nu ssh key
 nu scripts/dockypody.nu ssh key --force
 
-# CI commands
+# CI commands (--target is mandatory for workflow; empty defaults error)
 nu scripts/dockypody.nu ci list-deps --service nextcloud
-nu scripts/dockypody.nu ci workflow --target all
+nu scripts/dockypody.nu ci workflow --target all --dry-run
 nu scripts/dockypody.nu ci images --service nextcloud
+nu scripts/dockypody.nu ci merge-cache-shards --service svc --ref r --sha s
 nu scripts/dockypody.nu ci ghcr-purge --dry-run
 # --max-deletes is a global budget across all services in the run
 nu scripts/dockypody.nu ci ghcr-purge --dry-run=false --max-deletes=200
@@ -75,7 +76,7 @@ nu scripts/dockypody.nu docs lint --fix
 | Subcommand | Description | Domain CLI |
 | ---------- | ----------- | ---------- |
 | `build` | Build container images | `build/cli.nu [build-cli]` |
-| `test` | Run test suites | `test/cli.nu [test-cli]` |
+| `test` | Run test suites (`--suite`, `--verbose`) | `test/cli.nu [test-cli]` |
 | `validate` | Validate service configurations | `validate/cli.nu [validate-cli]` |
 | `tls ca` | Generate CA certificate | `tls/cli.nu [tls-cli]` |
 | `tls certs` | Generate service certificates | `tls/cli.nu [tls-cli]` |
@@ -85,8 +86,12 @@ nu scripts/dockypody.nu docs lint --fix
 | `ci load-deps` | Load dependency tarballs | `ci/cli.nu [ci-cli]` |
 | `ci load-owner` | Load owner tarballs | `ci/cli.nu [ci-cli]` |
 | `ci save-owner` | Save owner tarballs | `ci/cli.nu [ci-cli]` |
-| `ci workflow` | Generate CI workflows (--target all\|build\|build-push\|orchestrator\|build-service\|ghcr-purge) | `ci/cli.nu [ci-cli]` |
+| `ci prepare-node-deps` | Download/load dep shards from run artifacts (CI) | `ci/cli.nu [ci-cli]` |
+| `ci workflow` | Write CI workflow YAML (--target ..., --dry-run) | `ci/cli.nu [ci-cli]` |
 | `ci images` | List canonical image references | `ci/cli.nu [ci-cli]` |
+| `ci login-registry` | Log into default container registry | `ci/cli.nu [ci-cli]` |
+| `ci merge-cache-shards` | Merge cache shards under shard root | `ci/cli.nu [ci-cli]` |
+| `ci cleanup-cache-shards` | Delete GitHub Actions cache entries for shards | `ci/cli.nu [ci-cli]` |
 | `ci ghcr-purge` | Purge stale GHCR package versions (SSOT-based) | `ci/cli.nu [ci-cli]` |
 | `docs lint` | Lint documentation files | `docs/cli.nu [docs-cli]` |
 
@@ -98,6 +103,126 @@ nu scripts/dockypody.nu docs lint --fix
 - The router parses top-level commands and flags, then calls the appropriate domain CLI
 - Domain CLIs handle subcommand routing and flag processing internally
 - This pattern enables clean separation of concerns and testable domain logic
+
+### Help routing
+
+Use `nu scripts/dockypody.nu`, `nu scripts/dockypody.nu help`, `-h`, or `--help`
+for top-level usage. Use a second positional for `build`, `test`, and `validate`
+(`nu scripts/dockypody.nu build help`). For `ssh`, `tls`, `ci`, and `docs`, omit
+the subcommand or pass `help` / `-h` / `--help` as the second word to reach
+domain help.
+
+### Router flags snapshot
+
+All flags below live on `scripts/dockypody.nu` `main`. Each handler reads only its
+subset; unrelated flags remain parsed but unused for that invocation.
+
+Build-related: `--service`, `--all-services`, `--push`, `--latest`,
+`--extra-tag`, `--provenance`, `--version`, `--all-versions`, `--versions`,
+`--latest-only`, `--platform`, `--matrix-json`, `--progress`, `--cache-bust`,
+`--no-cache`, `--show-build-order`, `--dep-cache`, `--push-deps`, `--tag-deps`,
+`--fail-fast`, `--pull`, `--cache-match`, `--disk-monitor`,
+`--prune-cache-mounts`.
+
+Test: `--suite`, `--verbose`.
+
+Validate: `--service`, `--all-services`, `--manifests-only`.
+
+TLS: `--service` (comma-separated service names passed to clean), `--filter`
+(comma list for cert generation subset), `--service-ca-only`, `--skip-shared-ca`,
+`--keep-empty-dirs`, `--dry-run`, `--force`, `--verbose`.
+
+SSH: `--force`.
+
+CI (shared fields): `--service`, `--version`, `--platform`,
+`--dependencies` (comma list), `--target`, `--ref`, `--sha`, `--transitive`,
+`--debug`, `--dry-run`, `--max-deletes`, `--force`.
+
+Docs: `--fix`.
+
+## Non-build commands (reference)
+
+The sections below summarize commands other than `build`. Build flags remain the
+bulk of this file starting at [Build Command](#build-command).
+
+### test
+
+```bash
+nu scripts/dockypody.nu test [--suite <name>] [--verbose]
+```
+
+- `--suite` names a file under `scripts/tests/<suite>.nu` (default suite name
+  `all` runs a fixed bundle: architecture, manifests, services, tls, ssh,
+  tag-generation, build-system, defaults, pull, validate, registries, ci,
+  ghcr-purge).
+- You may pass any suite name matching a `scripts/tests/*.nu` file; suites not in
+  the `all` bundle run only when selected explicitly.
+
+### validate
+
+```bash
+nu scripts/dockypody.nu validate [--service <name>] [--all-services] [--manifests-only]
+```
+
+- `--all-services`: validate every discovered service (mutually exclusive with a
+  single `--service`; see `validate-cli` behavior).
+
+### tls
+
+Subcommands: `ca`, `certs`, `clean`; help when the subcommand is missing or set
+to `help` / `-h` / `--help`.
+
+```bash
+nu scripts/dockypody.nu tls ca [--verbose]
+nu scripts/dockypody.nu tls certs [--filter svc1,svc2] [--verbose]
+nu scripts/dockypody.nu tls clean [--service a,b] [--dry-run]
+     [--skip-shared-ca] [--keep-empty-dirs] [--service-ca-only]
+```
+
+TLS library helpers like `copy-tls` are module exports only; no `tls copy`
+subcommand is routed through `dockypody.nu`.
+
+### ssh
+
+Subcommands: `key`.
+
+```bash
+nu scripts/dockypody.nu ssh key [--force]
+```
+
+### ci
+
+Invoke as `nu scripts/dockypody.nu ci <subcommand> [flags]`.
+
+| Subcommand | Role | Typical flags |
+| ---------- | ------ | ------------- |
+| `list-deps` | Print dependency names (stdout lines) | `--service`, optional `--transitive`, `--debug` |
+| `load-deps` | Load dependency tarballs from cache | `--service` |
+| `load-owner` / `save-owner` | Load/save owner tarballs | `--service` |
+| `prepare-node-deps` | Download shard artifacts when run in GitHub Actions | `--service`, `--version`, optional `--platform`, `--dependencies` (comma), `--debug` |
+| `workflow` | Rewrite workflow files from templates | Mandatory `--target` (see targets below), `--dry-run` optional |
+| `images` | Print canonical refs for caches | `--service` |
+| `login-registry` | Registry login helper | `--debug` |
+| `merge-cache-shards` | Merge downloaded shards locally | `--service`, `--ref`, `--sha`; optional `--debug`; base dir from `DOCKYPODY_SHARD_BASE_DIR` or `/tmp/docker-images/shards` |
+| `cleanup-cache-shards` | Delete matching GitHub Actions caches | `--service`, `--ref`, `--sha`; `--dry-run`, `--debug`; needs `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `gh` |
+| `ghcr-purge` | Trim GHCR package versions vs SSOT | Optional `--service` (omit = all services), `--dry-run`, `--max-deletes`, `--debug`, `--force` (needs single service, no dry-run; see purge rules in code comments) |
+
+`ci workflow --target` must be exactly one of: `all`, `build`, `build-push`,
+`orchestrator`, `build-service`, `image-purge`. An omitted or empty `--target`
+errors because the router forwards an empty string to `get-workflows-for-target`.
+
+### docs
+
+Subcommands: `lint`.
+
+```bash
+nu scripts/dockypody.nu docs lint [--fix]
+```
+
+`lint-docs` can accept explicit file paths when called through the module API;
+`dockypody.nu` always passes an empty list and therefore lints repo-wide Markdown
+(per `glob` rules inside `scripts/lib/docs/lint.nu`), not per-file positional
+arguments.
 
 ## Build Command
 

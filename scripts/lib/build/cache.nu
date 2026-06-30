@@ -294,7 +294,7 @@ export def save-owner-tarballs [
 
         # Skip if tarball already exists (dedup within build session)
         if ($tarball_path | path exists) {
-            print $"Skipping ($image_id | str substring 0..16)... (tarball exists)"
+            print $"Skipping ($image_id | str substring 0..16)... \(tarball exists\)"
             continue
         }
 

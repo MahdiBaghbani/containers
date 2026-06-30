@@ -1,10 +1,17 @@
 mode = "strict"
+compatibility_scope = "none"
 listen_addr = ":443"
 
-[outbound_http]
-ssrf_mode = "strict"
+[outbound_http.ssrf]
+mode = "strict"
 
 [tls]
 mode = "static"
 cert_file = "/tls/ocmgo.crt"
 key_file = "/tls/ocmgo.key"
+
+[http.services.api]
+allowed_paths = ["/tmp", "/data"]
+
+[http.services.ui.wayf]
+enabled = true

@@ -72,7 +72,7 @@ export def validate-local-path [path: string, repo_root: string] {
     })
 
     if $path_type != "dir" {
-        $errors = ($errors | append $"Path '($path)' is not a directory (type: ($path_type))")
+        $errors = ($errors | append $"Path '($path)' is not a directory \(type: ($path_type)\)")
         return {valid: false, errors: $errors}
     }
 

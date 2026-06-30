@@ -51,7 +51,7 @@ cache = 'lru'" | save -f $test_file
     rm -f $test_file
     return true
   } else {
-    print $"  [FAIL] parse_partial_file valid: FAILED (got: ($result | to json))"
+    print $"  [FAIL] parse_partial_file valid: FAILED \(got: ($result | to json)\)"
     rm -f $test_file
     return false
   }
@@ -106,7 +106,7 @@ def test_sort_partials_by_order [] {
     print "  [PASS] sort_partials_by_order: PASSED"
     return true
   } else {
-    print $"  [FAIL] sort_partials_by_order: FAILED (orders: ($first_order), ($second_order), ($third_order), ($fourth_order))"
+    print $"  [FAIL] sort_partials_by_order: FAILED \(orders: ($first_order), ($second_order), ($third_order), ($fourth_order)\)"
     return false
   }
 }
@@ -141,7 +141,7 @@ value = 3" | save -f $test_file
     rm -f $test_file
     return true
   } else {
-    print $"  [FAIL] remove_old_merged_sections: FAILED (content: ($content))"
+    print $"  [FAIL] remove_old_merged_sections: FAILED \(content: ($content)\)"
     rm -f $test_file
     return false
   }
@@ -171,7 +171,7 @@ value = 1" | save -f $test_file
     rm -f $test_file
     return true
   } else {
-    print $"  [FAIL] merge_partial_with_marker: FAILED (content: ($content))"
+    print $"  [FAIL] merge_partial_with_marker: FAILED \(content: ($content)\)"
     rm -f $test_file
     return false
   }
@@ -201,7 +201,7 @@ value = 1" | save -f $test_file
     rm -f $test_file
     return true
   } else {
-    print $"  [FAIL] merge_partial_without_marker: FAILED (content: ($content))"
+    print $"  [FAIL] merge_partial_without_marker: FAILED \(content: ($content)\)"
     rm -f $test_file
     return false
   }
@@ -249,7 +249,7 @@ value = 3"
     }
   }
   
-  print $"  [FAIL] find_partials_for_target: FAILED (found ($result | length) partials, expected 2)"
+  print $"  [FAIL] find_partials_for_target: FAILED \(found ($result | length) partials, expected 2\)"
   rm -rf $test_dir
   return false
 }

@@ -291,7 +291,7 @@ def main [--verbose] {
             (mock-version 3 ["old" "stale"])     # tagged -> kept
         ]
         let selected = (plan-deletions $versions [] 0 false)
-        if ($selected | length) != 1 { error make {msg: $"expected 1 (only untagged), got ($selected | length)"} }
+        if ($selected | length) != 1 { error make {msg: $"expected 1 \(only untagged\), got ($selected | length)"} }
         if $selected.0.id != 1 { error make {msg: $"expected id=1, got ($selected.0.id)"} }
         if $selected.0.reason != "untagged" { error make {msg: "expected reason=untagged"} }
         true

@@ -430,7 +430,7 @@ export def build-single-version [
     if not ($stale_deps | is-empty) {
       let stale_list = ($stale_deps | each {|d| $"  - ($d.node): ($d.reason)"} | str join "\n")
       error make {
-        msg: ($"CI strict mode (--dep-cache=strict): Found stale or missing dependency images.\n\n" +
+        msg: ($"CI strict mode \(--dep-cache=strict\): Found stale or missing dependency images.\n\n" +
               $"The following dependencies need to be rebuilt:\n($stale_list)\n\n" +
               "In strict mode, dependencies must have matching service definition hashes.\n" +
               "Either rebuild the dependencies first, or use --dep-cache=soft to allow auto-building.")
