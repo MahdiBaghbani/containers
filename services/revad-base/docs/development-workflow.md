@@ -63,6 +63,17 @@ volumes:
 - Scripts preserve edits (skip copy if exists)
 - Scripts still process placeholders (updates values)
 
+## Baked healthchecks
+
+Development images include `HEALTHCHECK` in `Dockerfile.development`. Compose
+files and examples should rely on the image probe (`healthcheck.nu`) and
+`docker compose up --wait` instead of duplicating per-service health blocks.
+
+Production/distroless Dockerfiles omit `HEALTHCHECK` by design.
+
+Third-party or minimal images (MariaDB without a probe, mitmproxy) may still
+use `service_started` until a valid health signal exists.
+
 ## Production Images
 
 ### Purpose
