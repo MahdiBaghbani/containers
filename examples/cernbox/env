@@ -1,6 +1,7 @@
-# Image versions (platform suffixes may be required - edit manually)
-IMAGE_CERNBOX_REVAD=mahdi_fix_localhome-development
-IMAGE_CERNBOX_WEB=testing
+# Image versions for this example stack.
+# Override locally if you need older milestone tags or experimental branches.
+IMAGE_CERNBOX_REVAD=master-development
+IMAGE_CERNBOX_WEB=v1.0.13
 IMAGE_IDP=v26.4.2
 
 # CERNBox Settings

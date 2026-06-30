@@ -24,7 +24,8 @@
   "name": "revad-base", // string (required)
   "context": "services/revad-base", // string (required)
   "dockerfile": "services/revad-base/Dockerfile", // string (required if no platforms.nuon, FORBIDDEN if platforms.nuon exists)
-  // CRITICAL: If platforms.nuon exists, base config can ONLY contain: name, context, tls, labels (all metadata)
+  // CRITICAL: If platforms.nuon exists, base config can ONLY contain:
+  //           name, context, tls, ssh, and labels (all metadata)
   //           Labels are metadata like TLS (Docker image labels), not infrastructure or version control
   //           All other fields (dockerfile, sources, external_images, dependencies, build_args) are FORBIDDEN
   //           ERROR: "Service 'X': external_images.build: Field forbidden when platforms.nuon exists. Move to platforms.nuon (infrastructure) or versions.nuon (versions)."
@@ -34,15 +35,21 @@
   // VALIDATION: Source keys must match ^[a-z0-9_]+$ (lowercase alphanumeric with underscores only)
   // VALIDATION: build_arg field is FORBIDDEN (auto-generated, will cause validation error)
   // VALIDATION: path and url/ref are MUTUALLY EXCLUSIVE (cannot have both in same source)
-  // NOTE: For single-platform services, sources are REQUIRED in base config (versions.nuon can override, but base must have as fallback).
-  //       For multi-platform services, sources are FORBIDDEN in base config (must be in versions.nuon overrides only).
+  // NOTE: For single-platform services, sources are allowed in base config but
+  //       are not required there. They may live entirely in versions.nuon
+  //       defaults or overrides if the merged config is still complete.
+  //       For multi-platform services, sources are FORBIDDEN in base config
+  //       and must live in versions.nuon defaults or overrides.
   // NOTE: path field can be defined in:
   //       - Base config (services/{service}.nuon) - for single-platform services
   //       - versions.nuon.defaults - for default source configuration
   //       - versions.nuon version overrides - for version-specific local paths
   //       - versions.nuon platform override blocks - for platform-specific local paths
   //       - NOT in platforms.nuon directly (sources are FORBIDDEN in platforms.nuon)
-  // NOTE: path field is dev-only (rejected in CI builds, but allowed in all config locations above)
+  // NOTE: path field is dev-only (rejected in CI builds, but allowed in all
+  //       config locations above). Paths must resolve inside this repo, or
+  //       inside a sibling repos/ workspace parent when this repo itself lives
+  //       under repos/.
   "sources": {
     "revad": {
       // Git source example - generates: REVAD_REF and REVAD_URL
@@ -137,7 +144,8 @@
   // TLS configuration
   // CRITICAL RESTRICTIONS:
   // - TLS config in platforms.nuon is FORBIDDEN (validation error)
-  // - TLS config in version overrides (versions.nuon) is FORBIDDEN (validation error)
+  // - TLS config in version defaults or overrides (versions.nuon) is FORBIDDEN
+  //   (validation error)
   // - TLS must be configured in base service config ONLY (never in platforms.nuon or versions.nuon)
   // - Services with TLS enabled MUST have common-tools dependency (validation error if missing)
   // - TLS config is allowed in base config even when platforms.nuon exists (it's metadata, not infrastructure)

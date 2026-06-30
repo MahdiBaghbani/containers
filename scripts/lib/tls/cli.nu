@@ -35,15 +35,19 @@ export def tls-help [] {
   print "Usage: nu scripts/dockypody.nu tls <subcommand> [options]"
   print ""
   print "Subcommands:"
-  print "  ca      Generate CA certificate"
+  print "  ca      Generate the shared CA certificate"
   print "  certs   Generate service certificates"
   print "  clean   Remove TLS artifacts"
   print ""
   print "Options:"
-  print "  --service <name>       Target specific service(s)"
-  print "  --dry-run              Show what would be done"
-  print "  --force                Force regeneration"
-  print "  --verbose              Show detailed output"
+  print "  --filter <list>        (certs) Comma-separated allow-list of service names"
+  print "  --force                (ca) Regenerate the CA even if it already exists;"
+  print "                         existing service certs must then be regenerated"
+  print "  --verbose              (ca/certs) Show detailed output"
+  print "  --service <name>       (clean) Target specific service(s), comma-separated"
+  print "  --dry-run              (clean) Show what would be removed without removing"
+  print "  --skip-shared-ca       (clean) Keep the shared CA; clean only service artifacts"
+  print "  --keep-empty-dirs      (clean) Do not remove directories left empty after cleanup"
   print "  --service-ca-only      (clean) Remove only service-local CA mirrors"
 }
 
@@ -62,14 +66,22 @@ export def tls-cli [
   let verbose = (try { $flags.verbose } catch { false })
 
   match $subcommand {
-    "help" | "--help" | "-h" => {
+    "help" => {
       tls-help
     }
     "ca" => {
-      if $verbose {
-        generate-ca --verbose
+      if $force {
+        if $verbose {
+          generate-ca --force --verbose
+        } else {
+          generate-ca --force
+        }
       } else {
-        generate-ca
+        if $verbose {
+          generate-ca --verbose
+        } else {
+          generate-ca
+        }
       }
     }
     "certs" => {

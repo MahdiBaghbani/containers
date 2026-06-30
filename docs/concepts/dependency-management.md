@@ -110,19 +110,20 @@ Dependencies resolve their version in this priority order:
 
 1. **Explicit version** in dependency config: `"version": "v3.3.3"` -> always use this
    - If explicit version includes platform suffix (e.g., `"v1.0.0-debian"`), it's used as-is
-   - If explicit version lacks platform suffix and parent is multi-platform, platform is inherited (see Platform Inheritance below)
-2. **Parent service version**: Inherit from parent if no explicit version (with platform inheritance for multi-platform services)
+   - If explicit version lacks platform suffix and parent uses `platforms.nuon`, platform is inherited (see Platform Inheritance below)
+2. **Parent service version**: Inherit from parent if no explicit version (with platform inheritance for services using `platforms.nuon`)
    - Base version name is inherited (e.g., `v3.3.3`)
-   - Platform suffix is automatically inherited if parent is multi-platform
+   - Platform suffix is automatically inherited if parent uses `platforms.nuon`
 3. **Error**: If no version can be determined, build fails with clear error message
 
 ## Platform Inheritance
 
-**When a multi-platform service depends on another service, the dependency automatically inherits the parent's platform.**
+**When a service using `platforms.nuon` depends on another service, the
+dependency automatically inherits the parent's platform.**
 
 ### How It Works
 
-1. **Parent is multi-platform** (has `platforms.nuon`)
+1. **Parent uses `platforms.nuon`**
 2. **Dependency version resolution:**
    - If explicit version has platform suffix: Use as-is (e.g., `"version": "v1.0.0-debian"`)
    - If explicit version lacks platform suffix: Inherit platform from parent (e.g., `"version": "v1.0.0"` + parent platform `debian` -> `v1.0.0-debian`)
@@ -179,13 +180,14 @@ Result: `base-service:v1.0.0-debian` (used as-is, no inheritance)
 
 ### Warnings and Errors
 
-#### Warning: If explicit version lacks platform suffix and parent is multi-platform
+#### Warning: If explicit version lacks platform suffix and parent uses
+`platforms.nuon`
 
 ```text
 Warning: Dependency 'dep-key' version 'v1.0.0' lacks platform suffix, inheriting 'debian' from parent
 ```
 
-#### Info: If dependency doesn't support platforms (no `platforms.nuon`) but parent is multi-platform
+#### Info: If dependency does not use `platforms.nuon` but parent does
 
 ```text
 Info: Multi-platform service depends on single-platform service 'base-service'.
@@ -198,7 +200,8 @@ If this is intentional, consider adding 'single_platform: true' to suppress this
 #### Solutions
 
 1. Add `single_platform: true` to suppress the informational message (recommended if intentional)
-2. Create `platforms.nuon` for the dependency to make it multi-platform, OR
+2. Create `platforms.nuon` for the dependency if it really needs
+   platform-specific variants, OR
 3. Use explicit version with platform suffix: `"version": "v1.0.0-debian"` (if dependency has platforms)
 
 For complete details on multi-platform builds and platform inheritance, see the [Multi-Platform Builds Guide](../guides/multi-platform-builds.md).
@@ -207,7 +210,11 @@ For complete details on multi-platform builds and platform inheritance, see the 
 
 ## Single-Platform Dependencies
 
-When a multi-platform service depends on a single-platform service (a service without `platforms.nuon`), the dependency can be used across all parent platforms. This is useful when the dependency's binaries are compatible with all platforms of the parent service.
+When a service using `platforms.nuon` depends on a single-platform service,
+the dependency can be used across all parent platforms. One common
+single-platform shape is a service without `platforms.nuon`. This is useful
+when the dependency's binaries are compatible with all platforms of the
+parent service.
 
 ### The `single_platform` Flag
 
@@ -445,7 +452,8 @@ Service `app` (multi-platform: debian, alpine) depends on `base-service` (multi-
       // Inherits version and platform from parent
     },
     "common-tools": {
-      "version": "v1.0.0-debian",  // Explicit platform suffix required (single-platform dependency)
+      "version": "v1.0.0",
+      "single_platform": true,
       "build_arg": "COMMON_TOOLS_IMAGE"
     }
   }
@@ -456,15 +464,18 @@ Service `app` (multi-platform: debian, alpine) depends on `base-service` (multi-
 
 - Building `app:v2.0.0-debian`:
   - `base-service` resolves to `base-service:v2.0.0-debian` (inherits version + platform)
-  - `common-tools` resolves to `common-tools:v1.0.0-debian` (explicit version with suffix)
+  - `common-tools` resolves to `common-tools:v1.0.0` (single-platform dependency)
 - Building `app:v2.0.0-alpine`:
   - `base-service` resolves to `base-service:v2.0.0-alpine` (inherits version + platform)
-  - `common-tools` resolves to `common-tools:v1.0.0-debian` (explicit version, no platform inheritance)
+  - `common-tools` resolves to `common-tools:v1.0.0` (same single-platform dependency)
 
-**Note:** Since `common-tools` is single-platform, it cannot inherit the platform from `app`. You must either:
+**Note:** Since `common-tools` is single-platform, it does not inherit the
+platform from `app`. That is allowed and normally reported as informational.
+Treat it as a real problem only if graph or suffix resolution fails.
 
-1. Specify explicit platform suffix: `"version": "v1.0.0-debian"`
-2. Create `platforms.nuon` for `common-tools` to make it multi-platform
+1. Keep `single_platform: true` when the shared dependency is intentional
+2. Create `platforms.nuon` for `common-tools` only if it truly needs
+   platform-specific variants
 
 ## Troubleshooting
 
@@ -508,38 +519,39 @@ nu scripts/dockypody.nu build --service revad-base --version v3.3.3 --platform d
 nu scripts/dockypody.nu build --service revad-base --version v3.3.3
 ```
 
-### Error: "Multi-platform service depends on single-platform service"
+### Info: Shared single-platform dependency under `platforms.nuon`
 
 #### Problem: Multi-Platform Depends on Single-Platform
 
 ```text
-Error: Multi-platform service depends on single-platform service 'base-service'.
-Dependency 'dep-key' cannot inherit platform 'debian'.
+Info: Multi-platform service depends on single-platform service 'base-service'.
+If this is intentional, consider adding 'single_platform: true'.
 ```
 
-#### Solution: Create Platforms Manifest or Use Explicit Version
+#### What To Do
 
-Choose one:
+This message is informational when the single-platform dependency is meant to
+be shared across all parent platforms.
 
-1. **Create platforms manifest for dependency:**
-
-   ```bash
-   # Create platforms.nuon for base-service
-   services/base-service/platforms.nuon
-   ```
-
-2. **Use explicit version with platform suffix:**
+1. **Keep the single-platform dependency and mark it explicitly:**
 
    ```nuon
    {
      "dependencies": {
        "base-service": {
-         "version": "v1.0.0-debian",  // Explicit platform suffix
+         "version": "v1.0.0",
+         "single_platform": true,
          "build_arg": "BASE_SERVICE_IMAGE"
        }
      }
    }
    ```
+
+2. **Create a platforms manifest for the dependency** only if it really needs
+   platform-specific variants.
+
+Real errors still happen when graph or suffix resolution fails, for example
+when a dependency version points to a missing platform-specific image.
 
 ### Error: "Dependency missing required field: 'build_arg'"
 

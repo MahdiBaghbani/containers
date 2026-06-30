@@ -20,9 +20,9 @@
 # GHCR purge offline unit tests.
 # Tests desired-tag computation and version decision logic with no gh api calls.
 
-use ../lib/ci/ghcr/purge.nu [decide-versions-to-delete sort-delete-candidates plan-deletions]
+use ../lib/ci/ghcr/purge.nu [decide-versions-to-delete sort-delete-candidates plan-deletions purge-service-core]
 use ../lib/ci/ghcr/ssot-tags.nu [compute-desired-tags-for-service]
-use ../lib/ci/ghcr/cli.nu [validate-force-flags]
+use ../lib/ci/ghcr/cli.nu [validate-force-flags aggregate-purge-results format-purge-summary]
 use ../lib/services/core.nu [list-service-names]
 use ./lib.nu [run-test print-test-summary]
 
@@ -52,6 +52,34 @@ def mock-version [
         $record = ($record | insert created_at $created_at)
     }
     $record
+}
+
+# Build a successful list-package-versions result wrapping the given versions.
+def mock-list-ok [versions: list] {
+    {
+        ok: true
+        base_path: "/orgs/acme/packages/container/repo%2Fsvc"
+        versions: $versions
+        not_found: false
+        permission_denied: false
+        error: ""
+    }
+}
+
+# Always-succeed delete closure.
+def delete-fn-ok [] {
+    {|base_path, version_id| {ok: true, error: ""} }
+}
+
+# Delete closure that fails for a specific version id.
+def delete-fn-fail-id [bad_id: int] {
+    {|base_path, version_id|
+        if $version_id == $bad_id {
+            {ok: false, error: "HTTP 500 simulated failure"}
+        } else {
+            {ok: true, error: ""}
+        }
+    }
 }
 
 def main [--verbose] {
@@ -484,6 +512,292 @@ def main [--verbose] {
         true
     } $verbose_flag)
     $results = ($results | append $t11)
+
+    # ------------------------------------------------------------------ #
+    # purge-service-core: injectable, API-free execution contract tests
+    # (no gh api calls; delete behavior is injected via a closure)
+    # ------------------------------------------------------------------ #
+
+    let t_core_live_ok = (run-test "core: live delete success -> ok, all deleted, charged=attempted" {
+        let versions = [(mock-version 1 []) (mock-version 2 [])]
+        let list_result = (mock-list-ok $versions)
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false false (delete-fn-ok))
+        if not $r.ok { error make {msg: "expected ok=true on full success"} }
+        if $r.planned != 2 { error make {msg: $"expected planned=2, got ($r.planned)"} }
+        if $r.attempted != 2 { error make {msg: $"expected attempted=2, got ($r.attempted)"} }
+        if $r.deleted != 2 { error make {msg: $"expected deleted=2, got ($r.deleted)"} }
+        if $r.failed != 0 { error make {msg: $"expected failed=0, got ($r.failed)"} }
+        if $r.charged != 2 { error make {msg: $"expected charged=2, got ($r.charged)"} }
+        if $r.skipped != 0 { error make {msg: $"expected skipped=0, got ($r.skipped)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_live_ok)
+
+    let t_core_live_fail_strict = (run-test "core: live delete failure (strict) -> ok=false, failure recorded" {
+        let versions = [(mock-version 1 []) (mock-version 2 [])]
+        let list_result = (mock-list-ok $versions)
+        # strict policy (partial_success=false): id=2 delete fails
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false false (delete-fn-fail-id 2))
+        if $r.ok { error make {msg: "expected ok=false when a live delete fails under strict policy"} }
+        if $r.failed != 1 { error make {msg: $"expected failed=1, got ($r.failed)"} }
+        if $r.deleted != 1 { error make {msg: $"expected deleted=1, got ($r.deleted)"} }
+        if ($r.error | str length) == 0 { error make {msg: "expected non-empty error message"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_live_fail_strict)
+
+    let t_core_live_fail_partial = (run-test "core: live delete failure (partial-success) -> ok=true, failure still counted" {
+        let versions = [(mock-version 1 []) (mock-version 2 [])]
+        let list_result = (mock-list-ok $versions)
+        # partial_success=true: failure tolerated
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false true (delete-fn-fail-id 2))
+        if not $r.ok { error make {msg: "expected ok=true under partial-success policy"} }
+        if $r.failed != 1 { error make {msg: $"expected failed=1, got ($r.failed)"} }
+        if $r.deleted != 1 { error make {msg: $"expected deleted=1, got ($r.deleted)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_live_fail_partial)
+
+    let t_core_dry_run = (run-test "core: dry-run charges zero against budget while reporting planned" {
+        let versions = [(mock-version 1 []) (mock-version 2 []) (mock-version 3 [])]
+        let list_result = (mock-list-ok $versions)
+        # dry_run=true; delete_fn must never be called, so a failing closure is safe
+        let r = (purge-service-core "svc" $list_result ["keep"] true 0 false false false (delete-fn-fail-id 1))
+        if not $r.ok { error make {msg: "expected ok=true in dry-run"} }
+        if $r.planned != 3 { error make {msg: $"expected planned=3, got ($r.planned)"} }
+        if $r.charged != 0 { error make {msg: $"expected charged=0 in dry-run, got ($r.charged)"} }
+        if $r.attempted != 0 { error make {msg: $"expected attempted=0 in dry-run, got ($r.attempted)"} }
+        if $r.deleted != 0 { error make {msg: $"expected deleted=0 in dry-run, got ($r.deleted)"} }
+        if $r.skipped != 3 { error make {msg: $"expected skipped=3 in dry-run, got ($r.skipped)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_dry_run)
+
+    let t_core_run_wide_plan_budget = (run-test "aggregate: dry-run planning budget is run-wide, not per-service" {
+        # Exercises the real ghcr-purge-cli aggregation loop via
+        # aggregate-purge-results (no local reimplementation).  Two services
+        # with 3 untagged (always-candidate) versions each and a run-wide
+        # max_deletes=4 must plan 4 total, NOT 6.  charged stays 0 because
+        # dry-run never touches the live delete budget.
+        let lists = {
+            "svc-a": (mock-list-ok [(mock-version 1 []) (mock-version 2 []) (mock-version 3 [])])
+            "svc-b": (mock-list-ok [(mock-version 4 []) (mock-version 5 []) (mock-version 6 [])])
+        }
+        let runner = {|svc, budget_remaining|
+            purge-service-core $svc ($lists | get $svc) ["keep"] true $budget_remaining false false false (delete-fn-ok)
+        }
+        let agg = (aggregate-purge-results ["svc-a" "svc-b"] 4 $runner)
+        if $agg.planned != 4 {
+            error make {msg: $"expected run-wide planned=4, got ($agg.planned)"}
+        }
+        if $agg.charged != 0 {
+            error make {msg: $"expected charged=0 across dry-run services, got ($agg.charged)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_run_wide_plan_budget)
+
+    let t_agg_failed_services = (run-test "aggregate: failed and permission-denied services are collected from real results" {
+        # svc-ok succeeds, svc-fail hits a strict live-delete failure (ok=false),
+        # svc-perm is soft-skipped on permission denied.  aggregate-purge-results
+        # must surface both lists and roll up the totals from the real core.
+        let lists = {
+            "svc-ok": (mock-list-ok [(mock-version 1 []) (mock-version 2 [])])
+            "svc-fail": (mock-list-ok [(mock-version 3 []) (mock-version 4 [])])
+            "svc-perm": {
+                ok: false, base_path: "", versions: [], not_found: false,
+                permission_denied: true, error: "HTTP 403"
+            }
+        }
+        let runner = {|svc, budget_remaining|
+            let delete_fn = (if $svc == "svc-fail" { (delete-fn-fail-id 4) } else { (delete-fn-ok) })
+            # live mode (dry_run=false), strict policy (partial_success=false)
+            purge-service-core $svc ($lists | get $svc) ["keep"] false $budget_remaining false false false $delete_fn
+        }
+        let agg = (aggregate-purge-results ["svc-ok" "svc-fail" "svc-perm"] 0 $runner)
+        if $agg.failed_services != ["svc-fail"] {
+            error make {msg: $"expected failed_services=[svc-fail], got ($agg.failed_services)"}
+        }
+        if $agg.permission_denied_services != ["svc-perm"] {
+            error make {msg: $"expected permission_denied_services=[svc-perm], got ($agg.permission_denied_services)"}
+        }
+        # svc-ok deleted 2, svc-fail deleted 1 of 2 -> 3 total deleted, 1 failed.
+        if $agg.deleted != 3 { error make {msg: $"expected deleted=3, got ($agg.deleted)"} }
+        if $agg.failed != 1 { error make {msg: $"expected failed=1, got ($agg.failed)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_agg_failed_services)
+
+    let t_agg_budget_stops_iteration = (run-test "aggregate: run-wide budget exhaustion stops later services" {
+        # First service plans 3 against a budget of 3, exhausting it; the second
+        # service must never run (planned stays 3, not 6).
+        let lists = {
+            "svc-a": (mock-list-ok [(mock-version 1 []) (mock-version 2 []) (mock-version 3 [])])
+            "svc-b": (mock-list-ok [(mock-version 4 []) (mock-version 5 []) (mock-version 6 [])])
+        }
+        let runner = {|svc, budget_remaining|
+            purge-service-core $svc ($lists | get $svc) ["keep"] true $budget_remaining false false false (delete-fn-ok)
+        }
+        let agg = (aggregate-purge-results ["svc-a" "svc-b"] 3 $runner)
+        if $agg.planned != 3 {
+            error make {msg: $"expected planned=3 (second service skipped), got ($agg.planned)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_agg_budget_stops_iteration)
+
+    # ------------------------------------------------------------------ #
+    # Strict-stop regression tests
+    # Strict policy (partial_success=false) must stop mutating as soon as a
+    # failure is observed: within a service (purge-service-core) and across
+    # services (aggregate-purge-results --strict-stop).
+    # ------------------------------------------------------------------ #
+
+    let t_core_strict_stop_first_failure = (run-test "core: strict policy stops deleting after the first failed delete" {
+        # Three untagged versions sort oldest-first as [1 2 3]; the first delete
+        # (id=1) fails under strict policy, so ids 2 and 3 must never be tried.
+        let versions = [(mock-version 1 []) (mock-version 2 []) (mock-version 3 [])]
+        let list_result = (mock-list-ok $versions)
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false false (delete-fn-fail-id 1))
+        if $r.ok { error make {msg: "expected ok=false on strict live-delete failure"} }
+        if $r.planned != 3 { error make {msg: $"expected planned=3, got ($r.planned)"} }
+        if $r.attempted != 1 { error make {msg: $"expected attempted=1 (stopped after first failure), got ($r.attempted)"} }
+        if $r.deleted != 0 { error make {msg: $"expected deleted=0, got ($r.deleted)"} }
+        if $r.failed != 1 { error make {msg: $"expected failed=1, got ($r.failed)"} }
+        if $r.charged != 1 { error make {msg: $"expected charged=1 (only the issued call), got ($r.charged)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_strict_stop_first_failure)
+
+    let t_core_partial_continues_after_failure = (run-test "core: partial-success keeps deleting after a mid-list failure" {
+        # Contrast with strict: the same id=1 failure under partial-success must
+        # not stop the loop; ids 2 and 3 are still deleted.
+        let versions = [(mock-version 1 []) (mock-version 2 []) (mock-version 3 [])]
+        let list_result = (mock-list-ok $versions)
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false true (delete-fn-fail-id 1))
+        if not $r.ok { error make {msg: "expected ok=true under partial-success policy"} }
+        if $r.attempted != 3 { error make {msg: $"expected attempted=3 (no early stop), got ($r.attempted)"} }
+        if $r.deleted != 2 { error make {msg: $"expected deleted=2, got ($r.deleted)"} }
+        if $r.failed != 1 { error make {msg: $"expected failed=1, got ($r.failed)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_partial_continues_after_failure)
+
+    let t_agg_strict_stop_halts_iteration = (run-test "aggregate: strict-stop halts service iteration after a failed service" {
+        # svc-fail hits a strict live-delete failure (ok=false); with --strict-stop
+        # set, svc-after must never run, so totals only reflect svc-fail.
+        let lists = {
+            "svc-fail": (mock-list-ok [(mock-version 1 []) (mock-version 2 [])])
+            "svc-after": (mock-list-ok [(mock-version 3 []) (mock-version 4 [])])
+        }
+        let runner = {|svc, budget_remaining|
+            let delete_fn = (if $svc == "svc-fail" { (delete-fn-fail-id 1) } else { (delete-fn-ok) })
+            purge-service-core $svc ($lists | get $svc) ["keep"] false $budget_remaining false false false $delete_fn
+        }
+        let agg = (aggregate-purge-results ["svc-fail" "svc-after"] 0 $runner --strict-stop)
+        if $agg.failed_services != ["svc-fail"] {
+            error make {msg: $"expected failed_services=[svc-fail], got ($agg.failed_services)"}
+        }
+        if $agg.planned != 2 { error make {msg: $"expected planned=2 (svc-after skipped), got ($agg.planned)"} }
+        if $agg.deleted != 0 { error make {msg: $"expected deleted=0 (svc-after skipped), got ($agg.deleted)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_agg_strict_stop_halts_iteration)
+
+    let t_agg_no_strict_stop_continues = (run-test "aggregate: without strict-stop, iteration continues past a failed service" {
+        # Same setup as above but with the default (flag unset): svc-after still
+        # runs, so totals roll up both services.
+        let lists = {
+            "svc-fail": (mock-list-ok [(mock-version 1 []) (mock-version 2 [])])
+            "svc-after": (mock-list-ok [(mock-version 3 []) (mock-version 4 [])])
+        }
+        let runner = {|svc, budget_remaining|
+            let delete_fn = (if $svc == "svc-fail" { (delete-fn-fail-id 1) } else { (delete-fn-ok) })
+            purge-service-core $svc ($lists | get $svc) ["keep"] false $budget_remaining false false false $delete_fn
+        }
+        let agg = (aggregate-purge-results ["svc-fail" "svc-after"] 0 $runner)
+        if $agg.failed_services != ["svc-fail"] {
+            error make {msg: $"expected failed_services=[svc-fail], got ($agg.failed_services)"}
+        }
+        if $agg.planned != 4 { error make {msg: $"expected planned=4 (both services run), got ($agg.planned)"} }
+        if $agg.deleted != 2 { error make {msg: $"expected deleted=2 (svc-after deleted both), got ($agg.deleted)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_agg_no_strict_stop_continues)
+
+    let t_format_summary = (run-test "format-purge-summary: emits summary, permission-denied, and failed lines" {
+        let agg = {
+            planned: 5, attempted: 4, deleted: 3, failed: 1, skipped: 0, charged: 4,
+            failed_services: ["svc-fail"], permission_denied_services: ["svc-perm"]
+        }
+        let lines = (format-purge-summary $agg)
+        if ($lines | length) != 3 { error make {msg: $"expected 3 summary lines, got ($lines | length)"} }
+        if not ($lines.0 | str contains "Purge complete: planned=5") {
+            error make {msg: $"expected summary line, got: ($lines.0)"}
+        }
+        if not ($lines.0 | str contains "failed_services=1") {
+            error make {msg: $"expected failed_services count in summary, got: ($lines.0)"}
+        }
+        if not ($lines.1 | str contains "Permission-denied versions") {
+            error make {msg: $"expected permission-denied line, got: ($lines.1)"}
+        }
+        if not ($lines.2 | str contains "Failed services: svc-fail") {
+            error make {msg: $"expected failed-services line, got: ($lines.2)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_format_summary)
+
+    let t_format_summary_clean = (run-test "format-purge-summary: clean run emits only the summary line" {
+        let agg = {
+            planned: 0, attempted: 0, deleted: 0, failed: 0, skipped: 0, charged: 0,
+            failed_services: [], permission_denied_services: []
+        }
+        let lines = (format-purge-summary $agg)
+        if ($lines | length) != 1 { error make {msg: $"expected 1 line for clean run, got ($lines | length)"} }
+        if not ($lines.0 | str contains "failed_services=0") {
+            error make {msg: $"expected failed_services=0, got: ($lines.0)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_format_summary_clean)
+
+    let t_core_perm_denied = (run-test "core: permission-denied list -> soft skip (ok=true, permission_denied=true)" {
+        let list_result = {
+            ok: false
+            base_path: ""
+            versions: []
+            not_found: false
+            permission_denied: true
+            error: "HTTP 403"
+        }
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false false (delete-fn-ok))
+        if not $r.ok { error make {msg: "expected ok=true for permission-denied soft skip"} }
+        if not $r.permission_denied { error make {msg: "expected permission_denied=true"} }
+        if $r.planned != 0 { error make {msg: $"expected planned=0, got ($r.planned)"} }
+        if $r.charged != 0 { error make {msg: $"expected charged=0, got ($r.charged)"} }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_perm_denied)
+
+    let t_core_list_fail = (run-test "core: non-permission list failure -> ok=false with error" {
+        let list_result = {
+            ok: false
+            base_path: ""
+            versions: []
+            not_found: false
+            permission_denied: false
+            error: "HTTP 500 server error"
+        }
+        let r = (purge-service-core "svc" $list_result ["keep"] false 0 false false false (delete-fn-ok))
+        if $r.ok { error make {msg: "expected ok=false for non-permission list failure"} }
+        if $r.permission_denied { error make {msg: "expected permission_denied=false"} }
+        if not ($r.error | str contains "HTTP 500") {
+            error make {msg: $"expected error to carry list failure detail, got: ($r.error)"}
+        }
+        true
+    } $verbose_flag)
+    $results = ($results | append $t_core_list_fail)
 
     print-test-summary $results
 

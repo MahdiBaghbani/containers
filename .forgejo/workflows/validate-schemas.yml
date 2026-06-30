@@ -1,32 +1,47 @@
-name: Validate Schemas and Manifests
+name: Validate Schemas and CI Helpers
 
 on:
   push:
     branches: [main, master]
     paths:
+      - '.forgejo/workflows/**'
+      - '.github/workflows/**'
+      - 'Makefile'
+      - 'README.md'
+      - 'docs/**'
       - 'schemas/**'
       - 'services/**/*.nuon'
-      - 'scripts/lib/validate.nu'
+      - 'scripts/**'
   pull_request:
     paths:
+      - '.forgejo/workflows/**'
+      - '.github/workflows/**'
+      - 'Makefile'
+      - 'README.md'
+      - 'docs/**'
       - 'schemas/**'
       - 'services/**/*.nuon'
-      - 'scripts/lib/validate.nu'
+      - 'scripts/**'
 
 jobs:
   validate:
-    name: Validate Schemas and Service Configs
+    name: Lightweight Non-Image Validation
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Nushell
+        env:
+          NU_VERSION: "0.108.0"
         run: |
-          curl -sSf https://raw.githubusercontent.com/nushell/nushell/main/install.sh | bash
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+
       - name: Validate schema example files
         run: |
           echo "Validating schema example files..."
@@ -34,22 +49,28 @@ jobs:
             echo "Validating $example"
             nu -c "open $example" || exit 1
           done
-      
+
       - name: Validate all service configs
         run: |
           echo "Validating all service configurations..."
           nu scripts/tests/manifests.nu || exit 1
-      
+
       - name: Validate schema file references
         run: |
           echo "Checking schema file references in documentation..."
           # Check that all schema references point to correct files
-          if grep -r "service-config.nuon" docs/; then
+          if git grep -n "service-config.nuon" -- docs/; then
             echo "ERROR: Found reference to old schema name 'service-config.nuon'"
             exit 1
           fi
-          if grep -r "version-manifest.nuon" docs/; then
+          if git grep -n "version-manifest.nuon" -- docs/; then
             echo "ERROR: Found reference to old schema name 'version-manifest.nuon'"
             exit 1
           fi
+
+      - name: Lint docs
+        run: nu scripts/dockypody.nu docs lint
+
+      - name: Run bounded non-Docker test suite bundle
+        run: nu scripts/dockypody.nu test --suite all
 

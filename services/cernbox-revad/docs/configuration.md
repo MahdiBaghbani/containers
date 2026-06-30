@@ -10,7 +10,8 @@ Configuration files are provided by the `revad-base` image and use generic names
 
 - `gateway.toml` - Gateway configuration
 - `dataprovider-{type}.toml` - Dataprovider configurations (localhome, ocm, sciencemesh)
-- `authprovider-{type}.toml` - Authprovider configurations (oidc, machine, ocmshares, publicshares)
+- `authprovider-{type}.toml` - Authprovider configurations (oidc, machine,
+  ocmshares, ocmsharecode, ocmexchangedtoken, publicshares)
 - `shareproviders.toml` - Share providers configuration
 - `groupuserproviders.toml` - User/group providers configuration
 
@@ -82,6 +83,18 @@ REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT=9166
 # OCM Shares
 REVAD_AUTHPROVIDER_OCMSHARES_HOST=cernbox-1-test-revad-authprovider-ocmshares
 REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT=9278
+
+# OCM Share Code
+REVAD_AUTHPROVIDER_OCMSHARECODE_HOST=cernbox-1-test-revad-authprovider-ocmsharecode
+REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT=9280
+
+# OCM Exchanged Token
+REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST=cernbox-1-test-revad-authprovider-ocmexchangedtoken
+REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT=9282
+
+# Public Shares
+REVAD_AUTHPROVIDER_PUBLICSHARES_HOST=cernbox-1-test-revad-authprovider-publicshares
+REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT=9160
 ```
 
 ### Dataprovider Variables
@@ -177,9 +190,14 @@ enabled = true
 
 For complete documentation on partial configs:
 
-- **Partial Config Schema**: See [`services/revad-base/docs/partial-config-schema.md`](../../../revad-base/docs/partial-config-schema.md) for complete schema and examples
-- **Reva Base Configuration**: See [`services/revad-base/docs/configuration.md`](../../../revad-base/docs/configuration.md#partial-configuration-system) for partial config system details
-- **Config Overrides**: See [`services/cernbox-revad/configs/README.md`](../../configs/README.md) for full override mechanism
+- **Partial Config Schema**: See
+  [`services/revad-base/docs/partial-config-schema.md`](../../revad-base/docs/partial-config-schema.md)
+  for complete schema and examples
+- **Reva Base Configuration**: See
+  [`services/revad-base/docs/configuration.md`](../../revad-base/docs/configuration.md#partial-configuration-system)
+  for partial config system details
+- **Config Overrides**: See [`services/cernbox-revad/configs/README.md`](../configs/README.md)
+  for full override mechanism
 
 ## Related Documentation
 

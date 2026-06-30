@@ -4,26 +4,29 @@ Complete reference for all ports used in the CERNBox multi-container deployment.
 
 ## Port Assignment Table
 
-| Service                      | Container Name                                  | gRPC Port | HTTP Port | Protocol    |
-| ---------------------------- | ----------------------------------------------- | --------- | --------- | ----------- |
-| **Gateway**                  | `cernbox-1-test-revad-gateway`                  | 9142      | 80        | HTTP        |
-| **Share Providers**          | `cernbox-1-test-revad-shareproviders`           | 9144      | -         | gRPC only   |
-| **User/Group Providers**     | `cernbox-1-test-revad-groupuserproviders`       | 9145      | -         | gRPC only   |
-| **Auth Provider OIDC**       | `cernbox-1-test-revad-authprovider-oidc`        | 9158      | -         | gRPC only   |
-| **Auth Provider Machine**    | `cernbox-1-test-revad-authprovider-machine`     | 9166      | -         | gRPC only   |
-| **Auth Provider OCM Shares** | `cernbox-1-test-revad-authprovider-ocmshares`   | 9278      | -         | gRPC only   |
-| **Dataprovider Localhome**   | `cernbox-1-test-revad-dataprovider-localhome`   | 9143      | 80        | HTTP + gRPC |
-| **Dataprovider OCM**         | `cernbox-1-test-revad-dataprovider-ocm`         | 9146      | 80        | HTTP + gRPC |
-| **Dataprovider ScienceMesh** | `cernbox-1-test-revad-dataprovider-sciencemesh` | 9147      | 80        | HTTP + gRPC |
-| **IdP (Keycloak)**           | `cernbox-1-test-idp`                            | -         | 8080      | HTTPS       |
-| **Web Frontend**             | `cernbox-1-test-web`                            | -         | 80        | HTTP        |
+| Service                               | Container Name                                         | gRPC Port | HTTP Port | Protocol    |
+| ------------------------------------- | ------------------------------------------------------ | --------- | --------- | ----------- |
+| **Gateway**                           | `cernbox-1-test-revad-gateway`                         | 9142      | 80        | HTTP        |
+| **Share Providers**                   | `cernbox-1-test-revad-shareproviders`                  | 9144      | -         | gRPC only   |
+| **User/Group Providers**              | `cernbox-1-test-revad-groupuserproviders`              | 9145      | -         | gRPC only   |
+| **Auth Provider OIDC**                | `cernbox-1-test-revad-authprovider-oidc`               | 9158      | -         | gRPC only   |
+| **Auth Provider Public Shares**       | `cernbox-1-test-revad-authprovider-publicshares`       | 9160      | -         | gRPC only   |
+| **Auth Provider Machine**             | `cernbox-1-test-revad-authprovider-machine`            | 9166      | -         | gRPC only   |
+| **Auth Provider OCM Shares**          | `cernbox-1-test-revad-authprovider-ocmshares`          | 9278      | -         | gRPC only   |
+| **Auth Provider OCM Share Code**      | `cernbox-1-test-revad-authprovider-ocmsharecode`       | 9280      | -         | gRPC only   |
+| **Auth Provider OCM Exchanged Token** | `cernbox-1-test-revad-authprovider-ocmexchangedtoken`  | 9282      | -         | gRPC only   |
+| **Dataprovider Localhome**            | `cernbox-1-test-revad-dataprovider-localhome`          | 9143      | 80        | HTTP + gRPC |
+| **Dataprovider OCM**                  | `cernbox-1-test-revad-dataprovider-ocm`                | 9146      | 80        | HTTP + gRPC |
+| **Dataprovider ScienceMesh**          | `cernbox-1-test-revad-dataprovider-sciencemesh`        | 9147      | 80        | HTTP + gRPC |
+| **IdP (Keycloak)**                    | `cernbox-1-test-idp`                                   | -         | 8080      | HTTPS       |
+| **Web Frontend**                      | `cernbox-1-test-web`                                   | -         | 80        | HTTP        |
 
 ## Port Allocation Strategy
 
 Ports are allocated following the CERN production pattern:
 
 - **9000-9199:** Core Reva services (gateway, providers, dataproviders)
-- **9200-9299:** Extended services (OCM Shares auth provider)
+- **9200-9299:** Extended auth services (OCM Shares, OCM Share Code, OCM Exchanged Token)
 - **8000-8099:** External services (IdP, Web)
 
 ### Port Groups
@@ -37,11 +40,14 @@ Ports are allocated following the CERN production pattern:
 - `9146` - OCM Dataprovider
 - `9147` - ScienceMesh Dataprovider
 
-#### Auth Providers (9158-9278)
+#### Auth Providers (9158-9282)
 
 - `9158` - OIDC Auth Provider (matches CERN production)
+- `9160` - Public Shares Auth Provider
 - `9166` - Machine Auth Provider (matches CERN production)
 - `9278` - OCM Shares Auth Provider (matches CERN production)
+- `9280` - OCM Share Code Auth Provider
+- `9282` - OCM Exchanged Token Auth Provider
 
 #### External Services
 
@@ -71,8 +77,11 @@ REVAD_GROUPUSERPROVIDERS_GRPC_PORT=9145
 
 # Auth Providers
 REVAD_AUTHPROVIDER_OIDC_GRPC_PORT=9158
+REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT=9160
 REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT=9166
 REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT=9278
+REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT=9280
+REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT=9282
 
 # Dataproviders
 REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT=9143

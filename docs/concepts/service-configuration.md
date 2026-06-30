@@ -34,11 +34,19 @@ Service configurations define how services are built, what sources they use, wha
 
 This requirement ensures compatibility with editors that use JSONC syntax highlighting for `.nuon` files. While NUON supports bare keys, JSONC does not, so quoted keys are required for proper syntax highlighting.
 
-Each service has a configuration file in `services/{service-name}.nuon` that
-defines:
+Each service is discovered from:
+
+- `services/{name}.nuon` - base service metadata and config when no platform
+  manifest is used
+- `services/{name}/versions.nuon` - required version manifest
+- `services/{name}/platforms.nuon` - optional platform manifest with one or
+  more platform entries
+
+The base config in `services/{name}.nuon` defines:
 
 - Service metadata (name, context, dockerfile, tls)
-- Source repositories to build from (single-platform only)
+- Source repositories to build from (only when the service does not use
+  `platforms.nuon`)
 - External base images (not built by us) - infrastructure only (name, no tag)
 - Dependencies (internal service dependencies) - infrastructure only (service, build_arg, no version)
 - Build arguments
@@ -51,12 +59,15 @@ forbidden and must be moved to `platforms.nuon` (infrastructure) or
 
 ## Dockerfile Requirement
 
-- **Required** if the service is single-platform (no `platforms.nuon` exists)
-- **Ignored/Replaced** if the service is multi-platform (has `platforms.nuon`) - each platform defines its own dockerfile in the platforms manifest, and the base config `dockerfile` field is completely replaced by platform-specific dockerfiles
+- **Required** when the service does not use `platforms.nuon`
+- **Ignored/Replaced** if the service uses `platforms.nuon` - even a
+  one-platform manifest replaces the base `dockerfile` field with the
+  per-platform dockerfile entries from the platform manifest
 
 ## Versioning
 
-**CRITICAL REQUIREMENT: All services MUST have version manifests** (`services/{service}/versions.nuon`).
+**CRITICAL REQUIREMENT: All services MUST have version manifests**
+(`services/{name}/versions.nuon`).
 
 The build system requires a version manifest for every service. Without it, builds will fail with a clear error message. This is not optional - it's a core requirement of the build system.
 
@@ -76,8 +87,11 @@ Source repositories are defined in the `sources` section and auto-generate build
 
 **CRITICAL**: Source location depends on service type:
 
-- **Single-platform**: Sources are **REQUIRED** in base config (versions.nuon can override, but base must have as fallback)
-- **Multi-platform**: Sources are **FORBIDDEN** in base config (must be in versions.nuon overrides only)
+- **Single-platform**: Sources are allowed in base config, but they are not
+  required there. They may live entirely in `versions.nuon` defaults or
+  overrides if the merged config is still complete.
+- **Multi-platform**: Sources are **FORBIDDEN** in base config and must live
+  in `versions.nuon` defaults or overrides.
 
 **Single-platform example:**
 
@@ -103,7 +117,7 @@ Source repositories are defined in the `sources` section and auto-generate build
   "context": "services/my-service"
 }
 
-// services/my-service/versions.nuon (sources REQUIRED here)
+// services/my-service/versions.nuon (sources defined here)
 {
   "overrides": {
     "sources": {
@@ -124,7 +138,9 @@ For local development, you can use local filesystem directories as sources inste
 
 - **Development only** - Local sources are **REJECTED** in CI/production builds
 - **Mutually exclusive** - A source cannot have both `path` and `url`/`ref` fields
-- **Path validation** - Paths must exist, be directories, and be within the repository root
+- **Path validation** - Paths must exist, be directories, and stay within the
+  repository root or a sibling `repos/` workspace parent when this repo itself
+  lives under `repos/`
 
 **Configuration:**
 
@@ -144,8 +160,11 @@ Local sources use the `path` field instead of `url`/`ref`:
 **Path Resolution:**
 
 - **Relative paths** - Resolved relative to repository root
-- **Absolute paths** - Must be within repository root (path traversal prevention)
-- **Validation** - Paths are validated to ensure they exist, are directories, and are within the repository
+- **Absolute paths** - Allowed when they still resolve inside the repository
+  root or a sibling `repos/` workspace parent when this repo itself lives under
+  `repos/`
+- **Validation** - Paths are validated to ensure they exist, are directories,
+  and stay within one of those allowed roots
 
 **Example - Local Development:**
 
@@ -171,14 +190,15 @@ Add a dedicated version that uses a local path from `versions.nuon`:
   "overrides": {
     "sources": {
       "ocm_go": {
-        "path": ".repos/opencloudmesh-go"
+        "path": "../opencloudmesh-go"
       }
     }
   }
 }
 ```
 
-Build with: `nu scripts/dockypody.nu build --service opencloudmesh-go --version local`
+Build with:
+`nu scripts/dockypody.nu build --service opencloudmesh-go --version local`
 
 **Example - Environment Variable Override:**
 
@@ -193,7 +213,7 @@ nu scripts/dockypody.nu build --service my-service
 
 Local sources can be defined in the same locations as Git sources:
 
-- **Base config** (single-platform services only)
+- **Base config** (services without `platforms.nuon` only)
 - **`versions.nuon.defaults`** (default configuration for all versions)
 - **`versions.nuon` version overrides** (version-specific paths)
 - **`versions.nuon` platform override blocks** (platform-specific paths)
@@ -700,7 +720,8 @@ External Docker images (not built by us) use separated `name` and `tag` fields. 
 
 **Key rules:**
 
-- `name` field: Infrastructure - defined in base config (single-platform) or platforms.nuon (multi-platform)
+- `name` field: Infrastructure - defined in base config when the service does
+  not use `platforms.nuon`, or in `platforms.nuon` when it does
 - `tag` field: Version control - **ALWAYS** defined in versions.nuon overrides (never in base config or platforms.nuon)
 - `image` field: **FORBIDDEN** (legacy - use `name` instead)
 - Tag can include digest: `"1.25-trixie@sha256:abc123..."` (digest is optional suffix to tag)
@@ -737,7 +758,8 @@ For complete details, see [Dependency Management](dependency-management.md).
 
 ## Base Config Restrictions
 
-**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY** contain: `name`, `context`, `tls`, `labels` (all metadata).
+**CRITICAL**: When `platforms.nuon` exists, base config can **ONLY**
+contain: `name`, `context`, `tls`, `ssh`, `labels` (all metadata).
 
 All other fields (`dockerfile`, `external_images`, `sources`, `dependencies`, `build_args`) are **FORBIDDEN** in base config when `platforms.nuon` exists. These fields must be moved to:
 
@@ -752,13 +774,21 @@ Service 'my-service': external_images.build: Field forbidden when platforms.nuon
 
 ## Labels Configuration
 
-Labels are Docker image metadata (OCI labels), similar to TLS configuration. They are **allowed in base config** even when `platforms.nuon` exists.
+Labels are Docker image metadata (OCI labels), similar to TLS
+configuration. They are **allowed in base config** even when
+`platforms.nuon` exists.
+
+DockyPody also auto-injects `org.opencloudmesh.service=<service name>` at
+build time. You do not need to duplicate that label in every manifest unless
+you want an explicit local override.
 
 **Where labels can be defined:**
 
-- **Base config** - Common labels for all platforms (allowed even when `platforms.nuon` exists)
+- **Base config** - Common labels for all platforms (allowed even when
+  `platforms.nuon` exists)
 - **platforms.nuon** - Platform-specific labels (deep-merged with base labels)
-- **versions.nuon** - Version-specific label overrides (deep-merged with base/platform labels)
+- **versions.nuon** - Version-specific label overrides (deep-merged with
+  base/platform labels)
 
 **Example:**
 

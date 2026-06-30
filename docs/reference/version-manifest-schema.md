@@ -28,7 +28,8 @@ Complete reference for the version manifest schema (`versions.nuon` files).
 
 Version manifests are stored as `.nuon` files in service directories:
 
-- `services/{service-name}/versions.nuon` - Version manifest (REQUIRED for all services)
+- `services/{name}/versions.nuon` - Version manifest (REQUIRED for all
+  services)
 
 For the authoritative schema file, see [`schemas/versions.nuon`](../../schemas/versions.nuon).
 
@@ -58,13 +59,21 @@ The optional `defaults` field allows you to define common configuration values t
 
 ### Defaults Structure
 
-The `defaults` field has the same structure as the `overrides` field in version specifications:
+The `defaults` field has the same structure as the `overrides` field in
+version specifications:
 
 - `sources` - Default source repository refs/URLs
 - `external_images` - Default external image tags
 - `build_args` - Default build arguments
 - `dependencies` - Default dependency versions
-- `platforms` - Platform-specific defaults (for multi-platform services)
+- `platforms` - Platform-specific defaults (for services using `platforms.nuon`)
+
+Validation-specific notes:
+
+- `tls` is forbidden in `defaults` and in `defaults.platforms.*`
+- `ssh` is allowed in `defaults` and in `defaults.platforms.*`
+- Source fragments in defaults may set `path`, `url`, or `ref`; merged
+  validation later checks that the final source config is complete
 
 ### How Defaults Work
 
@@ -94,7 +103,7 @@ Version Overrides (with version defaults already merged)
   "default": "v3.3.3",
   "versions": [
     {
-      "name": "v3.3.3",
+      "name": "v3.3.4",
       "overrides": {
         "external_images": {
           "build": { "tag": "1.25-trixie" }
@@ -159,7 +168,7 @@ Version Overrides (with version defaults already merged)
       "overrides": {}
     },
     {
-      "name": "v3.3.3",
+      "name": "v3.3.4",
       "overrides": {}
     }
   ]
@@ -168,7 +177,8 @@ Version Overrides (with version defaults already merged)
 
 ### Platform-Specific Defaults
 
-You can define defaults that apply only to specific platforms:
+For services using `platforms.nuon`, you can define defaults that apply only
+to specific platforms:
 
 ```nuon
 {
@@ -234,12 +244,15 @@ Version overrides take precedence over defaults:
 
 ### Validation Rules
 
-Defaults are validated using the same rules as version overrides:
+Defaults are validated using the same rules as version overrides, plus the
+placement rules below:
 
 - Allows `sources` section
 - Allows `tag` field in `external_images`
 - Forbids `name` and `build_arg` in `external_images` (infrastructure - defined in base config or platforms.nuon)
 - Platform names in `defaults.platforms` must match platforms in `platforms.nuon`
+- Forbids `tls` in `defaults` and `defaults.platforms.*`
+- Allows `ssh` in `defaults` and `defaults.platforms.*`
 
 ## Version Specification
 
@@ -286,7 +299,7 @@ The `overrides` section can override any field from the base service config:
 ### Common Overrides
 
 - `sources.{name}.ref` - Change source repository ref/branch/tag
-- `sources.{name}.url` - Change source repository URL (required for multi-platform)
+- `sources.{name}.url` - Change source repository URL
 - `external_images.{stage}.tag` - Change external image tag (version control)
 - `build_args.{name}` - Override build arguments
 - `dependencies.{name}.version` - Pin dependency to specific version
@@ -298,9 +311,10 @@ The `overrides` section can override any field from the base service config:
 - Overrides are **deep merged** with base config
 - Specific fields override; missing fields use base config values
 
-### Platform-Specific Overrides (Multi-Platform Services)
+### Platform-Specific Overrides (Services Using `platforms.nuon`)
 
-When a service has a `platforms.nuon` manifest, you can override configuration per platform within a version:
+When a service uses a `platforms.nuon` manifest, you can override
+configuration per platform within a version:
 
 ```nuon
 {
@@ -356,7 +370,7 @@ When a service has a `platforms.nuon` manifest, you can override configuration p
 
 ### Platform Override Merge Precedence
 
-1. Base config (`services/{service-name}.nuon`)
+1. Base config (`services/{name}.nuon`)
 2. Platform config (`platforms.nuon`)
 3. Global version overrides (`versions.nuon` - `overrides` excluding `platforms` key)
 4. Platform-specific version overrides (`versions.nuon` - `overrides.platforms.{platform_name}`) - **highest priority**
@@ -415,10 +429,15 @@ Platform-specific overrides win over global overrides for the same field. All fi
 
 **CRITICAL**: The following fields are **FORBIDDEN** in version overrides:
 
-- `external_images.{stage}.name` - Infrastructure, must be in base config (single-platform) or platforms.nuon (multi-platform)
-- `external_images.{stage}.build_arg` - Infrastructure, must be in base config (single-platform) or platforms.nuon (multi-platform)
+- `external_images.{stage}.name` - Infrastructure, must be in base config when
+  the service does not use `platforms.nuon`, or in `platforms.nuon` when it
+  does
+- `external_images.{stage}.build_arg` - Infrastructure, must be in base config
+  when the service does not use `platforms.nuon`, or in `platforms.nuon` when
+  it does
 - `external_images.{stage}.image` - Legacy field, use `tag` instead
-- `tls` section - Metadata, must be in base config only
+- `tls` section - Metadata, must be in base config only, including version
+  defaults
 
 **Note:** Unlike TLS, `ssh` configuration is allowed in `versions.nuon` overrides,
 but it should be rare and documented.
@@ -426,7 +445,7 @@ but it should be rare and documented.
 **Error examples:**
 
 ```text
-Version 'v1.0.0': external_images.build.name: Field forbidden. Define in base config (single-platform) or platforms.nuon (multi-platform).
+Version 'v1.0.0': external_images.build.name: Field forbidden. Define in base config when the service does not use platforms.nuon, or in platforms.nuon when it does.
 Version 'v1.0.0': tls: Section forbidden. Configure TLS in base service config only.
 ```
 

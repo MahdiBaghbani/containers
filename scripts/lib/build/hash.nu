@@ -19,6 +19,7 @@
 # See docs/concepts/build-system.md for details on hash inputs and stability guarantees
 
 use ./order.nu [build-dependency-graph topological-sort-dfs]
+use ./dependencies.nu [resolve-dep-node]
 use ./config.nu [load-service-config detect-all-source-types]
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest get-version-or-null]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform strip-platform-suffix]
@@ -158,6 +159,39 @@ export def compute-service-def-hash [
     $normalized | hash sha256
 }
 
+# Collect dependency hashes for one node and enforce the hash-graph safety
+# invariants. Pure (no config or filesystem access) so the safety branches are
+# unit-testable in isolation:
+#   - An in-order dependency (a node that is part of build_order) with no
+#     computed hash is a real ordering/scope bug; hard error instead of dropping.
+#   - A dependency outside the current build scope cannot be hashed here; warn
+#     with an explicit count and omit it rather than failing silently.
+# Returns the {dep_node_key: hash} record used as a hash input for the node.
+export def collect-dep-hashes [
+    node: string,
+    dep_node_keys: list,
+    computed_hashes: record,
+    build_order: list
+] {
+    let computed_keys = ($computed_hashes | columns)
+    let missing_keys = ($dep_node_keys | where {|k| not ($k in $computed_keys)})
+
+    let in_order_missing = ($missing_keys | where {|k| $k in $build_order})
+    if not ($in_order_missing | is-empty) {
+        let missing_str = ($in_order_missing | uniq | str join ", ")
+        error make { msg: $"Service definition hash invariant violated: dependency node\(s\) \(($missing_str)\) of '($node)' are in the build order but have no computed hash. Dependencies must be hashed before dependents." }
+    }
+
+    let out_of_scope = ($missing_keys | where {|k| not ($k in $build_order)} | uniq)
+    if not ($out_of_scope | is-empty) {
+        print $"WARNING: ($out_of_scope | length) dependency hash\(es\) omitted from hash of '($node)' \(not in build scope\): ($out_of_scope | str join ', ')"
+    }
+
+    $dep_node_keys | where {|k| $k in $computed_keys} | uniq | reduce --fold {} {|dep_node_key, dep_acc|
+        $dep_acc | upsert $dep_node_key ($computed_hashes | get $dep_node_key)
+    }
+}
+
 # Compute service definition hashes for all nodes in a build scope
 # Must be called with nodes in topological order (dependencies before dependents)
 # Returns {node_key: hash} record
@@ -222,41 +256,27 @@ export def compute-service-def-hash-graph [
                     }
                 })
                 
-                # Collect dependency hashes from already-computed nodes
+                # Collect dependency hashes from already-computed nodes.
+                # Dependency node keys come from the shared resolver, so they match
+                # exactly the keys produced when the build graph (order.nu) was built.
                 let deps = (try { $cfg.dependencies } catch { {} })
-                let dep_hashes = (if ($deps | is-empty) {
-                    {}
+                let dep_node_keys = (if ($deps | is-empty) {
+                    []
                 } else {
-                    ($deps | columns | reduce --fold {} {|dep_key, dep_acc|
+                    let parent_has_platforms = (check-platforms-manifest-exists $service)
+                    ($deps | columns | each {|dep_key|
                         let dep_config = ($deps | get $dep_key)
                         let dep_service = (try { $dep_config.service } catch { $dep_key })
-                        let dep_version = (try { $dep_config.version } catch { $version_name })
-                        
-                        # Determine dep platform (inherits from parent if multi-platform)
-                        let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
-                        let dep_platform = (if $dep_has_platforms and ($platform | str length) > 0 {
-                            let single_platform = (try { $dep_config.single_platform | default false } catch { false })
-                            if $single_platform { "" } else { $platform }
-                        } else {
-                            ""
-                        })
-                        
-                        # Build dep node key
-                        let dep_node_key = (if ($dep_platform | str length) > 0 {
-                            $"($dep_service):($dep_version):($dep_platform)"
-                        } else {
-                            $"($dep_service):($dep_version)"
-                        })
-                        
-                        # Get hash from already-computed hashes
-                        let dep_hash = (try { $acc.hashes | get $dep_node_key } catch { "" })
-                        if ($dep_hash | str length) > 0 {
-                            $dep_acc | upsert $dep_node_key $dep_hash
-                        } else {
-                            $dep_acc
-                        }
+                        let dep_resolved = (resolve-dep-node $dep_config $dep_service $version_name $platform $parent_has_platforms)
+                        $dep_resolved.node_key
                     })
                 })
+
+                # Collect dependency hashes and enforce the hash-graph safety
+                # invariants (in-order-missing -> hard error, out-of-scope ->
+                # warn and omit). Extracted to a pure helper so those branches
+                # are unit-testable without loading real configs and source SHAs.
+                let dep_hashes = (collect-dep-hashes $node $dep_node_keys $acc.hashes $build_order)
                 
                 # Compute hash for this node
                 let hash = (compute-service-def-hash $service $version_name $platform $cfg $sha_result.shas $source_types $dep_hashes)

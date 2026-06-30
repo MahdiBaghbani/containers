@@ -21,16 +21,28 @@
 
 > **Status:** Stub (topic list only)
 
-This page is a topic list for the Makefile surface. It does not yet describe each target.
+This page is still a compact reference, but the core build and docs targets
+now map to the live `dockypody` CLI surfaces below.
 
-## Topics to Document
+## Build Targets
 
-- Make targets and their Nushell script equivalents
-- Makefile variables (SERVICE, PUSH, LATEST, PROVENANCE, TAG, EXTRA_TAG)
-- When to use Make vs direct Nushell scripts
+- `make build` calls the same build entrypoint as CI:
+  `nu scripts/dockypody.nu build ...`
+- `make build-push` is the push-enabled wrapper over the same CLI surface
+- `SERVICE`, `PUSH`, `LATEST`, `PROVENANCE`, `TAG`, and `EXTRA_TAG` shape the
+  forwarded build flags
+- Use the Make targets when you want the repo's familiar shortcuts; use
+  `nu scripts/dockypody.nu ...` when you want the exact underlying command
+
+## Docs Targets
+
+- `make lint-docs` maps to `nu scripts/dockypody.nu docs lint`
+- `make lint-docs-fix` maps to `nu scripts/dockypody.nu docs lint --fix`
+
+## Other Topics
+
 - TLS certificate management via Make (`make tls all`, `make tls clean`)
-- Build commands via Make (`make build`, `make build-push`)
-- Documentation linting (`make lint-docs`, `make lint-docs-fix`)
+- Full target-by-target variable reference
 
 ## Related Documentation
 

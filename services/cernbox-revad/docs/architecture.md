@@ -31,6 +31,9 @@ graph TB
         OIDC[OIDC Auth Provider<br/>Port 9158]
         Machine[Machine Auth Provider<br/>Port 9166]
         OCMShare[OCM Shares Auth Provider<br/>Port 9278]
+        OCMShareCode[OCM Share Code Auth Provider<br/>Port 9280]
+        OCMExchanged[OCM Exchanged Token Auth Provider<br/>Port 9282]
+        PublicShares[Public Shares Auth Provider<br/>Port 9160]
         IdP[Keycloak IdP<br/>Port 8080]
     end
 
@@ -55,6 +58,9 @@ graph TB
     Gateway --> OIDC
     Gateway --> Machine
     Gateway --> OCMShare
+    Gateway --> OCMShareCode
+    Gateway --> OCMExchanged
+    Gateway --> PublicShares
     Gateway --> ShareProv
     Gateway --> UserProv
     Gateway --> Localhome
@@ -82,6 +88,7 @@ graph LR
         S1[usershareprovider]
         S2[publicshareprovider]
         S3[ocmshareprovider]
+        S4[ocmincoming]
     end
 
     subgraph "User/Group Providers Container"
@@ -93,6 +100,9 @@ graph LR
         A1[OIDC Provider]
         A2[Machine Provider]
         A3[OCM Shares Provider]
+        A4[OCM Share Code Provider]
+        A5[OCM Exchanged Token Provider]
+        A6[Public Shares Provider]
     end
 
     subgraph "Dataprovider Containers"
@@ -109,6 +119,9 @@ graph LR
     G1 --> A1
     G1 --> A2
     G1 --> A3
+    G1 --> A4
+    G1 --> A5
+    G1 --> A6
     G1 --> D1
     G1 --> D2
     G1 --> D3
@@ -177,7 +190,8 @@ sequenceDiagram
 ### Share Providers Container
 
 - **Container Name:** `cernbox-1-test-revad-shareproviders`
-- **Services:** usershareprovider, publicshareprovider, ocmshareprovider
+- **Services:** usershareprovider, publicshareprovider, ocmshareprovider,
+  ocmincoming
 - **Port:** 9144 (gRPC)
 - **Role:** Manages file and folder sharing
 - **Config:** `shareproviders.toml` (provided by revad-base)
@@ -195,6 +209,9 @@ sequenceDiagram
 - **OIDC Provider:** Port 9158 - OIDC/OAuth2 authentication
 - **Machine Provider:** Port 9166 - Machine-to-machine authentication
 - **OCM Shares Provider:** Port 9278 - OCM share authentication
+- **OCM Share Code Provider:** Port 9280 - Share-exchange code validation
+- **OCM Exchanged Token Provider:** Port 9282 - Exchanged-token validation
+- **Public Shares Provider:** Port 9160 - Public-link authentication
 
 ### Dataprovider Containers
 

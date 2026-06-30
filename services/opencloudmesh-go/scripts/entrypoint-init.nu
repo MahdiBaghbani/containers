@@ -89,18 +89,18 @@ def resolve_public_origin [validated_host: string] {
   error make { msg: "Either PUBLIC_ORIGIN or HOST must be set" }
 }
 
-def validate_mode [] {
-  let mode = (get_env_or_default "OCM_GO_MODE" "" | str trim)
-  if ($mode | str length) == 0 {
+export def validate_mode [] {
+  let raw = (get_env_or_default "OCM_GO_MODE" "" | str trim)
+  if ($raw | str length) == 0 {
     return ""
   }
 
-  let valid_modes = ["strict" "interop" "dev"]
-  if not ($mode in $valid_modes) {
-    error make { msg: $"OCM_GO_MODE must be strict, interop, or dev; got: ($mode)" }
+  let valid_modes = ["strict" "compat" "dev"]
+  if not ($raw in $valid_modes) {
+    error make { msg: $"OCM_GO_MODE must be strict, compat, or dev; got: ($raw)" }
   }
 
-  $mode
+  $raw
 }
 
 def ensure_logfile [] {

@@ -33,10 +33,10 @@
         "BUILD_VARIANT": "debian"
       },
       
-      // IMPORTANT: Each external_images entry MUST include both 'image' and 'build_arg'
+      // IMPORTANT: Each external_images entry MUST include both 'name' and 'build_arg'
       "external_images": {
         "runtime": {
-          "image": "debian:trixie-slim",
+          "name": "debian:trixie-slim",
           "build_arg": "BASE_RUNTIME_IMAGE"
         }
       },
@@ -56,7 +56,7 @@
       
       "external_images": {
         "runtime": {
-          "image": "alpine:3.21",
+          "name": "alpine:3.21",
           "build_arg": "BASE_RUNTIME_IMAGE"
         }
       },
@@ -76,7 +76,7 @@
       
       "external_images": {
         "runtime": {
-          "image": "registry.access.redhat.com/ubi9/ubi-micro:9.5",
+          "name": "registry.access.redhat.com/ubi9/ubi-micro:9.5",
           "build_arg": "BASE_RUNTIME_IMAGE"
         }
       },
@@ -91,15 +91,15 @@
 
 // MERGE BEHAVIOR EXAMPLE:
 // Base config (services/revad-base.nuon):
-//   external_images: { build: { image: "golang:1.25-bookworm", build_arg: "BASE_BUILD_IMAGE" },
-//                      runtime: { image: "debian:bookworm-slim", build_arg: "BASE_RUNTIME_IMAGE" } }
+//   external_images: { build: { name: "golang:1.25-bookworm", build_arg: "BASE_BUILD_IMAGE" },
+//                      runtime: { name: "debian:bookworm-slim", build_arg: "BASE_RUNTIME_IMAGE" } }
 //
 // Platform config (debian from above):
-//   external_images: { runtime: { image: "debian:trixie-slim", build_arg: "BASE_RUNTIME_IMAGE" } }
+//   external_images: { runtime: { name: "debian:trixie-slim", build_arg: "BASE_RUNTIME_IMAGE" } }
 //
 // Merged result for debian platform:
-//   external_images: { build: { image: "golang:1.25-bookworm", build_arg: "BASE_BUILD_IMAGE" },      // From base
-//                      runtime: { image: "debian:trixie-slim", build_arg: "BASE_RUNTIME_IMAGE" } }    // From platform (overrides base)
+//   external_images: { build: { name: "golang:1.25-bookworm", build_arg: "BASE_BUILD_IMAGE" },      // From base
+//                      runtime: { name: "debian:trixie-slim", build_arg: "BASE_RUNTIME_IMAGE" } }    // From platform (overrides base)
 //
 // TAG GENERATION (with version v1.0.0, latest: true, tags: ["v1.0", "v1"]):
 // - debian (default): ["latest", "latest-debian", "v1.0.0", "v1.0.0-debian", "v1.0-debian", "v1-debian"]

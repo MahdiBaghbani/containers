@@ -16,7 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 .PHONY: help build build-push list-services validate-service
-.PHONY: tls ca certs all clean tls.help tls.ca tls.certs tls.all tls.clean
+.PHONY: tls ca certs all clean tls.help
 .PHONY: lint-docs lint-docs-fix
 
 # Auto discover services in services/*.nuon files (using lib directly)
@@ -28,6 +28,7 @@ LATEST ?= 1
 PROVENANCE ?= 0
 TAG ?=
 EXTRA_TAG ?=
+FILTER ?=
 
 # Canonical CLI entry point
 # Use: nu scripts/dockypody.nu <command> [options]
@@ -36,18 +37,20 @@ EXTRA_TAG ?=
 help:
 	@echo "Open Cloud Mesh Container Build System"
 	@echo ""
-	@echo "Canonical CLI: nu scripts/dockypody.nu <command>"
+	@echo "Canonical CLI: nu scripts/dockypody.nu help"
 	@echo ""
 	@echo "Available targets:"
 	@echo "  build              Build all services (local, no push)"
 	@echo "  build-push         Build and push all services to registries"
 	@echo "  list-services      List all available services"
+	@echo "  tls.help           Show TLS-oriented Make targets and options"
 	@echo ""
-	@echo "TLS certificate management:"
-	@echo "  tls ca             Generate shared Certificate Authority (CA)"
-	@echo "  tls certs          Generate certificates for all services"
-	@echo "  tls all            Generate CA and all certificates"
-	@echo "  tls clean          Clean up generated certificates"
+	@echo "TLS-oriented Make targets:"
+	@echo "  ca                 Generate the shared Certificate Authority (CA)"
+	@echo "  certs              Generate certificates for TLS-enabled services"
+	@echo "  all                Compatibility target: run TLS 'ca' then 'certs'"
+	@echo "  clean              Compatibility target: remove TLS artifacts"
+	@echo "  (You can prefix these with 'tls' for readability, for example 'make tls certs')"
 	@echo "  (Run 'make tls.help' for detailed TLS options)"
 	@echo ""
 	@echo "Build a specific service:"
@@ -68,7 +71,7 @@ help:
 	@echo "  make build-push SERVICE=revad-base             # Build and push revad-base"
 	@echo "  make build PUSH=1 PROVENANCE=1                # Build all with push and provenance"
 	@echo "  make tls ca                                   # Generate shared CA"
-	@echo "  make tls certs DOMAIN_SUFFIX=docker          # Generate certs for all services"
+	@echo "  make tls certs FILTER=revad-base,reva-gateway # Generate certs for selected services"
 	@echo "  make tls all                                  # Generate CA and all certs"
 	@echo "  make tls clean                                # Remove generated TLS artifacts"
 	@echo ""
@@ -110,22 +113,30 @@ tls:
 
 ## Show TLS help  
 tls.help: tls
-	@echo "TLS Certificate Management"
+	@echo "TLS-oriented Make targets"
 	@echo ""
-	@echo "Available commands:"
-	@echo "  make tls ca        Generate shared Certificate Authority (CA)"
-	@echo "  make tls certs     Generate certificates for all services"
-	@echo "  make tls all       Generate CA and all certificates"
-	@echo "  make tls clean     Clean up generated certificates"
+	@echo "Available targets:"
+	@echo "  make ca            Generate the shared Certificate Authority (CA)"
+	@echo "  make certs         Generate certificates for TLS-enabled services"
+	@echo "  make all           Compatibility target: run TLS 'ca' then 'certs'"
+	@echo "  make clean         Compatibility target: remove TLS artifacts"
 	@echo ""
-	@echo "Options for 'make tls certs':"
-	@echo "  DOMAIN_SUFFIX=<suffix>      Domain suffix for certificates (default: docker)"
-	@echo "  INSTANCE_COUNT=<count>      Number of instances per service (default: 1)"
-	@echo "  FILTER=<service1,service2>  Only generate certs for specified services"
+	@echo "Readability aliases:"
+	@echo "  make tls ca"
+	@echo "  make tls certs"
+	@echo "  make tls all"
+	@echo "  make tls clean"
+	@echo ""
+	@echo "Options:"
+	@echo "  FILTER=<service1,service2>  Passed to 'nu scripts/dockypody.nu tls certs --filter ...'"
+	@echo ""
+	@echo "For CLI-only TLS flags such as '--force', '--skip-shared-ca',"
+	@echo "and '--keep-empty-dirs', use:"
+	@echo "  nu scripts/dockypody.nu tls help"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make tls all"
-	@echo "  make tls certs DOMAIN_SUFFIX=prod.example.com INSTANCE_COUNT=3"
+	@echo "  make all"
+	@echo "  make clean"
 	@echo "  make tls certs FILTER=revad-base,reva-gateway"
 	@echo ""
 
@@ -134,11 +145,11 @@ ca: tls
 	@echo "Generating Certificate Authority..."
 	@nu scripts/dockypody.nu tls ca
 
-## Generate certificates for all services
-## Usage: make tls certs DOMAIN_SUFFIX=docker INSTANCE_COUNT=1 FILTER="service1,service2"
+## Generate TLS certificates
+## Usage: make tls certs FILTER="service1,service2"
 certs: tls
-	@echo "Generating certificates for all services..."
-	@nu scripts/dockypody.nu tls certs
+	@echo "Generating TLS certificates..."
+	@nu scripts/dockypody.nu tls certs $(if $(FILTER),--filter "$(FILTER)",)
 
 ## Generate CA and all certificates
 all: tls ca certs

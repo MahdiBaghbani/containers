@@ -239,6 +239,7 @@ RUN --mount=type=bind,source=${REVA_PATH:-.},target=/tmp/local-reva,ro \
 
 ## Related Documentation
 
-- [Service Configuration](../concepts/service-configuration.md) - Complete service configuration guide
-- [Build System](../concepts/build-system.md) - Build argument injection priority
-- [Config Schema](../reference/config-schema.md) - Complete schema reference
+- [Service Configuration](concepts/service-configuration.md) - Complete
+  service configuration guide
+- [Build System](concepts/build-system.md) - Build argument injection priority
+- [Config Schema](reference/config-schema.md) - Complete schema reference

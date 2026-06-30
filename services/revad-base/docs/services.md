@@ -108,6 +108,30 @@ The gateway container runs multiple services:
 - Cross-site authentication
 - Share access authorization
 
+### OCM Share Code Auth Provider
+
+**Config File:** `authprovider-ocmsharecode.toml`
+
+**Purpose:** Validates share-exchange codes for `/ocm/token` style handoffs.
+
+**Features:**
+
+- Share code validation
+- Exchange-token handoff support
+- OCM code-flow integration
+
+### OCM Exchanged Token Auth Provider
+
+**Config File:** `authprovider-ocmexchangedtoken.toml`
+
+**Purpose:** Validates exchanged JWTs for DAV and follow-up OCM access.
+
+**Features:**
+
+- Exchanged token validation
+- Follow-up DAV authorization
+- Code-flow token continuation
+
 ### Public Shares Auth Provider
 
 **Config File:** `authprovider-publicshares.toml`

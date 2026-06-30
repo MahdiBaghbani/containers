@@ -35,7 +35,8 @@ Each container runs in a specific mode determined by the `REVAD_CONTAINER_MODE` 
 
 - `gateway` - Gateway services
 - `dataprovider-{type}` - Storage providers (localhome, ocm, sciencemesh)
-- `authprovider-{type}` - Authentication providers (oidc, machine, ocmshares, publicshares)
+- `authprovider-{type}` - Authentication providers (oidc, machine,
+  ocmshares, ocmsharecode, ocmexchangedtoken, publicshares)
 - `shareproviders` - Share management services
 - `groupuserproviders` - User and group management services
 

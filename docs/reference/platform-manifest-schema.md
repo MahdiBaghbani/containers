@@ -27,7 +27,7 @@ Complete reference for the platform manifest schema (`platforms.nuon` files).
 
 Platform manifests are stored as `.nuon` files in service directories:
 
-- `services/{service-name}/platforms.nuon` - Platform manifest
+- `services/{name}/platforms.nuon` - Platform manifest
 
 For the authoritative schema file, see [`schemas/platforms.nuon`](../../schemas/platforms.nuon).
 
@@ -60,6 +60,7 @@ Allowed fields:
 - `external_images` - Default external images (infrastructure only: name and build_arg)
 - `dependencies` - Default dependencies (infrastructure only: service and build_arg)
 - `labels` - Default labels
+- `ssh` - Default SSH configuration for platform-specific runtime behavior
 
 ### How Defaults Work
 
@@ -210,7 +211,8 @@ Platform configs take precedence over defaults:
 
 Defaults are validated using the same rules as platform configs:
 
-- Forbids `sources` section (version control - define in versions.nuon overrides only)
+- Forbids `sources` section (version control - define in versions.nuon
+  defaults or overrides)
 - Forbids `tag` field in `external_images` (version control - define in versions.nuon overrides)
 - Forbids `version` field in `dependencies` (version control - define in versions.nuon overrides)
 - Requires `name` and `build_arg` in `external_images` (if present)
@@ -226,6 +228,7 @@ Defaults are validated using the same rules as platform configs:
 | `external_images` | record | No       | Platform-specific external images (infrastructure only: name and build_arg, no tag)                 |
 | `dependencies`    | record | No       | Platform-specific dependencies (infrastructure only: service and build_arg, no version)             |
 | `labels`          | record | No       | Platform-specific labels                                                                            |
+| `ssh`             | record | No       | Platform-specific SSH configuration                                                                 |
 
 ## Platform Name Rules
 
@@ -286,6 +289,11 @@ Error: Platform name 'debian' is not unique (appears multiple times in platforms
       },
       "labels": {
         "org.opencontainers.image.variant": "debian"
+      },
+      "ssh": {
+        "enabled": true,
+        "mode": "server",
+        "default_user": "root"
       }
     },
     {
@@ -306,7 +314,7 @@ Error: Platform name 'debian' is not unique (appears multiple times in platforms
 When a platform manifest exists, configurations are merged in this order:
 
 ```text
-Base Config (services/{service-name}.nuon)
+Base Config (services/{name}.nuon)
   ->
 Platform Config (from platforms.nuon)
   ->
@@ -329,7 +337,8 @@ For complete details on configuration merging, see [Build System](../concepts/bu
 
 **CRITICAL**: The following fields are **FORBIDDEN** in `platforms.nuon`:
 
-- `sources` section - Version control, must be in `versions.nuon` overrides only
+- `sources` section - Version control, must be in `versions.nuon` defaults
+  or overrides
 - `external_images.{stage}.tag` - Version control, must be in `versions.nuon` overrides
 - `external_images.{stage}.image` - Legacy field, use `name` instead
 - `dependencies.{name}.version` - Version control, must be in `versions.nuon` overrides
@@ -341,7 +350,7 @@ For complete details on configuration merging, see [Build System](../concepts/bu
 **Error examples:**
 
 ```text
-Platform 'debian': sources: Section forbidden. Define in versions.nuon overrides only.
+Platform 'debian': sources: Section forbidden. Define in versions.nuon defaults or overrides.
 Platform 'debian': external_images.build.tag: Field forbidden. Define in versions.nuon overrides.
 Platform 'debian': dependencies.revad-base.version: Field forbidden. Define in versions.nuon overrides.
 ```

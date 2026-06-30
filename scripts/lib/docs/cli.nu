@@ -25,11 +25,10 @@ export def docs-help [] {
   print "Usage: nu scripts/dockypody.nu docs <subcommand> [options]"
   print ""
   print "Subcommands:"
-  print "  lint    Check documentation for prohibited characters"
+  print "  lint    Check all documentation .md files for prohibited characters"
   print ""
   print "Options:"
   print "  --fix              Attempt to fix violations automatically"
-  print "  <files>...         Files to check (default: all .md files)"
 }
 
 # Docs CLI entrypoint - called from dockypody.nu
@@ -38,7 +37,7 @@ export def docs-cli [
   flags: record        # Flags: { files: list<string>, fix: bool }
 ] {
   match $subcommand {
-    "help" | "--help" | "-h" => {
+    "help" => {
       docs-help
     }
     "lint" => {

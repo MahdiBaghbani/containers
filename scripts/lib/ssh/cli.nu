@@ -38,7 +38,7 @@ export def ssh-cli [
     let force = (try { $flags.force } catch { false })
 
     match $subcommand {
-        "help" | "--help" | "-h" => {
+        "help" => {
             ssh-help
         }
         "key" => {

@@ -31,6 +31,7 @@ use ../lib/platforms/core.nu [
 ]
 use ../lib/validate/core.nu [validate-merged-config]
 use ../lib/manifest/core.nu [get-version-or-null check-versions-manifest-exists]
+use ../lib/build/dependencies.nu [apply-platform-inheritance]
 
 # Test-controlled registry for platform manifest existence
 # Using $env to store registry state (allows mutation from functions)
@@ -292,7 +293,16 @@ def add-node [nodes: list, node: string] {
   }
 }
 
-# Mock resolve-dep-version - copies logic from real resolve-dep-version
+# Mock of production resolve-dep-version-platform (dependencies.nu).
+#
+# This mirrors the production decision tree exactly: single_platform handling,
+# explicit platform-suffix precedence over single_platform, and the parent
+# inheritance / allowed single-platform-dependency behavior. The only
+# difference from production is the source of platform data: the mock uses the
+# test-controlled platform registry (check-platforms-manifest-exists) and the
+# default mock platform manifest instead of real filesystem manifests. The
+# actual inheritance decision is delegated to the shared, pure
+# apply-platform-inheritance helper so it cannot drift from production.
 def resolve-dep-version-mock [
   dep_config: record,
   dep_service: string,
@@ -301,7 +311,7 @@ def resolve-dep-version-mock [
   parent_has_platforms: bool
 ] {
   let explicit_version = (try { $dep_config.version } catch { "" })
-  
+
   let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
   let dep_platforms = (if $dep_has_platforms {
     try {
@@ -312,45 +322,34 @@ def resolve-dep-version-mock [
   } else {
     null
   })
-  
+
+  let single_platform = (try {
+    let val = ($dep_config.single_platform | default false)
+    if $val == true { true } else { false }
+  } catch { false })
+
   if ($explicit_version | str length) > 0 {
-    # Check if explicit version has platform suffix
+    # Explicit platform suffix wins over inheritance and single_platform.
     let has_suffix = (if $dep_platforms != null {
       has-platform-suffix $explicit_version $dep_platforms
     } else {
       false
     })
-    
+
     if $has_suffix {
-      # Extract platform from suffix
+      if $single_platform {
+        print $"Warning: Dependency '($dep_service)' has both platform suffix in version '($explicit_version)' and single_platform: true. Platform suffix takes precedence, single_platform flag is ignored."
+      }
       let stripped = (strip-platform-suffix $explicit_version $dep_platforms)
-      return {version: $stripped.base_name, platform: $stripped.platform_name}
+      {version: $stripped.base_name, platform: $stripped.platform_name}
     } else {
-      # Apply platform inheritance if parent is multi-platform
-      if $parent_has_platforms and ($parent_platform | str length) > 0 {
-        if not $dep_has_platforms {
-          error make { msg: $"Multi-platform service depends on single-platform service '($dep_service)'. Dependency cannot inherit platform '($parent_platform)'." }
-        }
-        return {version: $explicit_version, platform: $parent_platform}
-      } else {
-        return {version: $explicit_version, platform: ""}
-      }
+      apply-platform-inheritance $dep_service $explicit_version $single_platform $dep_has_platforms $parent_has_platforms $parent_platform
     }
+  } else if ($parent_version | str length) > 0 {
+    apply-platform-inheritance $dep_service $parent_version $single_platform $dep_has_platforms $parent_has_platforms $parent_platform
+  } else {
+    error make { msg: $"Dependency '($dep_service)' must have explicit 'version' field or inherit from parent version" }
   }
-  
-  # Inherit version from parent if no explicit version
-  if ($parent_version | str length) > 0 {
-    if $parent_has_platforms and ($parent_platform | str length) > 0 {
-      if not $dep_has_platforms {
-        error make { msg: $"Multi-platform service depends on single-platform service '($dep_service)'. Dependency cannot inherit platform '($parent_platform)'." }
-      }
-      return {version: $parent_version, platform: $parent_platform}
-    } else {
-      return {version: $parent_version, platform: ""}
-    }
-  }
-  
-  error make { msg: $"Dependency '($dep_service)' must have explicit 'version' field or inherit from parent version" }
 }
 
 # Recursively build dependency graph with mocks

@@ -20,9 +20,13 @@
 # Build system tests
 
 use ../lib/build/args.nu [generate-build-args]
-use ../lib/build/order.nu [topological-sort-dfs]
+use ../lib/build/order.nu [topological-sort-dfs build-dependency-graph]
 use ../lib/build/docker.nu [normalize-docker-label]
-use ../lib/manifest/core.nu [get-default-version get-version-or-null]
+use ../lib/build/dependencies.nu [resolve-dep-node resolve-dep-platforms]
+use ../lib/build/config.nu [load-service-config]
+use ../lib/build/disk.nu [extract-root-mount extract-root-avail-gb is-low-disk filter-df-summary-lines parse-size-to-gb]
+use ../lib/manifest/core.nu [get-default-version get-version-or-null load-versions-manifest]
+use ../lib/platforms/core.nu [load-platforms-manifest]
 use ./mocks.nu [detect-build get-mock-service-config build-mock-version-manifest build-mock-platform-manifest check-platforms-manifest-exists check-versions-manifest-exists build-dependency-graph-with-mocks get-default-platform set-mock-platform-behavior]
 use ./helpers.nu [setup-test-environment setup-test-service-with-deps cleanup-test-environment with-test-cleanup create-test-dependency create-test-deps-resolved create-test-tls-meta create-test-registry-info assert-cache-bust-format assert-cache-bust-value assert-build-args-contain assert-build-order assert-graph-structure]
 use ./lib.nu [run-test print-test-summary]
@@ -1025,6 +1029,259 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test32)
+
+  # Real-Manifest Dependency Resolution Regression Tests
+  # These exercise the shared resolver (resolve-dep-node) against the real
+  # service manifests to lock in platform-suffixed dependency node keys.
+
+  # Test 33: revad-base production depends on common-tools:v1.0.0:debian
+  # The dependency version "v1.0.0-debian" carries an explicit platform suffix
+  # for common-tools (which has platforms.nuon), so the node key must split the
+  # debian platform out: common-tools:v1.0.0:debian.
+  let test33 = (run-test "Test 33: Real manifest - revad-base prod dep common-tools:v1.0.0:debian" {
+    let svc = "revad-base"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let vspec = (get-version-or-null $vm "v3.3.3")
+    let cfg = (load-service-config $svc $vspec "production" $pm)
+    let dep_config = ($cfg.dependencies | get "common-tools")
+    let dep_service = (try { $dep_config.service } catch { "common-tools" })
+    let resolved = (resolve-dep-node $dep_config $dep_service "v3.3.3" "production" true)
+
+    if $resolved.node_key != "common-tools:v1.0.0:debian" {
+      error make {msg: $"Expected 'common-tools:v1.0.0:debian', got '($resolved.node_key)'"}
+    }
+
+    if $verbose_flag {
+      print $"    revad-base prod -> ($resolved.node_key)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test33)
+
+  # Test 34: cernbox-revad production depends on revad-base:master:production
+  # The production platform override sets revad-base version "master-production",
+  # which has a platform suffix for revad-base (production/development), so the
+  # node key must be revad-base:master:production.
+  let test34 = (run-test "Test 34: Real manifest - cernbox-revad prod dep revad-base:master:production" {
+    let svc = "cernbox-revad"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let vspec = (get-version-or-null $vm "master")
+    let cfg = (load-service-config $svc $vspec "production" $pm)
+    let dep_config = ($cfg.dependencies | get "revad-base")
+    let dep_service = (try { $dep_config.service } catch { "revad-base" })
+    let resolved = (resolve-dep-node $dep_config $dep_service "master" "production" true)
+
+    if $resolved.node_key != "revad-base:master:production" {
+      error make {msg: $"Expected 'revad-base:master:production', got '($resolved.node_key)'"}
+    }
+
+    if $verbose_flag {
+      print $"    cernbox-revad prod -> ($resolved.node_key)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test34)
+
+  # Test 39: Real manifest integration - the original bug lived in the graph
+  # caller (order.nu), not just the helper. This drives the real
+  # build-dependency-graph for revad-base production and proves the shared
+  # resolver's platform-suffixed node key (common-tools:v1.0.0:debian) actually
+  # lands in the graph nodes and edges, not only when resolve-dep-node is called
+  # directly. build-dependency-graph does no docker I/O, so this is safe to run.
+  let test39 = (run-test "Test 39: Real manifest integration - build-dependency-graph revad-base prod contains common-tools:v1.0.0:debian" {
+    let svc = "revad-base"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let vspec = (get-version-or-null $vm "v3.3.3")
+    let cfg = (load-service-config $svc $vspec "production" $pm)
+
+    let graph = (build-dependency-graph $svc $vspec $cfg "production" $pm false {})
+
+    let parent_node = "revad-base:v3.3.3:production"
+    let dep_node = "common-tools:v1.0.0:debian"
+
+    if not ($parent_node in $graph.nodes) {
+      error make {msg: $"Expected parent node '($parent_node)' in graph, got: ($graph.nodes | to nuon)"}
+    }
+    if not ($dep_node in $graph.nodes) {
+      error make {msg: $"Expected dependency node '($dep_node)' in graph, got: ($graph.nodes | to nuon)"}
+    }
+
+    let has_edge = ($graph.edges | any {|e| $e.from == $parent_node and $e.to == $dep_node})
+    if not $has_edge {
+      error make {msg: $"Expected edge ($parent_node) -> ($dep_node), got: ($graph.edges | to nuon)"}
+    }
+
+    if $verbose_flag {
+      print $"    graph nodes: ($graph.nodes | str join ', ')"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39)
+
+  # Test 40: Fail-closed dependency platforms-manifest load
+  # Regression guard: when a dependency reports check-platforms-manifest-exists
+  # == true but its platforms manifest fails to load, resolution must error
+  # (fail-closed) rather than silently degrade to single-platform, which would
+  # drop the platform suffix and produce a wrong node key. Exercised via the
+  # pure resolve-dep-platforms helper with the manifest load injected as a
+  # closure so no real malformed manifest is needed on disk.
+  let test40 = (run-test "Test 40: Dependency resolution - fail-closed on platforms manifest load failure" {
+    # Branch under test: dep_has_platforms == true and the loader throws.
+    let failed = (try {
+      resolve-dep-platforms "dep-service" true {|| error make {msg: "simulated parse failure"} }
+      false
+    } catch {|err|
+      # Must be the fail-closed refusal, not a silent single-platform degrade.
+      if not ($err.msg | str contains "Refusing to silently treat") {
+        error make {msg: $"Expected fail-closed error, got: ($err.msg)"}
+      }
+      true
+    })
+
+    if not $failed {
+      error make {msg: "Expected resolve-dep-platforms to fail-closed when the platforms manifest load fails, but it returned a value"}
+    }
+
+    # When a dependency declares platforms and the load succeeds, the loaded
+    # manifest is returned unchanged.
+    let manifest = {default: "debian", platforms: [{name: "debian"}]}
+    let loaded = (resolve-dep-platforms "dep-service" true {|| $manifest })
+    if $loaded != $manifest {
+      error make {msg: $"Expected loaded manifest to pass through unchanged, got: ($loaded | to nuon)"}
+    }
+
+    # A dependency with no platforms manifest resolves to null (single-platform)
+    # without invoking the loader.
+    let none = (resolve-dep-platforms "dep-service" false {|| error make {msg: "loader must not run when dep_has_platforms is false"} })
+    if $none != null {
+      error make {msg: $"Expected null for single-platform dependency, got: ($none | to nuon)"}
+    }
+
+    if $verbose_flag {
+      print "    fail-closed error raised; success and single-platform paths verified"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test40)
+
+  # Disk Filesystem Parsing Tests (pure, no shelling out)
+
+  # Sample `df -h` output used by the disk tests below.
+  let df_sample = ["Filesystem      Size  Used Avail Use% Mounted on"
+    "/dev/root        78G   45G   30G  61% /"
+    "tmpfs           7.9G     0  7.9G   0% /dev/shm"
+    "/dev/sda15      105M  6.1M   99M   6% /boot/efi"
+    "overlay          78G   45G   30G  61% /var/lib/docker/overlay2"
+    "tmpfs           1.6G  1.1M  1.6G   1% /run"]
+
+  # Test 35: Root mount extraction matches the mount column exactly as "/"
+  let test35 = (run-test "Test 35: Disk - root mount extraction from df -h" {
+    let root = (extract-root-mount $df_sample)
+    if $root == null {
+      error make {msg: "Root mount not found"}
+    }
+    if $root.mount != "/" {
+      error make {msg: $"Expected root mount '/', got '($root.mount)'"}
+    }
+    if $root.filesystem != "/dev/root" {
+      error make {msg: $"Expected root filesystem '/dev/root', got '($root.filesystem)'"}
+    }
+    if $root.avail != "30G" {
+      error make {msg: $"Expected root avail '30G', got '($root.avail)'"}
+    }
+
+    if $verbose_flag {
+      print $"    Root: ($root.filesystem) avail ($root.avail)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test35)
+
+  # Test 36: parse-size-to-gb converts df size strings to GB
+  let test36 = (run-test "Test 36: Disk - parse-size-to-gb conversions" {
+    let g30 = (parse-size-to-gb "30G")
+    if $g30 != 30.0 {
+      error make {msg: $"30G should be 30.0, got ($g30)"}
+    }
+    let t1 = (parse-size-to-gb "1T")
+    if $t1 != 1024.0 {
+      error make {msg: $"1T should be 1024.0, got ($t1)"}
+    }
+    let m512 = (parse-size-to-gb "512M")
+    if ($m512 < 0.49) or ($m512 > 0.51) {
+      error make {msg: $"512M should be ~0.5GB, got ($m512)"}
+    }
+    let avail_gb = (extract-root-avail-gb $df_sample)
+    if $avail_gb != 30.0 {
+      error make {msg: $"Root avail GB should be 30.0, got ($avail_gb)"}
+    }
+
+    if $verbose_flag {
+      print $"    30G=($g30) 1T=($t1) 512M=($m512)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test36)
+
+  # Test 37: low-disk threshold behavior (0.0 means unknown, not low)
+  let test37 = (run-test "Test 37: Disk - low-disk threshold behavior" {
+    if not (is-low-disk 0.5 1.0) {
+      error make {msg: "0.5GB below 1.0GB threshold should be low"}
+    }
+    if (is-low-disk 30.0 1.0) {
+      error make {msg: "30.0GB above 1.0GB threshold should not be low"}
+    }
+    if (is-low-disk 0.0 1.0) {
+      error make {msg: "0.0GB (unknown) should not be flagged as low"}
+    }
+
+    if $verbose_flag {
+      print "    low-disk threshold checks passed"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test37)
+
+  # Test 38: Filtered summary includes the root filesystem and header
+  let test38 = (run-test "Test 38: Disk - filtered summary includes root filesystem" {
+    let filtered = (filter-df-summary-lines $df_sample)
+
+    let has_root = ($filtered | any {|line|
+      let parts = ($line | split row -r '\s+' | where {|p| ($p | str length) > 0})
+      ($parts | length) >= 6 and ($parts | get 5) == "/"
+    })
+    if not $has_root {
+      error make {msg: $"Filtered summary missing root filesystem. Lines: ($filtered | to nuon)"}
+    }
+
+    let has_header = ($filtered | any {|line| $line | str starts-with "Filesystem"})
+    if not $has_header {
+      error make {msg: "Filtered summary missing header line"}
+    }
+
+    # Non-relevant mounts must be excluded
+    let has_boot = ($filtered | any {|line| $line | str contains "/boot/efi"})
+    if $has_boot {
+      error make {msg: "Filtered summary should not include /boot/efi"}
+    }
+
+    if $verbose_flag {
+      print $"    Filtered ($filtered | length) lines, root present"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test38)
 
   print-test-summary $results
   

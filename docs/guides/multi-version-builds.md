@@ -39,7 +39,7 @@ Version manifests enable building multiple versions of the same service with dif
 
 ### 1. Create a Version Manifest
 
-Create `services/{service-name}/versions.nuon`:
+Create `services/{name}/versions.nuon`:
 
 ```nuon
 {
@@ -113,7 +113,7 @@ nu scripts/dockypody.nu build --service revad-base --all-versions
 
 ```nuon
 {
-  "default": "v1.0.0",  // ERROR ERROR: v1.0.0 not in versions array
+  "default": "v1.0.0",  // ERROR: v1.0.0 not in versions array
   "versions": [
     {
       "name": "v2.0.0",  // Only v2.0.0 exists
@@ -169,7 +169,7 @@ The `overrides` section can override any field from the base service config:
 
 - `sources.{name}.ref` - Change source repository ref/branch/tag
 - `sources.{name}.url` - Change source repository URL
-- `external_images.{stage}.image` - Change external base images
+- `external_images.{stage}.tag` - Change external image tags
 - `build_args.{name}` - Override build arguments
 - `dependencies.{name}.version` - Pin dependency to specific version
 
@@ -267,9 +267,10 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 - Other fields (`dependencies`, `external_images`, `build_args`, etc.) continue using normal deep-merge
 - This behavior applies to both global and platform-specific source overrides
 
-**Platform-Specific Overrides (Multi-Platform Services):**
+**Platform-Specific Overrides (Services Using `platforms.nuon`):**
 
-When a service has a `platforms.nuon` manifest, you can override configuration per platform within a version:
+When a service uses a `platforms.nuon` manifest, you can override
+configuration per platform within a version:
 
 ```nuon
 {
@@ -307,7 +308,7 @@ When a service has a `platforms.nuon` manifest, you can override configuration p
 
 **Platform Override Merge Precedence:**
 
-1. Base config (`services/{service-name}.nuon`)
+1. Base config (`services/{name}.nuon`)
 2. Platform config (`platforms.nuon`)
 3. Global version overrides (`versions.nuon` - `overrides` excluding `platforms` key)
 4. Platform-specific version overrides (`versions.nuon` - `overrides.platforms.{platform_name}`) - **highest priority**
@@ -329,7 +330,7 @@ When multiple versions share the same configuration values, you can use the opti
   "default": "v3.3.3",
   "versions": [
     {
-      "name": "v3.3.3",
+      "name": "v3.3.4",
       "overrides": {
         "external_images": {
           "build": { "tag": "1.25-trixie" }
@@ -373,7 +374,7 @@ When multiple versions share the same configuration values, you can use the opti
       "overrides": {}
     },
     {
-      "name": "v3.3.3",
+      "name": "v3.3.4",
       "overrides": {}
     }
   ]
@@ -382,7 +383,8 @@ When multiple versions share the same configuration values, you can use the opti
 
 **Platform-Specific Defaults:**
 
-For multi-platform services, you can define defaults that apply only to specific platforms:
+For services using `platforms.nuon`, you can define defaults that apply only
+to specific platforms:
 
 ```nuon
 {
@@ -485,7 +487,7 @@ nu scripts/dockypody.nu build --service revad-base
 # Build specific version from manifest
 nu scripts/dockypody.nu build --service revad-base --version v1.29.0
 
-# Build custom version (not in manifest)
+# Missing manifest versions fail validation
 nu scripts/dockypody.nu build --service revad-base --version v1.30.0-rc1
 ```
 
@@ -572,7 +574,8 @@ Version: v1.28.0
 2. revad-base:v1.28.0
 ```
 
-For multi-platform services, each version/platform combination is displayed separately:
+For services using `platforms.nuon`, each version/platform combination is
+displayed separately:
 
 ```text
 === Build Order ===
@@ -593,7 +596,7 @@ Version: v1.29.0 (development)
 - Understanding build order differences between versions
 - Release planning and dependency impact analysis
 
-**See Also:** [CLI Reference](../reference/cli-reference.md#--show-build-order) for complete flag documentation.
+**See Also:** [CLI Reference](../reference/cli-reference.md#show-build-order) for complete flag documentation.
 
 ### Build Flags
 
@@ -869,7 +872,8 @@ nu scripts/dockypody.nu build --service revad-base --all-versions
 
 ### Error: "Version manifest not found"
 
-**Solution:** Create `services/{service}/versions.nuon` or remove version-specific flags.
+**Solution:** Create `services/{name}/versions.nuon` or remove
+version-specific flags.
 
 ### Error: "Version 'x' not found in manifest"
 

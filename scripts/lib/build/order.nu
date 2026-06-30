@@ -18,6 +18,7 @@
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest get-version-or-null get-default-version]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform strip-platform-suffix has-platform-suffix]
 use ./config.nu [load-service-config]
+use ./dependencies.nu [resolve-dep-node]
 
 # Helper: Add node to nodes list if not already present
 def add-node [nodes: list, node: string] {
@@ -26,113 +27,6 @@ def add-node [nodes: list, node: string] {
   } else {
     $nodes
   }
-}
-
-# Resolve dependency version and platform
-# Returns {version: string, platform: string}
-def resolve-dep-version [
-  dep_config: record,
-  dep_service: string,
-  parent_version: string,
-  parent_platform: string,
-  parent_has_platforms: bool
-] {
-  let explicit_version = (try { $dep_config.version } catch { "" })
-  
-  let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
-  let dep_platforms = (if $dep_has_platforms {
-    try {
-      load-platforms-manifest $dep_service
-    } catch {
-      null
-    }
-  } else {
-    null
-  })
-  
-  if ($explicit_version | str length) > 0 {
-    # Check if explicit version has platform suffix FIRST
-    let has_suffix = (if $dep_platforms != null {
-      has-platform-suffix $explicit_version $dep_platforms
-    } else {
-      false
-    })
-    
-    if $has_suffix {
-      # Extract platform from suffix - use as-is
-      # If single_platform flag is also set, warn that suffix takes precedence
-      let single_platform = (try {
-        let val = ($dep_config.single_platform | default false)
-        if $val == true { true } else { false }
-      } catch { false })
-      if $single_platform {
-        print $"Warning: Dependency '($dep_service)' has both platform suffix in version '($explicit_version)' and single_platform: true. Platform suffix takes precedence, single_platform flag is ignored."
-      }
-      let stripped = (strip-platform-suffix $explicit_version $dep_platforms)
-      return {version: $stripped.base_name, platform: $stripped.platform_name}
-    } else {
-      # No platform suffix - check for single_platform flag (only true has meaning)
-      let single_platform = (try {
-        let val = ($dep_config.single_platform | default false)
-        if $val == true { true } else { false }
-      } catch { false })
-      
-      if $single_platform {
-        let dep_has_platforms_check = (check-platforms-manifest-exists $dep_service)
-        if $dep_has_platforms_check {
-          print $"Warning: Dependency '($dep_service)' has single_platform: true but has platforms.nuon. Using version without platform suffix anyway."
-        }
-        return {version: $explicit_version, platform: ""}
-      }
-      
-      # Apply platform inheritance if parent is multi-platform
-      if $parent_has_platforms and ($parent_platform | str length) > 0 {
-        let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
-        
-        if not $dep_has_platforms {
-          # Single-platform dependency - allow with informational message
-          print $"Info: Multi-platform service depends on single-platform service '($dep_service)'. Dependency will use version '($explicit_version)' for all platforms. If intentional, add 'single_platform: true' to suppress this message."
-          return {version: $explicit_version, platform: ""}
-        }
-        
-        return {version: $explicit_version, platform: $parent_platform}
-      } else {
-        return {version: $explicit_version, platform: ""}
-      }
-    }
-  }
-  
-  # Inherit version from parent if no explicit version
-  if ($parent_version | str length) > 0 {
-    let single_platform = (try {
-      let val = ($dep_config.single_platform | default false)
-      if $val == true { true } else { false }
-    } catch { false })
-    
-    if $single_platform {
-      let dep_has_platforms_check = (check-platforms-manifest-exists $dep_service)
-      if $dep_has_platforms_check {
-        print $"Warning: Dependency '($dep_service)' has single_platform: true but has platforms.nuon. Using version without platform suffix anyway."
-      }
-      return {version: $parent_version, platform: ""}
-    }
-    
-    if $parent_has_platforms and ($parent_platform | str length) > 0 {
-      let dep_has_platforms = (check-platforms-manifest-exists $dep_service)
-      
-      if not $dep_has_platforms {
-        # Single-platform dependency - allow with informational message
-        print $"Info: Multi-platform service depends on single-platform service '($dep_service)'. Dependency will use version '($parent_version)' for all platforms. If intentional, add 'single_platform: true' to suppress this message."
-        return {version: $parent_version, platform: ""}
-      }
-      
-      return {version: $parent_version, platform: $parent_platform}
-    } else {
-      return {version: $parent_version, platform: ""}
-    }
-  }
-  
-  error make { msg: $"Dependency '($dep_service)' must have explicit 'version' field or inherit from parent version" }
 }
 
 # Load service config for graph construction (with caching)
@@ -250,15 +144,9 @@ def build-graph-recursive [
       # Use 'service' field from config if present, otherwise use dependency key as service name
       let dep_service = (try { $dep_config.service } catch { $dep_key })
       
-      # Resolve dependency version/platform
-      let dep_resolved = (resolve-dep-version $dep_config $dep_service $version $platform $parent_has_platforms)
-      
-      # Create dependency node
-      let dep_node_key = (if ($dep_resolved.platform | str length) > 0 {
-        $"($dep_service):($dep_resolved.version):($dep_resolved.platform)"
-      } else {
-        $"($dep_service):($dep_resolved.version)"
-      })
+      # Resolve dependency version/platform/node-key via the shared resolver
+      let dep_resolved = (resolve-dep-node $dep_config $dep_service $version $platform $parent_has_platforms)
+      let dep_node_key = $dep_resolved.node_key
       
       # Add dependency node to graph
       let new_nodes = (add-node $acc.nodes $dep_node_key)

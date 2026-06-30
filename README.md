@@ -104,35 +104,44 @@ See [Documentation Index](docs/index.md) for complete documentation listing.
 
 ## Service Configuration
 
-Services are defined in `services/{service-name}.nuon`:
+Services are discovered from a small manifest family:
 
-```nuon
-{
-  "name": "revad-base",
-  "context": "services/revad-base",
-  "dockerfile": "services/revad-base/Dockerfile",
-  "sources": {
-    "revad": {
-      "url": "https://github.com/cs3org/reva",
-      "ref": "v3.3.3"
-    }
-  }
-}
-```
+- `services/{name}.nuon` - base service metadata and config when no platform
+  manifest is used
+- `services/{name}/versions.nuon` - required version manifest
+- `services/{name}/platforms.nuon` - optional platform manifest with one or
+  more platform entries
 
-See [Service Configuration](docs/concepts/service-configuration.md) for complete documentation.
+See [Service Configuration](docs/concepts/service-configuration.md) for the
+placement rules and merge behavior.
 
 ## Workflows
 
 CI/CD workflows are available for GitHub Actions and Forgejo Actions:
 
-- GitHub: `.github/workflows/build-containers.yml`
-- Forgejo: `.forgejo/workflows/build-containers.yml`
+- GitHub: generated workflows under `.github/workflows/`
+  - `Build All` (`build.yml`) - manual build verification via
+    `workflow_dispatch`
+  - `Build and Push All` (`build-push.yml`) - manual build-and-push run plus
+    post-push GHCR purge
+  - `Build Orchestrator` (`build-orchestrator.yml`) - reusable
+    `workflow_call` graph for the full service set
+  - `Build Service` (`build-service.yml`) - reusable `workflow_call` for one
+    service's version and platform matrix
+  - `Image Purge` (`image-purge.yml`) - manual SSOT-based GHCR purge workflow
+- Forgejo: committed workflows under `.forgejo/workflows/`
+  - `Validate Schemas and CI Helpers`
+    (`validate-schemas.yml`) - automatic lightweight validation on
+    `main`/`master` pushes and matching pull requests
+  - `Build Containers` (`build-containers.yml`) - manual dispatch, version-tag
+    pushes, or branch pushes whose commit message contains `dev-build` or
+    `stage-build`
 
 See [CI/CD Workflows](docs/guides/ci-cd.md) for workflow documentation.
 
 ## Conventions
 
 - Release builds: native runner architecture (linux/amd64 on GitHub-hosted runners)
-- Dev/Stage builds: linux/amd64 only, triggered by commit messages containing `(dev-build)` or `(stage-build)`
+- Dev/Stage builds: linux/amd64 only, triggered by commit messages containing
+  `dev-build` or `stage-build`
 - Registries: GHCR (`ghcr.io`) and Forgejo (domain from git origin)

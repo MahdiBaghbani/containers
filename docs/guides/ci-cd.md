@@ -19,95 +19,130 @@
 
 # CI/CD Workflows
 
-This section documents CI/CD workflows and automation for the DockyPody build system.
+This section documents the current CI/CD workflows for the DockyPody build
+system.
 
 ## GitHub Actions Workflows
 
-The build system uses reusable GitHub Actions workflows:
+The shipped build workflows are generated from the current service graph by
+`nu scripts/dockypody.nu ci workflow` and then committed to
+`.github/workflows/`.
 
-- **`.github/workflows/build.yml`**: Entry point for manual builds
-- **`.github/workflows/build-service.yml`**: Reusable workflow for building a single service
+- **`Build All`** (`.github/workflows/build.yml`): Generated manual
+  `workflow_dispatch` entry point for build-only verification
+- **`Build and Push All`** (`.github/workflows/build-push.yml`): Generated
+  manual `workflow_dispatch` entry point for build-and-push runs plus the
+  post-push GHCR purge
+- **`Build Orchestrator`** (`.github/workflows/build-orchestrator.yml`):
+  Generated reusable `workflow_call` workflow that encodes service ordering
+  and dependency fan-out
+- **`Build Service`** (`.github/workflows/build-service.yml`): Generated
+  reusable `workflow_call` workflow for one service's version/platform matrix
+- **`Image Purge`** (`.github/workflows/image-purge.yml`): Generated manual
+  `workflow_dispatch` GHCR purge entry point
 
-Builds are triggered by workflow dispatch (manual), not inferred from commits.
+In other words: `build.yml`, `build-push.yml`, and `image-purge.yml` are the
+manual GitHub entry points, while `build-orchestrator.yml` and
+`build-service.yml` are reusable building blocks. When the service graph or
+workflow templates change, rerun the generator and commit the updated files.
+
+## Forgejo Workflows
+
+Forgejo keeps the committed, non-generated workflows that round out the CI
+story:
+
+- **`Validate Schemas and CI Helpers`**
+  (`.forgejo/workflows/validate-schemas.yml`): Lightweight non-image
+  validation. It checks schema examples, service configs and manifests, schema
+  file references in `docs/`, runs `nu scripts/dockypody.nu docs lint`, and
+  runs `nu scripts/dockypody.nu test --suite all` for the bounded non-Docker
+  public suite bundle. It triggers on pushes to `main` and `master`, plus
+  pull requests whose
+  changes touch the committed CI contract (`README.md`, workflow files,
+  `docs/**`, `schemas/**`, `services/**/*.nuon`, `scripts/**`, and related
+  helper files).
+- **`Build Containers`** (`.forgejo/workflows/build-containers.yml`): Image
+  build workflow that installs the same Nushell version as GitHub and calls
+  `nu scripts/dockypody.nu build ...` directly. It can be started manually via
+  `workflow_dispatch`, runs automatically for version tag pushes, and also
+  allows branch-push builds when the head commit message contains `dev-build`
+  or `stage-build`.
+
+In other words: Forgejo handles the committed automatic validation lane plus
+the compatible image-build lane, while the generated GitHub workflows
+describe the current build-and-purge graph.
 
 ## GHCR package retention (SSOT purge)
 
-When you push the same tag (for example `latest`) multiple times, GHCR keeps old
-package versions as untagged history. Over time this can consume significant
-storage.
+When you push the same tag (for example `latest`) multiple times, GHCR keeps
+old package versions as untagged history. Over time this can consume
+significant storage.
 
 DockyPody supports a SSOT-based purge that deletes GHCR package versions that
 are not referenced by the current `services/**/{versions,platforms}.nuon`
 state.
 
 - Manual workflow: `.github/workflows/image-purge.yml`
-- Auto purge: `ghcr_purge` job inside `.github/workflows/build-orchestrator.yml`
+- Auto purge: `ghcr_purge` job inside `.github/workflows/build-push.yml`
   (runs only when `push: true` and all builds succeeded)
 - CLI entrypoint: `nu scripts/dockypody.nu ci ghcr-purge`
 
 Safety and fault tolerance:
 
 - Manual workflow defaults to `dry_run=true`.
-- Use `--max-deletes` (and the workflow input `max_deletes`) to cap deletions. This is a global budget across all services in the run.
-- If a service's SSOT desired tag set is empty, the purge deletes only untagged versions by default. Use `--force` with `--service` and `--dry-run=false` to allow a full wipe for that single service.
+- Use `--max-deletes` (and the workflow input `max_deletes`) to cap
+  deletions. This is a global budget across all services in the run.
+- If a service's SSOT desired tag set is empty, the purge deletes only
+  untagged versions by default. Use `--force` with `--service` and
+  `--dry-run=false` to allow a full wipe for that single service.
 - If the token cannot delete package versions (permission denied), the purge
   step should warn and skip instead of failing the build.
 
-## Docker Image Caching
+## Dependency Reuse in CI
 
-CI workflows use `actions/cache` to store and restore Docker images between runs. This speeds up builds by reusing previously built dependency images.
+Current CI uses workflow-local shard artifacts, not `actions/cache`, to
+reuse dependency images between jobs. The shipped generated workflows do not
+have an active `actions/cache` restore/save path.
 
-### Cache Key Strategy
+### Artifact Flow
 
-The cache uses a commit+branch key pattern:
+The generated `build-service.yml` workflow does this for each
+service/version/platform node:
 
-```yaml
-key: images-{service}-{branch}-{commit}
-restore-keys: |
-  images-{service}-{branch}-
-```
+1. **Prepare dependency shards**: Run `nu scripts/dockypody.nu ci
+   prepare-node-deps ...` for the dependency closure passed in by
+   `build-orchestrator.yml`.
+2. **Download and load dependency shards**: `ci prepare-node-deps` pulls the
+   shard artifacts from earlier jobs in the same workflow run and loads the
+   matching images into the Docker daemon.
+3. **Build node**: Run `nu scripts/dockypody.nu build ...` with
+   `--dep-cache=soft` and the normal CI pull settings so missing shards can
+   still be rebuilt when needed.
+4. **Create shard**: Package the node's image state as a shard artifact after
+   the build finishes.
+5. **Upload shard artifact**: Publish that shard so downstream jobs in the
+   same run can download and reuse it.
 
-This strategy provides:
+Shard artifact names follow
+`shard-<service>-<version>-<platform|single>`. This keeps reuse scoped to
+the current workflow run and aligned with the generated service graph.
 
-- **Exact match**: Reuse cache from the same commit on the same branch
-- **Fallback match**: Reuse cache from an older commit on the same branch
-- **No cross-branch pollution**: Each branch has its own cache namespace
+### Legacy Cache Notes
 
-### Cache Match Kind
-
-The workflow determines how the cache was matched and passes this to the build script:
-
-| Match Kind | Meaning | Typical Cause |
-| ---------- | ------- | ------------- |
-| `exact` | Cache key matched exactly | Same commit rebuilt |
-| `fallback` | Restore key matched | New commit on existing branch |
-| `miss` | No cache found | First build on a new branch |
-
-The match kind is passed via the `--cache-match` flag:
-
-```bash
-nu scripts/dockypody.nu build --service my-service --cache-match=fallback
-```
-
-This appears in log messages when dependencies are auto-built, helping diagnose cache behavior.
-
-### Cache Workflow Steps
-
-The `build-service.yml` workflow:
-
-1. **Restore cache**: Attempts to restore from exact key, then fallback keys
-2. **Load images**: Loads saved images into Docker daemon (if cache hit)
-3. **Determine match kind**: Computes `exact`, `fallback`, or `miss`
-4. **Build service**: Runs build with `--cache-match` flag
-5. **Save images**: Saves all images to cache directory
-6. **Save cache**: Stores cache for future runs
+The CLI still documents `--cache-match` for legacy or custom callers, but
+the generated workflows no longer compute `exact`/`fallback`/`miss` labels
+through `actions/cache`, and they no longer restore or save image state with
+`actions/cache` at all.
 
 ## Service Definition Hash
 
-In CI, the build system uses service definition hashes to skip unnecessary dependency rebuilds:
+In CI, the build system uses service definition hashes to skip unnecessary
+dependency rebuilds:
 
-1. Each built image gets a hash label (`org.opencloudmesh.system.service-def-hash`)
-2. Before building dependencies, the system checks if local images have matching hashes
+1. Each built image gets a hash label
+   (`org.opencloudmesh.system.service-def-hash`)
+2. Before building dependencies, the system checks if local images have
+   matching hashes
 3. Dependencies with matching hashes are skipped (valid cache hit)
 4. Dependencies with missing or stale hashes are auto-built with a warning
 
@@ -120,7 +155,9 @@ Both development and CI builds use the same Docker driver model:
 - **Dev builds**: Default Buildx builder (docker driver)
 - **CI builds**: Buildx configured with `driver: docker` via `docker/setup-buildx-action`
 
-This ensures consistent behavior between local and CI environments. Images built with `--load` go to the Docker daemon store, which is shared with Buildx.
+This ensures consistent behavior between local and CI environments. Images
+built with `--load` go to the Docker daemon store, which is shared with
+Buildx.
 
 ## Related Documentation
 

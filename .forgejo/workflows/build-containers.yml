@@ -41,9 +41,9 @@ jobs:
 
       - name: Install Nushell
         env:
-          NU_VERSION: "0.98.0"
+          NU_VERSION: "0.108.0"
         run: |
-          curl -fsSL -o /tmp/nu.tar.gz https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
           mkdir -p /tmp/nu
           tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
           sudo mv /tmp/nu/nu /usr/local/bin/nu
@@ -65,6 +65,16 @@ jobs:
           FORGEJO_REGISTRY_USER: ${{ secrets.FORGEJO_REGISTRY_USER }}
           FORGEJO_REGISTRY_TOKEN: ${{ secrets.FORGEJO_REGISTRY_TOKEN }}
         run: |
-          # Deprecated: scripts/build.nu no longer exists in this repo.
-          # This workflow needs rewrite to use: nu scripts/dockypody.nu build ...
-          nu scripts/build.nu --service ${{ inputs.service || 'cernbox-web' }} --push ${{ steps.flags.outputs.push }} --latest true --extra-tag "${{ inputs.extra_tag }}" --pull=deps,externals
+          SERVICE="${{ inputs.service }}"
+          if [ -z "$SERVICE" ]; then
+            SERVICE="cernbox-web"
+          fi
+          EXTRA_TAG="${{ inputs.extra_tag }}"
+          set -- scripts/dockypody.nu build --service "$SERVICE" --latest --pull=deps,externals
+          if [ "${{ steps.flags.outputs.push }}" = "true" ]; then
+            set -- "$@" --push
+          fi
+          if [ -n "$EXTRA_TAG" ]; then
+            set -- "$@" --extra-tag "$EXTRA_TAG"
+          fi
+          nu "$@"

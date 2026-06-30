@@ -336,27 +336,35 @@ export def ci-help [] {
   print "Usage: nu scripts/dockypody.nu ci <subcommand> [options]"
   print ""
   print "Subcommands:"
-  print "  list-deps           List dependency services"
-  print "  load-deps           Load dependency tarballs"
-  print "  load-owner          Load owner tarballs"
-  print "  save-owner          Save owner tarballs"
-  print "  prepare-node-deps   Download and load dependency shards from artifacts (CI only)"
-  print "  workflow            Generate CI workflows (--target all|build|build-push|orchestrator|image-purge)"
-  print "  images              List canonical image references for a service"
-  print "  login-registry      Log in to container registry (CI only)"
-  print "  ghcr-purge          Purge stale GHCR package versions based on SSOT"
+  print "  list-deps             List dependency services"
+  print "  load-deps             Load dependency tarballs"
+  print "  load-owner            Load owner tarballs"
+  print "  save-owner            Save owner tarballs"
+  print "  prepare-node-deps     Download and load dependency shards from artifacts (CI only)"
+  print "  workflow              Generate CI workflows (requires --target: all|build|build-push|orchestrator|build-service|image-purge)"
+  print "  images                List canonical image references for a service"
+  print "  login-registry        Log in to container registry (CI only)"
+  print "  merge-cache-shards    [legacy] Merge per-node cache shards - manual maintenance only,"
+  print "                        not part of the normal artifact-based workflow (requires --service, --ref, --sha)"
+  print "  cleanup-cache-shards  [legacy] Delete shard caches from GitHub Actions - manual maintenance only,"
+  print "                        not part of the normal artifact-based workflow (requires --service, --ref, --sha)"
+  print "  ghcr-purge            Purge stale GHCR package versions based on SSOT"
   print ""
   print "Options:"
   print "  --service <name>        Target service"
   print "  --version <name>        Target version (for prepare-node-deps)"
   print "  --platform <name>       Target platform (for prepare-node-deps)"
   print "  --dependencies <list>   Comma-separated dependency services (for prepare-node-deps)"
-  print "  --target <name>         Workflow target (for workflow: all, build, build-push, orchestrator, image-purge)"
+  print "  --target <name>         Workflow target (required for workflow: all, build, build-push, orchestrator, build-service, image-purge)"
+  print "  --ref <name>            Git ref (for merge-cache-shards, cleanup-cache-shards)"
+  print "  --sha <name>            Commit SHA (for merge-cache-shards, cleanup-cache-shards)"
   print "  --transitive            Include transitive dependencies"
   print "  --dry-run               Show what would be done without deleting"
   print "  --max-deletes <n>       Global budget: max versions deleted across ALL services in this run (0 = unlimited, default: 0)"
   print "  --force                 For ci ghcr-purge: when desired_tags is empty, delete all candidates instead of only untagged ones."
   print "                          Requires --service (single service only) and --dry-run=false."
+  print "  --partial-success       For ci ghcr-purge: tolerate live delete failures and continue."
+  print "                          Default is strict: any live delete failure exits 1."
   print "  --debug                 Enable verbose output"
 }
 
@@ -444,23 +452,24 @@ def list-service-images [service: string] {
 # CI CLI entrypoint - called from dockypody.nu
 export def ci-cli [
   subcommand: string,  # Subcommand: list-deps, load-deps, load-owner, save-owner, prepare-node-deps, workflow, images, shard helpers, ghcr-purge, help
-  flags: record        # Flags: { service, version, platform, dependencies, target, ref, sha, transitive, debug, dry_run, max_deletes, force }
+  flags: record        # Flags: { service, version, platform, dependencies, target, ref, sha, transitive, debug, dry_run, max_deletes, force, partial_success }
 ] {
   let service = (try { $flags.service } catch { "" })
   let version = (try { $flags.version } catch { "" })
   let platform = (try { $flags.platform } catch { "" })
   let dependencies = (try { $flags.dependencies } catch { "" })
-  let target = (try { $flags.target } catch { "all" })
+  let target = (try { $flags.target } catch { "" })
   let transitive = (try { $flags.transitive } catch { false })
   let debug = (try { $flags.debug } catch { false })
   let dry_run = (try { $flags.dry_run } catch { false })
   let max_deletes = (try { $flags.max_deletes } catch { 0 })
   let force = (try { $flags.force } catch { false })
+  let partial_success = (try { $flags.partial_success } catch { false })
   let ref = (try { $flags.ref } catch { "" })
   let sha = (try { $flags.sha } catch { "" })
   
   match $subcommand {
-    "help" | "--help" | "-h" => {
+    "help" => {
       ci-help
     }
     "list-deps" => {
@@ -483,7 +492,11 @@ export def ci-cli [
     }
     "workflow" => {
       use ./workflow.nu [get-workflows-for-target write-workflows]
-      
+
+      if ($target | str length) == 0 {
+        print --stderr "ERROR: --target is required for ci workflow (all, build, build-push, orchestrator, build-service, image-purge)"
+        exit 1
+      }
       let workflows = (get-workflows-for-target $target)
       write-workflows $workflows --dry-run=$dry_run
     }
@@ -506,7 +519,7 @@ export def ci-cli [
       }
     }
     "ghcr-purge" => {
-      ghcr-purge-cli $service $dry_run $max_deletes $debug $force
+      ghcr-purge-cli $service $dry_run $max_deletes $debug $force --partial-success=$partial_success
     }
     _ => {
       print $"Unknown ci subcommand: ($subcommand)"

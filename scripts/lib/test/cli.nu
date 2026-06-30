@@ -18,6 +18,30 @@
 # Test CLI facade - runs test suites
 # See docs/reference/cli-reference.md for usage
 
+# Canonical suite inventory for the non-Docker bundle.
+# Single source of truth: test-help and test-cli both derive from this.
+const suite_inventory = [
+    {name: "architecture",   desc: "Architecture enforcement tests"}
+    {name: "manifests",      desc: "Version manifest tests"}
+    {name: "services",       desc: "Service configuration tests"}
+    {name: "tls",            desc: "TLS certificate and validation tests"}
+    {name: "ssh",            desc: "SSH configuration tests"}
+    {name: "tag-generation", desc: "Tag generation tests"}
+    {name: "build-system",   desc: "Build system tests"}
+    {name: "defaults",       desc: "Default value tests"}
+    {name: "pull",           desc: "Image pull tests"}
+    {name: "validate",       desc: "Validation tests"}
+    {name: "registries",     desc: "Registry tests"}
+    {name: "ci",             desc: "CI helper and dependency resolution tests"}
+    {name: "ghcr-purge",     desc: "GHCR purge desired-tag and decision logic tests"}
+    {name: "docs-lint",      desc: "Documentation lint detection and autofix tests"}
+    {name: "routed-smoke",   desc: "Routed CLI and Makefile dispatch smoke tests"}
+    {name: "cache-shards",   desc: "CI cache shard helper tests"}
+    {name: "orchestration",  desc: "Non-Docker build metadata paths (matrix-json, show-build-order)"}
+    {name: "dep-contract",     desc: "Dependency tag/key contract tests (dependencies, order, hash)"}
+    {name: "service-def-hash", desc: "Service definition hash stability tests"}
+]
+
 # Show test CLI help
 export def test-help [] {
   print "Usage: nu scripts/dockypody.nu test [options]"
@@ -27,20 +51,15 @@ export def test-help [] {
   print "  --verbose        Show detailed output"
   print ""
   print "Available suites:"
-  print "  all              Run all test suites"
-  print "  architecture     Architecture enforcement tests"
-  print "  manifests        Version manifest tests"
-  print "  services         Service configuration tests"
-  print "  tls              TLS certificate tests"
-  print "  ssh              SSH configuration tests"
-  print "  tag-generation   Tag generation tests"
-  print "  build-system     Build system tests"
-  print "  defaults         Default value tests"
-  print "  pull             Image pull tests"
-  print "  validate         Validation tests"
-  print "  registries       Registry tests"
-  print "  ci               CI helper tests"
-  print "  ghcr-purge       GHCR purge desired-tag and decision logic tests"
+  print "  all                  Run all non-Docker test suites"
+  for s in $suite_inventory {
+    print $"  ($s.name | fill -a l -w 20) ($s.desc)"
+  }
+  print ""
+  print "Opt-in suites (excluded from 'all', require Docker daemon):"
+  print "  docker-integration   Docker CLI and daemon reachability tests"
+  print "    Routed:  DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration"
+  print "    Direct:  nu scripts/tests/docker-integration.nu --docker"
 }
 
 # Test CLI entrypoint - called from dockypody.nu
@@ -48,46 +67,67 @@ export def test-cli [
   suite: string = "all",  # Which test suite to run
   verbose: bool = false   # Show detailed output
 ] {
-  print "Running OCM Containers Test Suite\n"
-  
+  let public_suites = ($suite_inventory | get name)
+  let supported_suites = ($public_suites | append "docker-integration")
+
   let test_suites = if $suite == "all" {
-    ["architecture", "manifests", "services", "tls", "ssh", "tag-generation", "build-system", "defaults", "pull", "validate", "registries", "ci", "ghcr-purge"]
+    $public_suites
   } else {
+    if not ($suite in $supported_suites) {
+      print --stderr $"Unsupported test suite: '($suite)'. Run: nu scripts/dockypody.nu test help"
+      exit 1
+    }
     [$suite]
   }
-  
+
+  print "Running OCM Containers Test Suite\n"
+
   # Run suites and collect results using reduce to avoid mutable variable scope issues
-  let results = ($test_suites | reduce --fold {passed: 0, failed: 0} {|suite_name, acc|
+  let results = ($test_suites | reduce --fold {passed: 0, failed: 0, skipped: 0} {|suite_name, acc|
     print $"=== ($suite_name | str upcase) ==="
-    
+
     let result = (if $verbose {
       nu $"scripts/tests/($suite_name).nu" "--verbose" | complete
     } else {
       nu $"scripts/tests/($suite_name).nu" | complete
     })
-    
-    let next_result = if $result.exit_code == 0 {
-      let counts = ($result.stdout | lines | last 2)
-      print $"($counts.0)\n($counts.1)"
-      {passed: ($acc.passed + 1), failed: $acc.failed}
-    } else {
+
+    # Detect suites that skipped via the SKIPPED: marker (zero exit, opt-in not set).
+    let has_skip_marker = ($result.stdout | lines | any {|l| $l | str starts-with "SKIPPED:"})
+    let is_skipped = ($result.exit_code == 0 and $has_skip_marker)
+
+    let next_result = if $result.exit_code != 0 {
       print "FAILED"
       print $result.stderr
-      {passed: $acc.passed, failed: ($acc.failed + 1)}
+      {passed: $acc.passed, failed: ($acc.failed + 1), skipped: $acc.skipped}
+    } else if $is_skipped {
+      for l in ($result.stdout | str trim | lines) { print $l }
+      {passed: $acc.passed, failed: $acc.failed, skipped: ($acc.skipped + 1)}
+    } else {
+      let counts = ($result.stdout | lines | last 2)
+      print $"($counts.0)\n($counts.1)"
+      {passed: ($acc.passed + 1), failed: $acc.failed, skipped: $acc.skipped}
     }
     print ""
     $next_result
   })
-  
+
   print "================================"
   print "Test Summary"
   print "================================"
   print $"Suites:  ($test_suites | length)"
-  print $"Passed: ($results.passed)"
-  print $"Failed: ($results.failed)"
-  
+  print $"Passed:  ($results.passed)"
+  if $results.skipped > 0 {
+    print $"Skipped: ($results.skipped)"
+  }
+  print $"Failed:  ($results.failed)"
+
   if $results.failed == 0 {
-    print "\nAll test suites passed!"
+    if $results.skipped > 0 {
+      print $"\nNo test suites failed; ($results.skipped) suite\(s\) skipped"
+    } else {
+      print "\nAll test suites passed!"
+    }
     exit 0
   } else {
     print $"\n($results.failed) test suite\(s\) failed"

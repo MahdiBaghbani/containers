@@ -1,5 +1,3 @@
-mode = "strict"
-compatibility_scope = "none"
 listen_addr = ":443"
 
 [outbound_http.ssrf]

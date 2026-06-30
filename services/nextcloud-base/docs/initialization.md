@@ -689,4 +689,4 @@ chmod +x /docker-entrypoint-hooks.d/post-installation/*.nu
 
 - [README.md](./README.md) - Service overview
 - [entrypoint.md](./entrypoint.md) - Entrypoint architecture
-- [../../docs/concepts/service-configuration.md](../../docs/concepts/service-configuration.md) - Service configuration
+- [../../../docs/concepts/service-configuration.md](../../../docs/concepts/service-configuration.md) - Service configuration

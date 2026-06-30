@@ -29,8 +29,8 @@ The `dockypody.nu` script is the canonical entry point for the DockyPody build s
 ### Basic Usage
 
 ```bash
-# Show help
-nu scripts/dockypody.nu --help
+# Show top-level help
+nu scripts/dockypody.nu help
 
 # Build commands
 nu scripts/dockypody.nu build --service gaia
@@ -50,16 +50,20 @@ nu scripts/dockypody.nu tls clean --service-ca-only
 nu scripts/dockypody.nu ssh key
 nu scripts/dockypody.nu ssh key --force
 
-# CI commands (--target is mandatory for workflow; empty defaults error)
+# CI commands (--target is mandatory for workflow; cache-shard helpers are
+# legacy/manual)
 nu scripts/dockypody.nu ci list-deps --service nextcloud
 nu scripts/dockypody.nu ci workflow --target all --dry-run
 nu scripts/dockypody.nu ci images --service nextcloud
+# Legacy/manual maintenance only; shipped workflows use artifact shards instead
 nu scripts/dockypody.nu ci merge-cache-shards --service svc --ref r --sha s
 nu scripts/dockypody.nu ci ghcr-purge --dry-run
 # --max-deletes is a global budget across all services in the run
 nu scripts/dockypody.nu ci ghcr-purge --dry-run=false --max-deletes=200
 # Force-wipe is allowed only for a single service and only with --dry-run=false
 nu scripts/dockypody.nu ci ghcr-purge --service nextcloud --dry-run=false --max-deletes=200 --force
+# Optional partial-success policy: tolerate live delete failures and continue
+nu scripts/dockypody.nu ci ghcr-purge --service nextcloud --dry-run=false --partial-success
 
 # Validate commands
 nu scripts/dockypody.nu validate --all-services
@@ -90,8 +94,8 @@ nu scripts/dockypody.nu docs lint --fix
 | `ci workflow` | Write CI workflow YAML (--target ..., --dry-run) | `ci/cli.nu [ci-cli]` |
 | `ci images` | List canonical image references | `ci/cli.nu [ci-cli]` |
 | `ci login-registry` | Log into default container registry | `ci/cli.nu [ci-cli]` |
-| `ci merge-cache-shards` | Merge cache shards under shard root | `ci/cli.nu [ci-cli]` |
-| `ci cleanup-cache-shards` | Delete GitHub Actions cache entries for shards | `ci/cli.nu [ci-cli]` |
+| `ci merge-cache-shards` | Legacy/manual cache-shard merge helper; not used by generated artifact workflows | `ci/cli.nu [ci-cli]` |
+| `ci cleanup-cache-shards` | Legacy/manual cache-shard cleanup helper; not used by generated artifact workflows | `ci/cli.nu [ci-cli]` |
 | `ci ghcr-purge` | Purge stale GHCR package versions (SSOT-based) | `ci/cli.nu [ci-cli]` |
 | `docs lint` | Lint documentation files | `docs/cli.nu [docs-cli]` |
 
@@ -106,11 +110,19 @@ nu scripts/dockypody.nu docs lint --fix
 
 ### Help routing
 
-Use `nu scripts/dockypody.nu`, `nu scripts/dockypody.nu help`, `-h`, or `--help`
-for top-level usage. Use a second positional for `build`, `test`, and `validate`
-(`nu scripts/dockypody.nu build help`). For `ssh`, `tls`, `ci`, and `docs`, omit
-the subcommand or pass `help` / `-h` / `--help` as the second word to reach
-domain help.
+DockyPody owns the positional `help` contract:
+
+- Top level: `nu scripts/dockypody.nu help`
+- Single-command CLIs: `nu scripts/dockypody.nu build help`,
+  `nu scripts/dockypody.nu test help`,
+  `nu scripts/dockypody.nu validate help`
+- Routed domains: `nu scripts/dockypody.nu tls help`,
+  `nu scripts/dockypody.nu ssh help`,
+  `nu scripts/dockypody.nu ci help`,
+  `nu scripts/dockypody.nu docs help`
+
+Nushell intercepts `--help` and `-h` before `dockypody.nu`'s `main` body runs,
+so those flag forms are Nushell help, not DockyPody-owned command help.
 
 ### Router flags snapshot
 
@@ -136,7 +148,8 @@ SSH: `--force`.
 
 CI (shared fields): `--service`, `--version`, `--platform`,
 `--dependencies` (comma list), `--target`, `--ref`, `--sha`, `--transitive`,
-`--debug`, `--dry-run`, `--max-deletes`, `--force`.
+`--debug`, `--dry-run`, `--max-deletes`, `--force`,
+`--partial-success`.
 
 Docs: `--fix`.
 
@@ -151,12 +164,14 @@ bulk of this file starting at [Build Command](#build-command).
 nu scripts/dockypody.nu test [--suite <name>] [--verbose]
 ```
 
-- `--suite` names a file under `scripts/tests/<suite>.nu` (default suite name
-  `all` runs a fixed bundle: architecture, manifests, services, tls, ssh,
-  tag-generation, build-system, defaults, pull, validate, registries, ci,
-  ghcr-purge).
-- You may pass any suite name matching a `scripts/tests/*.nu` file; suites not in
-  the `all` bundle run only when selected explicitly.
+- `--suite` accepts a runnable public suite name surfaced by
+  `nu scripts/dockypody.nu test help`. The default suite name `all` runs the
+  current non-Docker bundle from that same inventory.
+- Helper modules under `scripts/tests/` are internal implementation files, not
+  public suite names. `docker-integration` stays opt-in, is excluded from
+  `all`, and supports two truthful invocation paths:
+  - Routed: `DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration`
+  - Direct: `nu scripts/tests/docker-integration.nu --docker`
 
 ### validate
 
@@ -169,11 +184,11 @@ nu scripts/dockypody.nu validate [--service <name>] [--all-services] [--manifest
 
 ### tls
 
-Subcommands: `ca`, `certs`, `clean`; help when the subcommand is missing or set
-to `help` / `-h` / `--help`.
+Subcommands: `ca`, `certs`, `clean`; positional help is
+`nu scripts/dockypody.nu tls help`.
 
 ```bash
-nu scripts/dockypody.nu tls ca [--verbose]
+nu scripts/dockypody.nu tls ca [--force] [--verbose]
 nu scripts/dockypody.nu tls certs [--filter svc1,svc2] [--verbose]
 nu scripts/dockypody.nu tls clean [--service a,b] [--dry-run]
      [--skip-shared-ca] [--keep-empty-dirs] [--service-ca-only]
@@ -181,6 +196,13 @@ nu scripts/dockypody.nu tls clean [--service a,b] [--dry-run]
 
 TLS library helpers like `copy-tls` are module exports only; no `tls copy`
 subcommand is routed through `dockypody.nu`.
+
+- `tls ca --force` regenerates the shared CA even if it already exists. After a
+  forced CA regeneration, regenerate service certificates with
+  `nu scripts/dockypody.nu tls certs`.
+- `--filter` applies to `tls certs` only.
+- `--service`, `--dry-run`, `--skip-shared-ca`, `--keep-empty-dirs`, and
+  `--service-ca-only` apply to `tls clean` only.
 
 ### ssh
 
@@ -203,13 +225,29 @@ Invoke as `nu scripts/dockypody.nu ci <subcommand> [flags]`.
 | `workflow` | Rewrite workflow files from templates | Mandatory `--target` (see targets below), `--dry-run` optional |
 | `images` | Print canonical refs for caches | `--service` |
 | `login-registry` | Registry login helper | `--debug` |
-| `merge-cache-shards` | Merge downloaded shards locally | `--service`, `--ref`, `--sha`; optional `--debug`; base dir from `DOCKYPODY_SHARD_BASE_DIR` or `/tmp/docker-images/shards` |
-| `cleanup-cache-shards` | Delete matching GitHub Actions caches | `--service`, `--ref`, `--sha`; `--dry-run`, `--debug`; needs `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `gh` |
-| `ghcr-purge` | Trim GHCR package versions vs SSOT | Optional `--service` (omit = all services), `--dry-run`, `--max-deletes`, `--debug`, `--force` (needs single service, no dry-run; see purge rules in code comments) |
+| `merge-cache-shards` | Legacy/manual helper for older cache-shard flows; not part of generated artifact workflows | `--service`, `--ref`, `--sha`; optional `--debug`; base dir from `DOCKYPODY_SHARD_BASE_DIR` or `/tmp/docker-images/shards` |
+| `cleanup-cache-shards` | Legacy/manual helper for older cache-shard flows; not part of generated artifact workflows | `--service`, `--ref`, `--sha`; `--dry-run`, `--debug`; needs `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `gh` |
+| `ghcr-purge` | Trim GHCR package versions vs SSOT | Optional `--service` (omit = all services), `--dry-run`, `--max-deletes`, `--debug`, `--force` (needs single service, no dry-run), `--partial-success` (default is strict failure on live delete errors) |
 
 `ci workflow --target` must be exactly one of: `all`, `build`, `build-push`,
 `orchestrator`, `build-service`, `image-purge`. An omitted or empty `--target`
-errors because the router forwards an empty string to `get-workflows-for-target`.
+is rejected by the routed `ci-cli` preflight before target resolution runs.
+
+Generated workflows use `ci prepare-node-deps` plus workflow-local shard
+artifacts for dependency reuse. `merge-cache-shards` and
+`cleanup-cache-shards` remain available only for legacy or manual maintenance
+flows.
+
+`ci ghcr-purge` reports run totals with separate `planned`, `attempted`,
+`deleted`, `failed`, `skipped`, and `charged` counts. Dry-run reports planned
+candidates but charges `0` against the live delete budget. Permission-denied
+version lists are soft-skipped and named explicitly in the final summary.
+
+`--max-deletes` defaults differ by entrypoint on purpose. The public CLI
+default is `0`, which means unlimited unless you pass a bound explicitly.
+Bundled workflows keep bounded defaults instead: `build-push.yml` runs
+`ghcr-purge` with `--max-deletes=200`, and `image-purge.yml` exposes a
+`max_deletes` input that defaults to `100`.
 
 ### docs
 
@@ -219,10 +257,13 @@ Subcommands: `lint`.
 nu scripts/dockypody.nu docs lint [--fix]
 ```
 
-`lint-docs` can accept explicit file paths when called through the module API;
-`dockypody.nu` always passes an empty list and therefore lints repo-wide Markdown
-(per `glob` rules inside `scripts/lib/docs/lint.nu`), not per-file positional
-arguments.
+The routed `dockypody.nu` contract is repo-wide linting only. It always passes
+an empty file list into the module API, so file discovery uses
+`git ls-files --cached --others --exclude-standard` and respects
+ignored/generated trees.
+
+Autofix (`--fix`) replaces all occurrences of each forbidden pattern, rescans
+the changed files, and exits successfully only when the rescan is clean.
 
 ## Build Command
 
@@ -232,9 +273,10 @@ nu scripts/dockypody.nu build --service <service-name> [options]
 
 ## Service Selection Flags
 
-### `--service <string>` (default: "cernbox-web")
+### `--service <string>`
 
-Build a specific service:
+Build a specific service. Use this when you are not targeting
+`--all-services`:
 
 ```bash
 nu scripts/dockypody.nu build --service revad-base
@@ -338,7 +380,8 @@ nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
 
 ### `--platform <string>`
 
-Filter builds to a specific platform (requires `platforms.nuon`):
+Filter builds to a specific platform (requires `platforms.nuon`, even if that
+manifest defines only one platform):
 
 ```bash
 # Build only debian variant
@@ -419,8 +462,10 @@ nu scripts/dockypody.nu build --service revad-base --matrix-json
 
 **Platform Field:**
 
-- Empty string (`""`) = single-platform service (no `platforms.nuon` exists)
-- Non-empty string = multi-platform service, platform name to pass to `--platform` flag
+- Empty string (`""`) = service resolved without an explicit
+  `platforms.nuon` manifest
+- Non-empty string = platform name from `platforms.nuon`, even when that
+  manifest contains only one platform
 - Never `null` - always a string (empty or platform name)
 
 ## Cache Busting Flags
@@ -583,7 +628,8 @@ Version: v1.1.0
 
 **Multi-Platform Output Format:**
 
-For multi-platform services, each version/platform combination is displayed separately:
+For services using `platforms.nuon`, each version/platform combination is
+displayed separately:
 
 ```text
 === Build Order ===
@@ -604,7 +650,7 @@ Version: v1.0.0 (development)
 - `--all-versions` - Show build order for all versions in the manifest
 - `--versions <list>` - Show build order for specific versions (comma-separated)
 - `--latest-only` - Show build order for versions marked `latest: true`
-- `--platform <string>` - Filter to specific platform (multi-platform services only)
+- `--platform <string>` - Filter to a platform from `platforms.nuon`
 
 **Use cases:**
 
@@ -666,7 +712,9 @@ nu scripts/dockypody.nu build --service revad-base --version v1.28.0 --latest fa
 
 ### `--disk-monitor <string>`
 
-Control disk monitoring output during builds:
+Control disk monitoring output during builds. `off` disables monitoring.
+Any other non-`off` value enables the same basic disk usage snapshots.
+Generated workflows currently pass `basic`.
 
 ```bash
 # Enable basic disk monitoring
@@ -676,12 +724,12 @@ nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monito
 nu scripts/dockypody.nu build --service cernbox-web --all-versions --disk-monitor=off
 ```
 
-**Modes:**
+**Runtime contract:**
 
-| Mode    | Behavior                                          |
-| ------- | ------------------------------------------------- |
-| `off`   | No monitoring (default for local builds)          |
-| `basic` | Emit disk usage snapshots at build phases         |
+| Value            | Behavior                                 |
+| ---------------- | ---------------------------------------- |
+| `off`            | No monitoring (default for local builds) |
+| any non-`off`    | Emit disk usage snapshots at build phases |
 
 **CI Default:** `basic` (enabled for all services in generated workflows)
 

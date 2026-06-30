@@ -20,7 +20,9 @@
 # CI domain test suite
 
 use ../lib/ci/deps.nu [get-direct-dependency-services get-all-dependency-services]
+use ../lib/ci/workflow.nu [get-workflows-for-target]
 use ../lib/services/core.nu [list-service-names]
+use ../lib/build/dep-nodes.nu [get-dependency-node-candidates get-matching-dependency-shards]
 use ./lib.nu [run-test print-test-summary]
 
 # Build dep_id -> service_name mapping from infra manifests (independent of library).
@@ -211,6 +213,350 @@ def main [--verbose] {
     true
   } $verbose)
   $results = ($results | append $test6)
+
+  # Test 7: Generated workflow output matches the committed .github/workflows/ files.
+  # Fails on any drift between the generator and the file on disk.
+  let test7 = (run-test "Generated workflows match committed files" {
+    let targets = ["build" "build-push" "orchestrator" "build-service" "image-purge"]
+    for target in $targets {
+      let workflows = (get-workflows-for-target $target)
+      for wf in $workflows {
+        if not ($wf.path | path exists) {
+          error make {
+            msg: $"Committed workflow missing for target ($target): ($wf.path)"
+          }
+        }
+        let committed = (open --raw $wf.path)
+        if $wf.contents != $committed {
+          error make {
+            msg: $"Workflow drift detected for target '($target)': ($wf.path) does not match generator output. Regenerate with: nu scripts/dockypody.nu ci workflow --target ($target)"
+          }
+        }
+      }
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test7)
+
+  # Test 8: Forgejo workflow files exist and still invoke expected commands.
+  # Protects against silent drift in .forgejo/workflows/ committed files.
+  let test8 = (run-test "Forgejo workflow files exist and invoke expected commands" {
+    let build_wf = ".forgejo/workflows/build-containers.yml"
+    let validate_wf = ".forgejo/workflows/validate-schemas.yml"
+    if not ($build_wf | path exists) {
+      error make {msg: $"Missing workflow: ($build_wf)"}
+    }
+    if not ($validate_wf | path exists) {
+      error make {msg: $"Missing workflow: ($validate_wf)"}
+    }
+    let build_contents = (open --raw $build_wf)
+    if not ($build_contents | str contains "scripts/dockypody.nu build") {
+      error make {
+        msg: $"($build_wf) does not invoke 'scripts/dockypody.nu build'"
+      }
+    }
+    let validate_contents = (open --raw $validate_wf)
+    let expected_commands = [
+      "scripts/dockypody.nu docs lint"
+      "scripts/dockypody.nu test --suite all"
+    ]
+    for cmd in $expected_commands {
+      if not ($validate_contents | str contains $cmd) {
+        error make {
+          msg: $"($validate_wf) does not invoke '($cmd)'"
+        }
+      }
+    }
+    # Parse the YAML and inspect trigger paths arrays directly.
+    let wf_data = (open $validate_wf)
+    let on_block = ($wf_data."on"? | default null)
+    if ($on_block == null) {
+      error make {msg: $"($validate_wf) missing 'on:' trigger block in parsed YAML"}
+    }
+    let push_block = ($on_block.push? | default null)
+    if ($push_block == null) {
+      error make {msg: $"($validate_wf) missing push: trigger"}
+    }
+    let push_branches = ($push_block.branches? | default [])
+    if ($push_branches | sort) != (["main" "master"] | sort) {
+      error make {
+        msg: $"($validate_wf) push.branches mismatch. got=($push_branches | str join ',') expected=main,master"
+      }
+    }
+    let push_paths = ($push_block.paths? | default [])
+    if ($push_paths | is-empty) {
+      error make {msg: $"($validate_wf) missing paths array in push trigger"}
+    }
+    let expected_trigger_paths = [
+      ".forgejo/workflows/**"
+      ".github/workflows/**"
+      "Makefile"
+      "README.md"
+      "docs/**"
+      "schemas/**"
+      "services/**/*.nuon"
+      "scripts/**"
+    ]
+    if ($push_paths | sort) != ($expected_trigger_paths | sort) {
+      error make {
+        msg: $"($validate_wf) push.paths mismatch. got=($push_paths | sort | str join ',') expected=($expected_trigger_paths | sort | str join ',')"
+      }
+    }
+    let pr_block = ($on_block.pull_request? | default null)
+    if ($pr_block == null) {
+      error make {msg: $"($validate_wf) missing pull_request: trigger"}
+    }
+    let pr_paths = ($pr_block.paths? | default [])
+    if ($pr_paths | is-empty) {
+      error make {
+        msg: $"($validate_wf) missing paths array in pull_request trigger"
+      }
+    }
+    if ($pr_paths | sort) != ($expected_trigger_paths | sort) {
+      error make {
+        msg: $"($validate_wf) pull_request.paths mismatch. got=($pr_paths | sort | str join ',') expected=($expected_trigger_paths | sort | str join ',')"
+      }
+    }
+    let job_name = ($wf_data.jobs?.validate?.name? | default "")
+    if $job_name != "Lightweight Non-Image Validation" {
+      error make {
+        msg: $"($validate_wf) jobs.validate.name mismatch. got=($job_name)"
+      }
+    }
+    let validate_job = ($wf_data.jobs?.validate? | default {})
+    let job_runs_on = ($validate_job | get --optional "runs-on") | default ""
+    if $job_runs_on != "ubuntu-latest" {
+      error make {
+        msg: $"($validate_wf) jobs.validate.runs-on mismatch. got=($job_runs_on)"
+      }
+    }
+    let steps = ($wf_data.jobs?.validate?.steps? | default [])
+    let step_names = ($steps | each {|s| $s.name? | default ""})
+    let required_step_names = [
+      "Checkout code"
+      "Install Nushell"
+      "Validate schema example files"
+      "Validate all service configs"
+      "Validate schema file references"
+    ]
+    for name in $required_step_names {
+      if not ($name in $step_names) {
+        error make {msg: $"($validate_wf) missing required step: ($name)"}
+      }
+    }
+    # Structured checks for build-containers.yml.
+    let build_data = (open $build_wf)
+
+    # 1. Nushell-version parity: both workflows must pin the same NU_VERSION.
+    let build_nu_steps = (
+      ($build_data.jobs?.build?.steps? | default [])
+      | where {|s| ($s.name? | default "") == "Install Nushell"}
+    )
+    if ($build_nu_steps | is-empty) {
+      error make {msg: $"($build_wf) missing 'Install Nushell' step"}
+    }
+    let build_nu_step = ($build_nu_steps | first)
+    let build_nu_version = ($build_nu_step.env?.NU_VERSION? | default "")
+    if $build_nu_version == "" {
+      error make {
+        msg: $"($build_wf) Install Nushell step missing NU_VERSION"
+      }
+    }
+    let github_build_wf = ".github/workflows/build-service.yml"
+    if not ($github_build_wf | path exists) {
+      error make {msg: $"Missing GitHub build workflow: ($github_build_wf)"}
+    }
+    let github_build_data = (open $github_build_wf)
+    let github_nu_steps = (
+      ($github_build_data.jobs?.build?.steps? | default [])
+      | where {|s| ($s.name? | default "") == "Install Nushell"}
+    )
+    if ($github_nu_steps | is-empty) {
+      error make {
+        msg: $"($github_build_wf) missing 'Install Nushell' step in build job"
+      }
+    }
+    let github_nu_version = (($github_nu_steps | first).env?.NU_VERSION? | default "")
+    if $build_nu_version != $github_nu_version {
+      error make {
+        msg: $"NU_VERSION mismatch: ($build_wf)=($build_nu_version) ($github_build_wf)=($github_nu_version)"
+      }
+    }
+
+    let build_steps = (
+      ($build_data.jobs?.build?.steps? | default [])
+      | where {|s| ($s.name? | default "") == "Build"}
+    )
+    if ($build_steps | is-empty) {
+      error make {msg: $"($build_wf) missing 'Build' step"}
+    }
+    let build_step = ($build_steps | first)
+    let build_run = ($build_step.run? | default "")
+
+    # 2. Default-service fallback: YAML input default and shell fallback.
+    let wd_svc = (
+      $build_data."on"?.workflow_dispatch?.inputs?.service? | default {}
+    )
+    let svc_default = ($wd_svc."default"? | default "")
+    if $svc_default != "cernbox-web" {
+      error make {
+        msg: $"($build_wf) workflow_dispatch service default mismatch. got=($svc_default)"
+      }
+    }
+    if not ($build_run | str contains 'SERVICE="cernbox-web"') {
+      error make {
+        msg: $"($build_wf) Build step missing SERVICE fallback to cernbox-web"
+      }
+    }
+
+    # 3. workflow_dispatch push input assertions.
+    let wd_push = (
+      $build_data."on"?.workflow_dispatch?.inputs?.push? | default {}
+    )
+    if ($wd_push | is-empty) {
+      error make {msg: $"($build_wf) missing workflow_dispatch input: push"}
+    }
+    let push_type = ($wd_push."type"? | default "")
+    if $push_type != "boolean" {
+      error make {
+        msg: $"($build_wf) workflow_dispatch push type mismatch. got=($push_type) expected=boolean"
+      }
+    }
+    let push_required = ($wd_push."required"? | default false)
+    if not $push_required {
+      error make {
+        msg: $"($build_wf) workflow_dispatch push should be required=true. got=($push_required)"
+      }
+    }
+    let push_default = ($wd_push."default"? | default null)
+    if $push_default != true {
+      error make {
+        msg: $"($build_wf) workflow_dispatch push default mismatch. got=($push_default) expected=true"
+      }
+    }
+
+    # 4. workflow_dispatch extra_tag input assertions.
+    let wd_extra_tag = (
+      $build_data."on"?.workflow_dispatch?.inputs?.extra_tag? | default {}
+    )
+    if ($wd_extra_tag | is-empty) {
+      error make {msg: $"($build_wf) missing workflow_dispatch input: extra_tag"}
+    }
+    let extra_tag_required = ($wd_extra_tag."required"? | default true)
+    if $extra_tag_required {
+      error make {
+        msg: $"($build_wf) workflow_dispatch extra_tag should be required=false. got=($extra_tag_required)"
+      }
+    }
+
+    # 5. Conditional --push forwarding.
+    if not ($build_run | str contains '[ "${{ steps.flags.outputs.push }}" = "true" ]') {
+      error make {
+        msg: $"($build_wf) Build step missing push condition on steps.flags.outputs.push"
+      }
+    }
+    if not ($build_run | str contains 'set -- "$@" --push') {
+      error make {
+        msg: $"($build_wf) Build step missing conditional '--push' append"
+      }
+    }
+
+    # 6. Optional --extra-tag forwarding.
+    if not ($build_run | str contains '[ -n "$EXTRA_TAG" ]') {
+      error make {
+        msg: $"($build_wf) Build step missing non-empty EXTRA_TAG guard"
+      }
+    }
+    if not ($build_run | str contains 'set -- "$@" --extra-tag "$EXTRA_TAG"') {
+      error make {
+        msg: $"($build_wf) Build step missing '--extra-tag' forwarding"
+      }
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test8)
+
+  # Test 9: get-dependency-node-candidates for common-tools with no target
+  # platform returns candidates for all platforms (debian, alpine, rhel).
+  let test9 = (run-test "dep-nodes: common-tools no target -> all platform candidates" {
+    let candidates = (get-dependency-node-candidates ["common-tools"])
+    if ($candidates | is-empty) {
+      error make {msg: "Expected non-empty candidates for common-tools"}
+    }
+    let platforms = ($candidates | each {|c| $c.platform} | uniq | sort)
+    for plat in ["debian" "alpine"] {
+      if not ($plat in $platforms) {
+        error make {msg: $"Expected platform '($plat)' in candidates, got: ($platforms | str join ',')"}
+      }
+    }
+    ($candidates | all {|c| $c.service == "common-tools"})
+  } $verbose)
+  $results = ($results | append $test9)
+
+  # Test 10: get-dependency-node-candidates filters to matching platform
+  # when the target platform exists in the dependency's platforms.nuon.
+  let test10 = (run-test "dep-nodes: common-tools target=debian -> only debian candidates" {
+    let candidates = (get-dependency-node-candidates ["common-tools"] "debian")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected debian candidates for common-tools"}
+    }
+    let non_debian = ($candidates | where {|c| $c.platform != "debian"})
+    if not ($non_debian | is-empty) {
+      error make {msg: $"Expected only debian, found non-debian: ($non_debian | length)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test10)
+
+  # Test 11: get-dependency-node-candidates falls back to all platforms when
+  # target platform does not exist in the dependency's platforms.nuon.
+  let test11 = (run-test "dep-nodes: common-tools unknown target -> all platform fallback" {
+    let candidates = (get-dependency-node-candidates ["common-tools"] "nonexistent-platform")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected fallback candidates for unknown target platform"}
+    }
+    let platforms = ($candidates | each {|c| $c.platform} | uniq)
+    if ($platforms | length) < 2 {
+      error make {msg: $"Expected multiple platforms in fallback, got: ($platforms | str join ',')"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test11)
+
+  # Test 12: get-matching-dependency-shards uses default platform for
+  # single-platform target (empty target_platform string).
+  let test12 = (run-test "dep-nodes: get-matching-dependency-shards uses default platform for single-platform target" {
+    let candidates = (get-matching-dependency-shards ["common-tools"] "")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected candidates from get-matching-dependency-shards"}
+    }
+    # Single-platform target must resolve to the default platform (debian).
+    let platforms = ($candidates | each {|c| $c.platform} | uniq)
+    if not ("debian" in $platforms) {
+      error make {msg: $"Expected default 'debian', got: ($platforms | str join ',')"}
+    }
+    # Must NOT include other platforms when a single default is available.
+    let non_default = ($candidates | where {|c| $c.platform != "debian"})
+    if not ($non_default | is-empty) {
+      error make {msg: $"Expected only default platform, got: ($non_default | length) extras"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test12)
+
+  # Test 13: get-matching-dependency-shards with explicit matching platform.
+  let test13 = (run-test "dep-nodes: get-matching-dependency-shards with explicit matching platform" {
+    let candidates = (get-matching-dependency-shards ["common-tools"] "debian")
+    if ($candidates | is-empty) {
+      error make {msg: "Expected candidates for debian target"}
+    }
+    let non_debian = ($candidates | where {|c| $c.platform != "debian"})
+    if not ($non_debian | is-empty) {
+      error make {msg: $"Expected only debian, found: ($non_debian | length)"}
+    }
+    true
+  } $verbose)
+  $results = ($results | append $test13)
 
   print-test-summary $results
 
