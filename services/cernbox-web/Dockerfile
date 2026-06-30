@@ -230,10 +230,14 @@ COPY --chown=nginx:nginx ./configs/nginx-https.conf.template /etc/nginx/template
 # Entrypoint scripts to replace lots of placeholders in frontend
 # Wrapper shell script (for nginx entrypoint compatibility) and nushell implementation
 COPY --chmod=755 --chown=nginx:nginx ./scripts/cernbox.sh /docker-entrypoint.d/cernbox.sh
-COPY --chmod=755 --chown=nginx:nginx ./scripts/cernbox.nu /docker-entrypoint.d/cernbox.nu
+COPY --chmod=755 ./scripts/cernbox.nu /usr/bin/cernbox.nu
+COPY --chmod=755 ./scripts/lib/tls.nu /usr/bin/lib/tls.nu
+COPY --chmod=755 ./scripts/healthcheck.nu /usr/bin/healthcheck.nu
 
 COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
 COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
+
+HEALTHCHECK --interval=5s --timeout=5s --start-period=90s --retries=36 CMD ["/usr/local/bin/nu", "/usr/bin/healthcheck.nu"]

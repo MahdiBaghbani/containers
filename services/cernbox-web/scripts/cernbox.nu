@@ -20,23 +20,15 @@
 # CERNBox web frontend configuration script
 # Configures nginx templates and frontend config.json based on environment variables
 
+use ./lib/tls.nu [resolve-revad-tls-enabled resolve-web-tls-enabled]
+
 def main [] {
     let cernbox_web_hostname = (try { $env.CERNBOX_WEB_HOSTNAME } catch {
         print "Error: CERNBOX_WEB_HOSTNAME is required"
         exit 1
     })
     
-    # Derive REVAD_* vars from REVAD_TLS_ENABLED (backend sets this, web follows)
-    let revad_tls_enabled = (try {
-        let val = $env.REVAD_TLS_ENABLED
-        if ($val | str trim | is-empty) {
-            try { $env.TLS_ENABLED } catch { "true" }
-        } else {
-            $val
-        }
-    } catch {
-        try { $env.TLS_ENABLED } catch { "true" }
-    })
+    let revad_tls_enabled = (resolve-revad-tls-enabled)
     
     let revad_protocol = (if $revad_tls_enabled == "false" {
         try { $env.REVAD_PROTOCOL } catch { "http" }
@@ -74,8 +66,7 @@ def main [] {
     $env.TLS_CRT = (try { $env.TLS_CRT } catch { "/tls/server.crt" })
     $env.TLS_KEY = (try { $env.TLS_KEY } catch { "/tls/server.key" })
     
-    # Frontend TLS can be controlled independently from backend
-    let web_tls_enabled = (try { $env.WEB_TLS_ENABLED } catch { $revad_tls_enabled })
+    let web_tls_enabled = (resolve-web-tls-enabled)
     
     let templates_dir = "/etc/nginx/templates-available"
     let nginx_conf = "/etc/nginx/conf.d/cernbox.conf"
