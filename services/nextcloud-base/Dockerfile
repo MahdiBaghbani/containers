@@ -97,6 +97,7 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
     libicu-dev \
     libjpeg-dev \
     libldap2-dev \
+    liblz4-dev \
     libmagickwand-dev \
     libmemcached-dev \
     libpng-dev \
@@ -127,14 +128,49 @@ RUN --mount=type=cache,id=nextcloud-php-ext-build,target=/usr/src/php/ext,sharin
     zip;
 
 # Install PECL extensions
+# pecl can report a successful RUN even if an earlier install failed, so this
+# step must fail fast before docker-php-ext-enable runs in the next layer.
+# PECL metadata can also fail transiently, so refresh the channel and retry.
 RUN --mount=type=cache,id=nextcloud-pecl-downloads,target=/tmp/pear/download,sharing=locked \
-    pecl install APCu-5.1.27; \
-    pecl install igbinary-3.2.16; \
-    pecl install imagick-3.8.0; \
-    pecl install memcached-3.4.0 \
-    --configureoptions 'enable-memcached-igbinary="yes"'; \
-    pecl install redis-6.3.0 \
-    --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"';
+    set -ex; \
+    pecl_channel_update_retry() { \
+    pecl_channel_attempt=1; \
+    while [ "$pecl_channel_attempt" -le 3 ]; do \
+    if pecl channel-update pecl.php.net; then \
+    return 0; \
+    fi; \
+    if [ "$pecl_channel_attempt" -eq 3 ]; then \
+    echo "WARNING: pecl channel-update failed after $pecl_channel_attempt attempts; continuing with install retries" >&2; \
+    return 0; \
+    fi; \
+    echo "WARNING: pecl channel-update failed (attempt $pecl_channel_attempt/3); retrying..." >&2; \
+    sleep $((pecl_channel_attempt * 2)); \
+    pecl_channel_attempt=$((pecl_channel_attempt + 1)); \
+    done; \
+    }; \
+    retry_pecl_install() { \
+    pecl_install_attempt=1; \
+    while [ "$pecl_install_attempt" -le 3 ]; do \
+    if pecl install "$@"; then \
+    return 0; \
+    fi; \
+    if [ "$pecl_install_attempt" -eq 3 ]; then \
+    return 1; \
+    fi; \
+    echo "WARNING: pecl install failed (attempt $pecl_install_attempt/3); refreshing channel and retrying..." >&2; \
+    pecl_channel_update_retry; \
+    sleep $((pecl_install_attempt * 2)); \
+    pecl_install_attempt=$((pecl_install_attempt + 1)); \
+    done; \
+    }; \
+    pecl_channel_update_retry; \
+    retry_pecl_install APCu-5.1.28; \
+    retry_pecl_install igbinary-3.2.16; \
+    retry_pecl_install imagick-3.8.0; \
+    retry_pecl_install --configureoptions 'enable-memcached-igbinary="yes"' \
+    memcached-3.4.0; \
+    retry_pecl_install --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"' \
+    redis-6.3.0;
 
 # Enable PHP extensions
 RUN docker-php-ext-enable \

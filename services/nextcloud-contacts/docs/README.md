@@ -1,14 +1,17 @@
 # Nextcloud Contacts Service
 
-Nextcloud service with Contacts app pre-installed and OCM Invites feature support.
+Nextcloud service with Contacts app pre-installed and OCM Invites feature
+support.
 
 ## Overview
 
 `nextcloud-contacts` extends `nextcloud-base` with:
 
 - **Contacts app** - Pre-baked and automatically enabled
-- **OCM Invites support** - Optional feature for Open Cloud Mesh invitation workflow
-- **UI build integration** - Automated npm build process for contacts app frontend
+- **OCM Invites support** - Open Cloud Mesh invitation workflow, configured
+  from environment variables
+- **UI build integration** - Automated npm build process for contacts app
+  frontend
 - **Composer dependencies** - PHP autoloader generation for contacts app
 
 ## Quick Start
@@ -39,60 +42,71 @@ docker run -d \
   -e MYSQL_USER=nextcloud \
   -e MYSQL_PASSWORD=dbsecret \
   -e CONTACTS_ENABLE_OCM_INVITES=true \
-  -e CONTACTS_MESH_PROVIDERS_SERVICE=https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download \
-  nextcloud-contacts:v8.1.0-ocm-nc-master
+  -e CONTACTS_OCM_INVITES_MODE=advanced \
+  -e CONTACTS_MESH_PROVIDERS_SERVICE=https://example.com/providers.json \
+  nextcloud-contacts:latest
 ```
 
 ## Environment Variables
+
+All OCM settings are written to the Contacts app config during container
+initialization using `occ config:app:set contacts <key> ...`.
 
 ### Contacts App Configuration
 
 - `CONTACTS_ENABLE_OCM_INVITES` - Enable OCM Invites feature (default: `false`)
   - Type: Boolean
   - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
-  - Description: Automatically enables OCM Invites feature after contacts app is enabled
+  - Maps to app config: `contacts ocm_invites_enabled`
   - Example: `CONTACTS_ENABLE_OCM_INVITES=true`
-  - Note: Only available in versions that ship the OCM Invite commands (for
-    example `v8.1.0-ocm-nc-master`). Standard versions log a warning if set.
 
-- `CONTACTS_MESH_PROVIDERS_SERVICE` - OCM Discovery Service URL (optional)
+- `CONTACTS_MESH_PROVIDERS_SERVICE` - OCM discovery service URL (optional)
   - Type: String (URL)
   - Default: Unset
-  - Description: URL to OCM Discovery Service for mesh providers configuration
-  - Example: `CONTACTS_MESH_PROVIDERS_SERVICE=https://surfdrive.surf.nl/index.php/s/d0bE1k3P1WHReTq/download`
-  - Note: Requires `CONTACTS_ENABLE_OCM_INVITES=true` to be useful. Will log a warning if command is not available.
+  - Maps to app config: `contacts mesh_providers_service`
+  - Example:
+    `CONTACTS_MESH_PROVIDERS_SERVICE=https://example.com/providers.json`
 
 ### OCM Invites Mode and Flags
 
-These variables control the OCM invites user experience. You can use a mode preset or override individual flags.
+These variables control the OCM invites user experience. Use a mode preset or
+override individual flags.
 
 - `CONTACTS_OCM_INVITES_MODE` - UX mode preset (optional)
   - Type: String
   - Values: `basic`, `advanced`
   - Default: Unset (uses basic defaults)
-  - Description: Sets defaults for the granular flags below
-  - `basic`: Email is required, CC checkbox shown, encoded copy button hidden
-  - `advanced`: Email is optional, CC checkbox shown, encoded copy button shown
+  - `basic`: email is required, encoded copy button hidden
+  - `advanced`: email is optional, encoded copy button shown
 
-- `CONTACTS_OCM_INVITES_OPTIONAL_MAIL` - Allow optional email (optional override)
+- `CONTACTS_OCM_INVITES_OPTIONAL_MAIL` - Allow optional email (override)
   - Type: Boolean
-  - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
-  - Default: Derived from mode (false for basic, true for advanced)
-  - Description: When true, users can create invites without sending email. The invite link must be shared manually.
+  - Default: Derived from mode (`false` for basic, `true` for advanced)
+  - Maps to app config: `contacts ocm_invites_optional_mail`
+  - When true, users can create invites without sending email and share the
+    invite link manually.
 
-- `CONTACTS_OCM_INVITES_CC_SENDER` - Show CC checkbox (optional override)
+- `CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON` - Show encoded copy button
+  (override)
   - Type: Boolean
-  - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
-  - Default: Derived from mode (true for both modes)
-  - Description: When true, shows checkbox allowing senders to receive a copy of the invite email.
+  - Default: Derived from mode (`false` for basic, `true` for advanced)
+  - Maps to app config: `contacts ocm_invites_encoded_copy_button`
+  - When true, shows the button to copy the base64-encoded invite.
 
-- `CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON` - Show encoded copy button (optional override)
+- `CONTACTS_OCM_INVITES_DISABLE_SSRF_GUARD` - Disable discovery SSRF guard
+  (optional)
   - Type: Boolean
-  - Values: `true`, `false`, `1`, `0`, `yes`, `no` (case-insensitive)
-  - Default: Derived from mode (false for basic, true for advanced)
-  - Description: When true, shows advanced button to copy base64-encoded invite. Hidden by default for simpler UX.
+  - Default: Unset (guard enabled)
+  - Maps to app config: `contacts ocm_invites_disable_ssrf_guard`
+  - When true, OCM discovery may reach reserved/private IP addresses and
+    localhost. Only needed when a peer is addressed by a literal private or
+    reserved IP address (or `localhost`); hostnames such as `nextcloud2.docker`
+    are not blocked and do not require this. Leave unset in production.
 
-**Note**: Per-flag environment variables override mode defaults. For example, setting `CONTACTS_OCM_INVITES_MODE=basic` with `CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON=true` uses basic defaults but enables the encoded copy button.
+**Note**: Per-flag variables override mode defaults. For example,
+`CONTACTS_OCM_INVITES_MODE=basic` with
+`CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON=true` uses basic defaults but shows
+the encoded copy button.
 
 ### Nextcloud Base Variables
 
@@ -120,43 +134,50 @@ for:
 - **Source**: `https://github.com/MahdiBaghbani/nextcloud-contacts`
 - **Ref**: `mahdi/fix/ui-optional-email`
 - **Features**: Contacts app with OCM Invites feature
-- **Usage**: Set `CONTACTS_ENABLE_OCM_INVITES=true` to enable OCM functionality
+- **Usage**: Set `CONTACTS_ENABLE_OCM_INVITES=true` to enable OCM
+  functionality
 
-Additional tracked variants currently include `sta-ocm-m6` and
-`sta-m6-nc-code-flow-arch-redesign` for milestone-specific testing.
+A `local` variant builds the contacts app from a local checkout
+(`../nextcloud-contacts`) and is what the bundled example deploys. The
+`sta-ocm-m6` variant is also tracked for milestone-specific testing.
 
 ## OCM Invites Feature
 
-The OCM Invites feature allows exchanging cloud IDs through OCM invitation workflow:
+The OCM Invites feature allows exchanging cloud IDs through the OCM invitation
+workflow:
 
-- Button to invite remote users to exchange cloudIDs
-- **Email is optional** (in advanced mode) - invites can be shared manually via link
-- Button to manually accept invite to exchange cloudIDs (supports invite links, codes, and encoded invites)
-- WAYF page allowing the receiver of the invite to open and accept the invitation
+- Button to invite remote users to exchange cloud IDs
+- Email is optional (in advanced mode) - invites can be shared manually via
+  link
+- Button to manually accept an invite (supports invite links, codes, and
+  encoded invites)
+- WAYF page allowing the receiver of the invite to open and accept the
+  invitation
 - Listing of open invitations
-- Option to resend (only for invites with email), revoke open invitations
-- Optional CC to sender when sending invite emails
+- Option to resend (only for invites with email) or revoke open invitations
 
 ### Enabling OCM Invites
 
 1. Use an OCM-capable version, for example
    `nextcloud-contacts:v8.1.0-ocm-nc-master`
 2. Set environment variable: `CONTACTS_ENABLE_OCM_INVITES=true`
-3. Optionally configure mesh providers service: `CONTACTS_MESH_PROVIDERS_SERVICE=<URL>`
-4. Optionally set mode: `CONTACTS_OCM_INVITES_MODE=basic` or `advanced`
+3. Optionally set mode: `CONTACTS_OCM_INVITES_MODE=basic` or `advanced`
+4. Optionally configure mesh providers service:
+   `CONTACTS_MESH_PROVIDERS_SERVICE=<URL>`
 
-The feature is automatically enabled during container initialization if the environment variable is set.
+The feature is configured automatically during container initialization from
+the environment variables above.
 
 ### Basic vs Advanced Mode
 
 **Basic mode** (default) is designed for simpler deployments:
+
 - Email address is required when creating invites
-- CC checkbox is available for senders
 - Encoded copy button is hidden (cleaner UI)
 
 **Advanced mode** is for power users and testing:
+
 - Email address is optional (invites can be shared manually)
-- CC checkbox is available
 - Encoded copy button is shown for technical users
 
 Example with advanced mode:
@@ -169,13 +190,14 @@ docker run -d \
   nextcloud-contacts:v8.1.0-ocm-nc-master
 ```
 
-### Manual Enablement
+### Manual Configuration
 
-If you prefer manual control, you can enable it after container startup:
+If you prefer manual control, configure the app after container startup with
+core `occ` commands:
 
 ```bash
-docker exec <container> php /var/www/html/occ contacts:enable-ocm-invites
-docker exec <container> php /var/www/html/occ contacts:set-mesh-providers-service <URL>
+docker exec <container> php /var/www/html/occ config:app:set contacts ocm_invites_enabled --value=true --type=boolean
+docker exec <container> php /var/www/html/occ config:app:set contacts mesh_providers_service --value=<URL> --type=string
 ```
 
 ## Architecture
@@ -196,7 +218,7 @@ The Contacts app is built in multiple stages:
 - At runtime, merged into `/usr/src/nextcloud/apps/contacts` by `nextcloud-base`
 - Presence is enforced during `before-starting` by `90-ensure-contacts.nu`
 - Automatically enabled via hook: `90-enable-contacts.nu`
-- OCM Invites configured via hook: `91-enable-contacts-ocm-invites.nu` (if enabled)
+- OCM Invites configured via hook: `91-enable-contacts-ocm-invites.nu`
 
 ### Hook Execution Order
 
@@ -206,8 +228,8 @@ Hooks execute alphabetically:
    in the runtime tree before Apache starts
 2. `post-installation/90-enable-contacts.nu` - Enables contacts app after
    install
-3. `post-installation/91-enable-contacts-ocm-invites.nu` - Enables OCM
-   Invites and configures mode/flags (if relevant env vars are set)
+3. `post-installation/91-enable-contacts-ocm-invites.nu` - Configures OCM
+   Invites from environment variables (when any OCM env var is set)
 
 ## Building
 
@@ -226,35 +248,53 @@ CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/dockypody.nu buil
 
 ### OCM Invites Not Enabled
 
-**Symptom**: `CONTACTS_ENABLE_OCM_INVITES=true` but feature not enabled
+**Symptom**: `CONTACTS_ENABLE_OCM_INVITES=true` but the feature is not active
 
 **Causes**:
 
-- Using a version without the OCM Invite commands
-- Hook execution failed (check logs)
+- Hook execution failed (check container logs)
+- App config not applied
 
 **Solution**:
 
-- Use `v8.1.0-ocm-nc-master` or another OCM-capable tracked variant
-- Check container logs for warnings
-- Manually enable: `occ contacts:enable-ocm-invites`
+- Check container logs for warnings from
+  `91-enable-contacts-ocm-invites.nu`
+- Verify the value:
+  `occ config:app:get contacts ocm_invites_enabled`
+- Set it manually:
+  `occ config:app:set contacts ocm_invites_enabled --value=true --type=boolean`
 
 ### Mesh Providers Service Not Configured
 
-**Symptom**: `CONTACTS_MESH_PROVIDERS_SERVICE` set but not configured
+**Symptom**: `CONTACTS_MESH_PROVIDERS_SERVICE` set but not applied
 
 **Causes**:
 
-- Using a version without the OCM Invite commands
-- Invalid URL format
+- Invalid URL format (must start with `http://` or `https://`)
 - Hook execution failed
 
 **Solution**:
 
-- Use `v8.1.0-ocm-nc-master` or another OCM-capable tracked variant
-- Verify URL starts with `http://` or `https://`
+- Verify the URL scheme
 - Check container logs for warnings
-- Manually configure: `occ contacts:set-mesh-providers-service <URL>`
+- Set it manually:
+  `occ config:app:set contacts mesh_providers_service --value=<URL> --type=string`
+
+### Discovery Fails for a Peer Addressed by a Private IP
+
+**Symptom**: Invite discovery to a peer addressed by a literal private/reserved
+IP address (or `localhost`) returns no result
+
+**Cause**: The discovery SSRF guard blocks reserved/private IP addresses and
+localhost by default. Hostname-based peers (for example `nextcloud2.docker`) are
+not affected.
+
+**Solution**:
+
+- Set `CONTACTS_OCM_INVITES_DISABLE_SSRF_GUARD=true` for trusted test or mesh
+  environments, then rebuild or restart the container
+- Or set it manually:
+  `occ config:app:set contacts ocm_invites_disable_ssrf_guard --value=true --type=boolean`
 
 ### Contacts App Not Enabled
 
