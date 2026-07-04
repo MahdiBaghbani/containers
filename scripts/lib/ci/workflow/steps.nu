@@ -22,7 +22,7 @@ const NU_VERSION = "0.108.0"
 export def step-checkout [] {
     {
         name: "Checkout"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v5"
     }
 }
 
@@ -49,7 +49,7 @@ sudo apt-get install -y zstd"
 export def step-setup-buildx [] {
     {
         name: "Set up Docker Buildx"
-        uses: "docker/setup-buildx-action@v3"
+        uses: "docker/setup-buildx-action@v4"
         with: { driver: "docker" }
     }
 }
@@ -70,7 +70,7 @@ export def step-restore-deps [] {
         {
             name: $"Restore dep($i) cache"
             if: $"steps.deps.outputs.dep($i) != ''"
-            uses: "actions/cache/restore@v4"
+            uses: "actions/cache/restore@v5"
             with: {
                 path: $"/tmp/docker-images/${{ steps.deps.outputs.dep($i) }}/"
                 key: $"images-${{ steps.deps.outputs.dep($i) }}-${{ github.ref }}-${{ github.sha }}"
@@ -105,7 +105,7 @@ export def step-restore-owner-cache [] {
     {
         name: "Restore Docker image cache"
         id: "cache-restore"
-        uses: "actions/cache/restore@v4"
+        uses: "actions/cache/restore@v5"
         with: {
             path: "/tmp/docker-images/${{ inputs.service }}/"
             key: "images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}"
@@ -230,7 +230,7 @@ export def step-create-shard [] {
 export def step-upload-shard [] {
     {
         name: "Upload shard artifact"
-        uses: "actions/upload-artifact@v4"
+        uses: "actions/upload-artifact@v6"
         with: {
             name: "shard-${{ inputs.service }}-${{ matrix.version }}-${{ matrix.platform != '' && matrix.platform || 'single' }}"
             path: "/tmp/docker-images/shards/${{ inputs.service }}/"

@@ -55,7 +55,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Nushell
         env:
           NU_VERSION: 0.108.0
