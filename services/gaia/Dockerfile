@@ -22,6 +22,11 @@ ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
 ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
 
 ################################
+###  Common Tools (nu)       ###
+################################
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools-builder
+
+################################
 ###  Build Gaia from source  ###
 ################################
 FROM ${BASE_BUILD_IMAGE} AS build
@@ -39,29 +44,33 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
+COPY --chmod=755 --from=common-tools-builder /usr/local/bin/nu /usr/local/bin/nu
+RUN nu --version || (echo "Nushell verification failed" && exit 1)
+
 WORKDIR /
 
 ARG GAIA_URL="https://github.com/cs3org/gaia"
 ARG GAIA_REF="master"
 ARG GAIA_SHA=""
+ARG GAIA_REF_KIND=""
 ARG GAIA_PATH=""
 ARG GAIA_MODE=""
 ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
 
-# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+# Clone or copy gaia source via shared helper (local bind mount or git cache).
 RUN --mount=type=cache,id=gaia-git-${CACHEBUST:-${GAIA_REF}},target=/src/gaia-git-cache,sharing=shared \
   --mount=type=bind,source=${GAIA_PATH:-.},target=/tmp/local-gaia,ro \
-  if [ "$GAIA_MODE" = "local" ]; then \
-  mkdir -p /gaia-git && \
-  cp -a /tmp/local-gaia/. /gaia-git; \
-  else \
-  mkdir -p /src/gaia-git-cache && \
-  if [ ! -d /src/gaia-git-cache/.git ]; then \
-  git clone --depth 1 --recursive --shallow-submodules --branch "${GAIA_REF}" ${GAIA_URL} /src/gaia-git-cache; \
-  fi && \
-  cp -a /src/gaia-git-cache/. /gaia-git; \
-  fi
+  nu /tmp/clone-source.nu \
+  --mode "${GAIA_MODE:-git}" \
+  --url "${GAIA_URL}" \
+  --ref "${GAIA_REF}" \
+  --ref-kind "${GAIA_REF_KIND}" \
+  --local-dir /tmp/local-gaia \
+  --cache-dir /src/gaia-git-cache \
+  --dest /gaia-git
 
 WORKDIR /gaia-git
 RUN --mount=type=cache,id=gaia-go-mod-cache,target=/go/pkg/mod,sharing=locked \

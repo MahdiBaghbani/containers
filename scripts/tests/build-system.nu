@@ -1993,6 +1993,18 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test39n)
 
+  let test39o = (run-test "Test 39o: Dockerfile drift - gaia passes --ref-kind on clone-source.nu calls" {
+    let dockerfiles = [
+      "services/gaia/Dockerfile"
+    ]
+    let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "GAIA_REF_KIND")]
+    for df in $dockerfiles {
+      assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39o)
+
   let test39m = (run-test "Test 39m: env REVAD_REF_KIND=ref with SHA REVAD_REF recomputes to sha" {
     let svc = "cernbox-revad"
     let version = "v3.10.1"
