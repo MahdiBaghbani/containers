@@ -106,7 +106,15 @@ def with-git-file-protocol-allowed [block: closure] {
   $result
 }
 
-def assert-dockerfile-clone-source-ref-kind-contract [dockerfile_path: string] {
+def clone-source-ref-kind-env-pattern [env_name: string] {
+  "--ref-kind " + ('"' + '$' + '{' + $env_name + '}' + '"')
+}
+
+def assert-dockerfile-clone-source-ref-kind-contract [
+  dockerfile_path: string
+  --expected-invocations (-e): int = 2
+  --ref-kind-patterns (-p): list<string> = []
+] {
   if not ($dockerfile_path | path exists) {
     error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
   }
@@ -117,10 +125,18 @@ def assert-dockerfile-clone-source-ref-kind-contract [dockerfile_path: string] {
     | where {|e| ($e.item | str trim) | str starts-with "nu /tmp/clone-source.nu" }
     | get index
   )
-  if ($invoke_indices | length) != 2 {
-    error make {msg: $"Expected 2 clone-source.nu invocations in ($dockerfile_path), found ($invoke_indices | length)"}
+  if ($invoke_indices | length) != $expected_invocations {
+    error make {
+      msg: $"Expected ($expected_invocations) clone-source.nu invocations in ($dockerfile_path), found ($invoke_indices | length)"
+    }
   }
-  for idx in $invoke_indices {
+  if ($ref_kind_patterns | length) > 0 and ($ref_kind_patterns | length) != $expected_invocations {
+    error make {
+      msg: $"ref-kind-patterns length (($ref_kind_patterns | length)) must match expected-invocations ($expected_invocations)"
+    }
+  }
+  for pair in ($invoke_indices | enumerate) {
+    let idx = $pair.item
     mut block_lines = []
     mut i = $idx
     loop {
@@ -134,6 +150,14 @@ def assert-dockerfile-clone-source-ref-kind-contract [dockerfile_path: string] {
     let block = ($block_lines | str join "\n")
     if not ($block | str contains "--ref-kind") {
       error make {msg: $"clone-source.nu invocation at line ($idx + 1) missing --ref-kind in ($dockerfile_path)"}
+    }
+    if ($ref_kind_patterns | length) > 0 {
+      let pattern = ($ref_kind_patterns | get $pair.index)
+      if not ($block | str contains $pattern) {
+        error make {
+          msg: $"clone-source.nu invocation ($pair.index + 1) missing explicit ref-kind pattern '($pattern)' in ($dockerfile_path)"
+        }
+      }
     }
   }
 }
@@ -1945,12 +1969,29 @@ def main [--verbose] {
       "services/cernbox-revad/Dockerfile.production"
       "services/cernbox-revad/Dockerfile.development"
     ]
+    let ref_kind_patterns = [
+      (clone-source-ref-kind-env-pattern "REVAD_REF_KIND")
+      (clone-source-ref-kind-env-pattern "REVAD_PLUGINS_REF_KIND")
+    ]
     for df in $dockerfiles {
-      assert-dockerfile-clone-source-ref-kind-contract $df
+      assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 2 --ref-kind-patterns $ref_kind_patterns
     }
     true
   } $verbose_flag)
   $results = ($results | append $test39l)
+
+  let test39n = (run-test "Test 39n: Dockerfile drift - revad-base passes --ref-kind on clone-source.nu calls" {
+    let dockerfiles = [
+      "services/revad-base/Dockerfile.production"
+      "services/revad-base/Dockerfile.development"
+    ]
+    let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "REVAD_REF_KIND")]
+    for df in $dockerfiles {
+      assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39n)
 
   let test39m = (run-test "Test 39m: env REVAD_REF_KIND=ref with SHA REVAD_REF recomputes to sha" {
     let svc = "cernbox-revad"
