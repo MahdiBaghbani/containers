@@ -162,6 +162,92 @@ def assert-dockerfile-clone-source-ref-kind-contract [
   }
 }
 
+def assert-dockerfile-nextcloud-local-mode-cleanup [dockerfile_path: string] {
+  if not ($dockerfile_path | path exists) {
+    error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
+  }
+  let lines = (open --raw $dockerfile_path | lines)
+  let invoke_indices = (
+    $lines
+    | enumerate
+    | where {|e| ($e.item | str trim) | str starts-with "nu /tmp/clone-source.nu" }
+    | get index
+  )
+  if ($invoke_indices | length) != 1 {
+    error make {
+      msg: $"Expected exactly 1 clone-source.nu invocation in ($dockerfile_path), found ($invoke_indices | length)"
+    }
+  }
+  let idx = ($invoke_indices | first)
+  mut block_lines = []
+  mut i = $idx
+  let line_count = ($lines | length)
+  loop {
+    if $i >= $line_count {
+      error make {
+        msg: $"nextcloud local-mode cleanup block missing 'fi' terminator after clone-source.nu at line ($idx + 1) in ($dockerfile_path)"
+      }
+    }
+    let line = ($lines | get $i)
+    $block_lines = ($block_lines | append $line)
+    let trimmed = ($line | str trim)
+    if ($trimmed == "fi") or ($trimmed | str ends-with "; fi") {
+      break
+    }
+    $i = $i + 1
+  }
+  let local_guard = 'if [ "$NEXTCLOUD_MODE" = "local" ]'
+  let config_rm = "rm -f /nextcloud-source/config/config.php"
+  let data_rm = "rm -rf /nextcloud-source/data /nextcloud-source/data-autotest"
+  let active_trimmed = (
+    $block_lines
+    | each {|line| $line | str trim }
+    | where {|t| ($t | str length) > 0 and not ($t | str starts-with "#") }
+  )
+  for pattern in [$local_guard $config_rm $data_rm] {
+    if ($active_trimmed | where {|t| $t | str contains $pattern } | length) == 0 {
+      error make {
+        msg: $"nextcloud local-mode cleanup block missing active line containing '($pattern)' in ($dockerfile_path)"
+      }
+    }
+  }
+  let if_line_idx = (
+    $block_lines
+    | enumerate
+    | where {|e|
+        let t = ($e.item | str trim)
+        ($t | str length) > 0 and not ($t | str starts-with "#") and ($t | str contains $local_guard)
+      }
+    | first
+    | get index
+  )
+  let config_line_idx = (
+    $block_lines
+    | enumerate
+    | where {|e|
+        let t = ($e.item | str trim)
+        ($t | str length) > 0 and not ($t | str starts-with "#") and ($t | str contains $config_rm)
+      }
+    | first
+    | get index
+  )
+  let data_line_idx = (
+    $block_lines
+    | enumerate
+    | where {|e|
+        let t = ($e.item | str trim)
+        ($t | str length) > 0 and not ($t | str starts-with "#") and ($t | str contains $data_rm)
+      }
+    | first
+    | get index
+  )
+  if $if_line_idx >= $config_line_idx or $if_line_idx >= $data_line_idx {
+    error make {
+      msg: $"nextcloud local-mode cleanup must follow NEXTCLOUD_MODE=local guard in ($dockerfile_path)"
+    }
+  }
+}
+
 def seed-local-git-repo [repo: string] {
   mkdir $repo
   "fixture" | save -f ($repo | path join "README.md")
@@ -2004,6 +2090,24 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test39o)
+
+  let test39p = (run-test "Test 39p: Dockerfile drift - nextcloud passes --ref-kind on clone-source.nu calls" {
+    let dockerfiles = [
+      "services/nextcloud/Dockerfile"
+    ]
+    let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "NEXTCLOUD_REF_KIND")]
+    for df in $dockerfiles {
+      assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39p)
+
+  let test39q = (run-test "Test 39q: Dockerfile drift - nextcloud local-mode cleanup removes config and data paths" {
+    assert-dockerfile-nextcloud-local-mode-cleanup "services/nextcloud/Dockerfile"
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39q)
 
   let test39m = (run-test "Test 39m: env REVAD_REF_KIND=ref with SHA REVAD_REF recomputes to sha" {
     let svc = "cernbox-revad"
