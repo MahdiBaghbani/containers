@@ -565,6 +565,158 @@ def assert-opencloud-override-uses-clone-source [
   }
 }
 
+def assert-dockerfile-ocis-sha-checkout-guard [block: string, dockerfile_path: string] {
+  if not ($block | str contains "OCIS_MODE") {
+    error make {
+      msg: $"ocis clone-source RUN block must guard SHA checkout when mode is not local in ($dockerfile_path)"
+    }
+  }
+  let has_local_guard = (
+    ($block | str contains '!= "local"') or ($block | str contains "!= 'local'")
+  )
+  if not $has_local_guard {
+    error make {
+      msg: $"ocis clone-source RUN block must guard SHA checkout when mode is not local in ($dockerfile_path)"
+    }
+  }
+  if not (($block | str contains "OCIS_SHA") and ($block | str contains "-n ")) {
+    error make {
+      msg: $"ocis clone-source RUN block must require non-empty OCIS_SHA before checkout in ($dockerfile_path)"
+    }
+  }
+  if not (($block | str contains "git -C /ocis checkout") and ($block | str contains "OCIS_SHA")) {
+    error make {
+      msg: $"ocis clone-source RUN block must checkout OCIS_SHA into /ocis in ($dockerfile_path)"
+    }
+  }
+  let fetch_retry_needles = [
+    'if ! git -C /ocis checkout "$OCIS_SHA"'
+    "fetch --depth 1 origin"
+    'git -C /ocis checkout "$OCIS_SHA"'
+  ]
+  for needle in $fetch_retry_needles {
+    if not ($block | str contains $needle) {
+      error make {
+        msg: $"ocis clone-source RUN block missing SHA fetch-retry fragment '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+}
+
+def assert-ocis-dockerfile-clone-source-contract [dockerfile_path: string] {
+  if not ($dockerfile_path | path exists) {
+    error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
+  }
+  let copy_needle = "COPY --chmod=755 ./scripts/lib/clone-source.nu /usr/local/bin/clone-source.nu"
+  let lines = (open --raw $dockerfile_path | lines)
+  let copy_count = ($lines | where {|l| ($l | str trim) == $copy_needle} | length)
+  if $copy_count != 2 {
+    error make {
+      msg: $"Expected 2 clone-source.nu COPY lines in ($dockerfile_path), found ($copy_count)"
+    }
+  }
+  let required_stage_args = [
+    'ARG OCIS_MODE=""'
+    'ARG OCIS_REF_KIND=""'
+    'ARG OCIS_WEB_REF_KIND=""'
+    'ARG OCIS_REVA_REF_KIND=""'
+  ]
+  for arg_line in $required_stage_args {
+    if not ($lines | any {|l| ($l | str trim) == $arg_line}) {
+      error make {
+        msg: $"ocis Dockerfile missing stage-local ($arg_line) in ($dockerfile_path)"
+      }
+    }
+  }
+  let invoke_prefix = "nu /usr/local/bin/clone-source.nu"
+  let invoke_indices = (
+    $lines
+    | enumerate
+    | where {|e| ($e.item | str trim) | str starts-with $invoke_prefix }
+    | get index
+  )
+  if ($invoke_indices | length) != 1 {
+    error make {
+      msg: $"Expected 1 clone-source.nu invocation in ($dockerfile_path), found ($invoke_indices | length)"
+    }
+  }
+  let block = (dockerfile-collect-continuation-block $lines ($invoke_indices | first))
+  let required_flags = [
+    '--mode "${OCIS_MODE:-git}"'
+    '--url "${OCIS_URL}"'
+    '--ref "${OCIS_REF}"'
+    (clone-source-ref-kind-env-pattern "OCIS_REF_KIND")
+    "--local-dir /mnt/src"
+    "--cache-dir /src/ocis-git-cache"
+    "--dest /ocis"
+  ]
+  for flag in $required_flags {
+    if not ($block | str contains $flag) {
+      error make {
+        msg: $"ocis clone-source RUN block missing '($flag)' in ($dockerfile_path)"
+      }
+    }
+  }
+  assert-dockerfile-ocis-sha-checkout-guard $block $dockerfile_path
+}
+
+def assert-ocis-dockerfile-override-wiring [dockerfile_path: string] {
+  if not ($dockerfile_path | path exists) {
+    error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
+  }
+  let lines = (open --raw $dockerfile_path | lines)
+  let trimmed = ($lines | each {|l| $l | str trim})
+  let required = [
+    "COPY --chmod=755 ./scripts/build/web-override.nu /usr/local/bin/web-override.nu"
+    "COPY --chmod=755 ./scripts/build/reva-override.nu /usr/local/bin/reva-override.nu"
+    "nu /usr/local/bin/web-override.nu"
+    "nu /usr/local/bin/reva-override.nu"
+  ]
+  for needle in $required {
+    if not ($trimmed | any {|l| $l == $needle}) {
+      error make {
+        msg: $"ocis Dockerfile missing required override wiring line '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+  let web_block = (dockerfile-collect-run-block-containing $lines "nu /usr/local/bin/web-override.nu")
+  if ($web_block | str length) == 0 {
+    error make {
+      msg: $"ocis Dockerfile missing RUN block for web-override.nu in ($dockerfile_path)"
+    }
+  }
+  let web_mount_needles = [
+    "target=/mnt/web"
+    "id=ocis-web-git-"
+    "target=/src/ocis-web-git-cache"
+  ]
+  for needle in $web_mount_needles {
+    if not ($web_block | str contains $needle) {
+      error make {
+        msg: $"ocis web-override RUN block missing mount fragment '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+  let reva_block = (dockerfile-collect-run-block-containing $lines "nu /usr/local/bin/reva-override.nu")
+  if ($reva_block | str length) == 0 {
+    error make {
+      msg: $"ocis Dockerfile missing RUN block for reva-override.nu in ($dockerfile_path)"
+    }
+  }
+  let reva_mount_needles = [
+    "target=/mnt/reva"
+    "id=ocis-reva-git-"
+    "target=/src/ocis-reva-git-cache"
+  ]
+  for needle in $reva_mount_needles {
+    if not ($reva_block | str contains $needle) {
+      error make {
+        msg: $"ocis reva-override RUN block missing mount fragment '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+}
+
 def assert-dockerfile-nextcloud-local-mode-cleanup [dockerfile_path: string] {
   if not ($dockerfile_path | path exists) {
     error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
@@ -2619,6 +2771,81 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test39x)
+
+  let test39z = (run-test "Test 39z: Dockerfile drift - ocis clone-source contract and SHA checkout guard" {
+    assert-ocis-dockerfile-clone-source-contract "services/ocis/Dockerfile.alpine"
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39z)
+
+  let test39za = (run-test "Test 39za: ocis override scripts use clone-source.nu contract" {
+    assert-opencloud-override-uses-clone-source "services/ocis/scripts/build/web-override.nu" "/mnt/web" "OCIS_WEB_REF_KIND"
+    assert-opencloud-override-uses-clone-source "services/ocis/scripts/build/reva-override.nu" "/mnt/reva" "OCIS_REVA_REF_KIND"
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39za)
+
+  let test39zb = (run-test "Test 39zb: Dockerfile drift - ocis web/reva override script COPY and RUN wiring" {
+    assert-ocis-dockerfile-override-wiring "services/ocis/Dockerfile.alpine"
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39zb)
+
+  let test39zc = (run-test "Test 39zc: Real manifest - ocis v8.0.1 and master alpine OCIS_REF_KIND build args" {
+    let svc = "ocis"
+    let platform = "alpine"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let meta = (detect-build)
+    let tls_meta = (create-test-tls-meta)
+    let ssh_meta = {
+      enabled: false,
+      mode: "disabled",
+      default_user: "root",
+      port: 22,
+      listen: "0.0.0.0"
+    }
+
+    let version_tag = "v8.0.1"
+    let vspec_tag = (get-version-or-null $vm $version_tag)
+    let cfg_tag = (load-service-config $svc $vspec_tag $platform $pm)
+    let ocis_ref_tag = (try { $cfg_tag.sources.ocis.ref } catch { "" })
+    if $ocis_ref_tag != "v8.0.1" {
+      error make {msg: $"Expected ocis ref 'v8.0.1' from tracked manifest, got: ($ocis_ref_tag)"}
+    }
+    let source_types_tag = (detect-all-source-types $cfg_tag.sources)
+    let source_ref_kinds_tag = (extract-source-ref-kinds $cfg_tag.sources $source_types_tag)
+    let build_args_tag = (
+      generate-build-args $version_tag $cfg_tag $meta {} $tls_meta $ssh_meta "" false {} $source_types_tag {} "tracked" $source_ref_kinds_tag
+    )
+    if (try { $build_args_tag.OCIS_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: $"Expected OCIS_REF_KIND=ref for tag v8.0.1, got: ($build_args_tag.OCIS_REF_KIND?)"}
+    }
+
+    let version_master = "master"
+    let vspec_master = (get-version-or-null $vm $version_master)
+    let cfg_master = (load-service-config $svc $vspec_master $platform $pm)
+    let ocis_ref_master = (try { $cfg_master.sources.ocis.ref } catch { "" })
+    if $ocis_ref_master != "master" {
+      error make {msg: $"Expected ocis ref 'master' from tracked manifest, got: ($ocis_ref_master)"}
+    }
+    let source_types_master = (detect-all-source-types $cfg_master.sources)
+    let source_ref_kinds_master = (extract-source-ref-kinds $cfg_master.sources $source_types_master)
+    let build_args_master = (
+      generate-build-args $version_master $cfg_master $meta {} $tls_meta $ssh_meta "" false {} $source_types_master {} "tracked" $source_ref_kinds_master
+    )
+    if (try { $build_args_master.OCIS_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: $"Expected OCIS_REF_KIND=ref for branch master, got: ($build_args_master.OCIS_REF_KIND?)"}
+    }
+
+    if $verbose_flag {
+      print $"    v8.0.1 OCIS_REF_KIND=($build_args_tag.OCIS_REF_KIND)"
+      print $"    master OCIS_REF_KIND=($build_args_master.OCIS_REF_KIND)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39zc)
 
   let test39u = (run-test "Test 39u: Real manifest - cernbox-web master mixed REF_KIND build args" {
     let svc = "cernbox-web"
