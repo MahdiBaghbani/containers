@@ -7,7 +7,7 @@
     },
     "sources": {
       "ocm_go": {
-        "url": "https://github.com/MahdiBaghbani/opencloudmesh-go",
+        "url": "https://github.com/MahdiBaghbani/opencloudmesh-go"
       }
     },
     "dependencies": {
@@ -34,7 +34,7 @@
   "versions": [
     {
       "name": "master",
-      "latest": true,
+      "latest": false,
       "overrides": {
         "sources": {
           "ocm_go": {

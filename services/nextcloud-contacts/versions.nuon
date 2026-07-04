@@ -29,7 +29,7 @@
       "overrides": {
         "sources": {
           "contacts": {
-            "version": "master"
+            "ref": "master"
           }
         },
         "dependencies": {
