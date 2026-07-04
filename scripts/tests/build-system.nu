@@ -110,10 +110,320 @@ def clone-source-ref-kind-env-pattern [env_name: string] {
   "--ref-kind " + ('"' + '$' + '{' + $env_name + '}' + '"')
 }
 
+def script-active-trimmed-lines [content: string] {
+  $content
+  | lines
+  | each {|line| $line | str trim}
+  | where {|t| ($t | str length) > 0 and not ($t | str starts-with "#")}
+}
+
+def dockerfile-collect-continuation-block [lines: list<string>, start_idx: int] {
+  mut block_lines = []
+  mut i = $start_idx
+  loop {
+    $block_lines = ($block_lines | append ($lines | get $i))
+    let line = ($lines | get $i | str trim)
+    if not ($line | str ends-with "\\") {
+      break
+    }
+    $i = $i + 1
+  }
+  $block_lines | str join "\n"
+}
+
+def dockerfile-collect-run-block-containing [lines: list<string>, needle: string] {
+  let hit = (
+    $lines
+    | enumerate
+    | where {|e| ($e.item | str trim) | str starts-with $needle}
+    | last
+  )
+  if $hit == null {
+    return ""
+  }
+  let hit_idx = ($hit | get index)
+  mut run_idx = $hit_idx
+  while $run_idx > 0 {
+    let trimmed = ($lines | get $run_idx | str trim)
+    if ($trimmed | str starts-with "RUN ") or ($trimmed | str starts-with "RUN\t") {
+      break
+    }
+    $run_idx = $run_idx - 1
+  }
+  dockerfile-collect-continuation-block $lines $run_idx
+}
+
+def opencloud-override-binds-ref-kind-from-env [content: string, ref_kind_env: string] {
+  script-active-trimmed-lines $content
+  | any {|t|
+    ($t | str starts-with "let ref_kind =") and ($t | str contains $"$env.($ref_kind_env)")
+  }
+}
+
+def opencloud-override-clone-line-has-contract [text: string] {
+  let required = [
+    "--mode $clone_mode"
+    "--url $url"
+    "--ref $ref_"
+    "--ref-kind $ref_kind"
+    "--cache-dir $git_cache"
+    "--dest $work_dir"
+  ]
+  $required | all {|needle| $text | str contains $needle}
+}
+
+def opencloud-override-has-guarded-sha-checkout [content: string] {
+  let guard_needles = ['($clone_mode == "git")', "not ($sha | is-empty)"]
+  let checkout_needles = [
+    "checkout-sha $work_dir $sha"
+  ]
+  let active = (script-active-trimmed-lines $content)
+  let same_line = (
+    $active
+    | any {|line|
+        (
+          ($guard_needles | all {|n| $line | str contains $n})
+          and ($checkout_needles | any {|n| $line | str contains $n})
+        )
+      }
+  )
+  if $same_line {
+    return true
+  }
+  let indexed = (
+    $content
+    | lines
+    | enumerate
+    | each {|e| {index: $e.index, text: ($e.item | str trim)}}
+    | where {|e| ($e.text | str length) > 0 and not ($e.text | str starts-with "#")}
+  )
+  let guard_entries = (
+    $indexed
+    | where {|e| $guard_needles | all {|n| $e.text | str contains $n}}
+  )
+  if ($guard_entries | length) == 0 {
+    return false
+  }
+  for guard in $guard_entries {
+    let guard_idx = $guard.index
+    let checkout_after = (
+      $indexed
+      | where {|e|
+          (
+            $e.index >= $guard_idx
+            and ($checkout_needles | any {|n| $e.text | str contains $n})
+          )
+        }
+    )
+    if ($checkout_after | length) > 0 {
+      return true
+    }
+  }
+  false
+}
+
+def opencloud-override-has-fetch-capable-checkout-sha-helper [content: string] {
+  let active = (script-active-trimmed-lines $content)
+  let def_entry = (
+    $active
+    | enumerate
+    | where {|e| $e.item | str starts-with "def checkout-sha"}
+    | first
+  )
+  if $def_entry == null {
+    return false
+  }
+  let def_idx = ($def_entry | get index)
+  let helper_body = ($active | skip ($def_idx + 1) | take 20)
+  let has_first_attempt = (
+    $helper_body
+    | any {|t|
+        (
+          ($t | str contains "^git -C $work_dir checkout $sha")
+          and ($t | str contains "| complete")
+        )
+      }
+  )
+  let has_early_return = (
+    ($helper_body | any {|t| $t | str contains "$first.exit_code == 0"})
+    and ($helper_body | any {|t| $t | str contains "return"})
+  )
+  let has_fetch_retry = (
+    $helper_body
+    | any {|t|
+        ($t | str contains "fetch --depth 1 origin") and ($t | str contains "$sha")
+      }
+  )
+  let checkout_attempts = (
+    $helper_body | where {|t| $t | str contains "^git -C $work_dir checkout $sha"} | length
+  )
+  let has_error = ($helper_body | any {|t| $t | str contains "error make"})
+  (
+    $has_first_attempt
+    and $has_early_return
+    and $has_fetch_retry
+    and ($checkout_attempts >= 2)
+    and $has_error
+  )
+}
+
+def assert-dockerfile-opencloud-sha-checkout-guard [block: string, dockerfile_path: string] {
+  if not ($block | str contains "OPENCLOUD_MODE") {
+    error make {
+      msg: $"opencloud clone-source RUN block must guard SHA checkout when mode is not local in ($dockerfile_path)"
+    }
+  }
+  let has_local_guard = (
+    ($block | str contains '!= "local"') or ($block | str contains "!= 'local'")
+  )
+  if not $has_local_guard {
+    error make {
+      msg: $"opencloud clone-source RUN block must guard SHA checkout when mode is not local in ($dockerfile_path)"
+    }
+  }
+  if not (($block | str contains "OPENCLOUD_SHA") and ($block | str contains "-n ")) {
+    error make {
+      msg: $"opencloud clone-source RUN block must require non-empty OPENCLOUD_SHA before checkout in ($dockerfile_path)"
+    }
+  }
+  if not (($block | str contains "git -C /opencloud checkout") and ($block | str contains "OPENCLOUD_SHA")) {
+    error make {
+      msg: $"opencloud clone-source RUN block must checkout OPENCLOUD_SHA into /opencloud in ($dockerfile_path)"
+    }
+  }
+  let fetch_retry_needles = [
+    'if ! git -C /opencloud checkout "$OPENCLOUD_SHA"'
+    "fetch --depth 1 origin"
+    'git -C /opencloud checkout "$OPENCLOUD_SHA"'
+  ]
+  for needle in $fetch_retry_needles {
+    if not ($block | str contains $needle) {
+      error make {
+        msg: $"opencloud clone-source RUN block missing SHA fetch-retry fragment '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+}
+
+def assert-opencloud-dockerfile-clone-source-contract [dockerfile_path: string] {
+  if not ($dockerfile_path | path exists) {
+    error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
+  }
+  let copy_needle = "COPY --chmod=755 ./scripts/lib/clone-source.nu /usr/local/bin/clone-source.nu"
+  let lines = (open --raw $dockerfile_path | lines)
+  let copy_count = ($lines | where {|l| ($l | str trim) == $copy_needle} | length)
+  if $copy_count != 2 {
+    error make {
+      msg: $"Expected 2 clone-source.nu COPY lines in ($dockerfile_path), found ($copy_count)"
+    }
+  }
+  let required_stage_args = [
+    'ARG OPENCLOUD_MODE=""'
+    'ARG OPENCLOUD_REF_KIND=""'
+    'ARG OPENCLOUD_WEB_REF_KIND=""'
+    'ARG OPENCLOUD_REVA_REF_KIND=""'
+  ]
+  for arg_line in $required_stage_args {
+    if not ($lines | any {|l| ($l | str trim) == $arg_line}) {
+      error make {
+        msg: $"opencloud Dockerfile missing stage-local ($arg_line) in ($dockerfile_path)"
+      }
+    }
+  }
+  let invoke_prefix = "nu /usr/local/bin/clone-source.nu"
+  let invoke_indices = (
+    $lines
+    | enumerate
+    | where {|e| ($e.item | str trim) | str starts-with $invoke_prefix }
+    | get index
+  )
+  if ($invoke_indices | length) != 1 {
+    error make {
+      msg: $"Expected 1 clone-source.nu invocation in ($dockerfile_path), found ($invoke_indices | length)"
+    }
+  }
+  let block = (dockerfile-collect-continuation-block $lines ($invoke_indices | first))
+  let required_flags = [
+    '--mode "${OPENCLOUD_MODE:-git}"'
+    '--url "${OPENCLOUD_URL}"'
+    '--ref "${OPENCLOUD_REF}"'
+    (clone-source-ref-kind-env-pattern "OPENCLOUD_REF_KIND")
+    "--local-dir /mnt/src"
+    "--cache-dir /src/opencloud-git-cache"
+    "--dest /opencloud"
+  ]
+  for flag in $required_flags {
+    if not ($block | str contains $flag) {
+      error make {
+        msg: $"opencloud clone-source RUN block missing '($flag)' in ($dockerfile_path)"
+      }
+    }
+  }
+  assert-dockerfile-opencloud-sha-checkout-guard $block $dockerfile_path
+}
+
+def assert-opencloud-dockerfile-override-wiring [dockerfile_path: string] {
+  if not ($dockerfile_path | path exists) {
+    error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
+  }
+  let lines = (open --raw $dockerfile_path | lines)
+  let trimmed = ($lines | each {|l| $l | str trim})
+  let required = [
+    "COPY --chmod=755 ./scripts/build/web-override.nu /usr/local/bin/web-override.nu"
+    "COPY --chmod=755 ./scripts/build/reva-override.nu /usr/local/bin/reva-override.nu"
+    "nu /usr/local/bin/web-override.nu"
+    "nu /usr/local/bin/reva-override.nu"
+  ]
+  for needle in $required {
+    if not ($trimmed | any {|l| $l == $needle}) {
+      error make {
+        msg: $"opencloud Dockerfile missing required override wiring line '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+  let web_block = (dockerfile-collect-run-block-containing $lines "nu /usr/local/bin/web-override.nu")
+  if ($web_block | str length) == 0 {
+    error make {
+      msg: $"opencloud Dockerfile missing RUN block for web-override.nu in ($dockerfile_path)"
+    }
+  }
+  let web_mount_needles = [
+    "target=/mnt/web"
+    "id=opencloud-web-git-"
+    "target=/src/opencloud-web-git-cache"
+  ]
+  for needle in $web_mount_needles {
+    if not ($web_block | str contains $needle) {
+      error make {
+        msg: $"opencloud web-override RUN block missing mount fragment '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+  let reva_block = (dockerfile-collect-run-block-containing $lines "nu /usr/local/bin/reva-override.nu")
+  if ($reva_block | str length) == 0 {
+    error make {
+      msg: $"opencloud Dockerfile missing RUN block for reva-override.nu in ($dockerfile_path)"
+    }
+  }
+  let reva_mount_needles = [
+    "target=/mnt/reva"
+    "id=opencloud-reva-git-"
+    "target=/src/opencloud-reva-git-cache"
+  ]
+  for needle in $reva_mount_needles {
+    if not ($reva_block | str contains $needle) {
+      error make {
+        msg: $"opencloud reva-override RUN block missing mount fragment '($needle)' in ($dockerfile_path)"
+      }
+    }
+  }
+}
+
 def assert-dockerfile-clone-source-ref-kind-contract [
   dockerfile_path: string
   --expected-invocations (-e): int = 2
   --ref-kind-patterns (-p): list<string> = []
+  --invoke-prefix: string = "nu /tmp/clone-source.nu"
 ] {
   if not ($dockerfile_path | path exists) {
     error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
@@ -122,7 +432,7 @@ def assert-dockerfile-clone-source-ref-kind-contract [
   let invoke_indices = (
     $lines
     | enumerate
-    | where {|e| ($e.item | str trim) | str starts-with "nu /tmp/clone-source.nu" }
+    | where {|e| ($e.item | str trim) | str starts-with $invoke_prefix }
     | get index
   )
   if ($invoke_indices | length) != $expected_invocations {
@@ -137,17 +447,7 @@ def assert-dockerfile-clone-source-ref-kind-contract [
   }
   for pair in ($invoke_indices | enumerate) {
     let idx = $pair.item
-    mut block_lines = []
-    mut i = $idx
-    loop {
-      $block_lines = ($block_lines | append ($lines | get $i))
-      let line = ($lines | get $i | str trim)
-      if not ($line | str ends-with "\\") {
-        break
-      }
-      $i = $i + 1
-    }
-    let block = ($block_lines | str join "\n")
+    let block = (dockerfile-collect-continuation-block $lines $idx)
     if not ($block | str contains "--ref-kind") {
       error make {msg: $"clone-source.nu invocation at line ($idx + 1) missing --ref-kind in ($dockerfile_path)"}
     }
@@ -158,6 +458,109 @@ def assert-dockerfile-clone-source-ref-kind-contract [
           msg: $"clone-source.nu invocation ($pair.index + 1) missing explicit ref-kind pattern '($pattern)' in ($dockerfile_path)"
         }
       }
+    }
+  }
+}
+
+def assert-opencloud-override-uses-clone-source [
+  script_path: string
+  local_mount: string
+  ref_kind_env: string
+] {
+  if not ($script_path | path exists) {
+    error make {msg: $"Script not found: ($script_path)"}
+  }
+  let content = (open --raw $script_path)
+  let active = (script-active-trimmed-lines $content)
+  if not ($active | any {|t| $t | str contains "/usr/local/bin/clone-source.nu"}) {
+    error make {msg: $"($script_path) must call /usr/local/bin/clone-source.nu"}
+  }
+  let git_clone_lines = ($active | where {|t| $t | str starts-with "^git clone"})
+  if ($git_clone_lines | length) > 0 {
+    error make {msg: $"($script_path) must not use inline git clone"}
+  }
+  let indexed_active = (
+    $content
+    | lines
+    | enumerate
+    | each {|e| {index: $e.index, text: ($e.item | str trim)}}
+    | where {|e| ($e.text | str length) > 0 and not ($e.text | str starts-with "#")}
+  )
+  if not (opencloud-override-binds-ref-kind-from-env $content $ref_kind_env) {
+    error make {
+      msg: $"($script_path) must bind ref_kind from ($ref_kind_env) before clone-source.nu"
+    }
+  }
+  let binding_idx = (
+    $indexed_active
+    | where {|e| ($e.text | str starts-with "let ref_kind =") and ($e.text | str contains $"$env.($ref_kind_env)")}
+    | first
+    | get index
+  )
+  let clone_entries = (
+    $indexed_active | where {|e| $e.text | str contains "/usr/local/bin/clone-source.nu"}
+  )
+  if ($clone_entries | length) == 0 {
+    error make {msg: $"($script_path) must call /usr/local/bin/clone-source.nu"}
+  }
+  let clone_entry = ($clone_entries | first)
+  let clone_idx = ($clone_entry | get index)
+  let clone_line = ($clone_entry | get text)
+  if $binding_idx >= $clone_idx {
+    error make {
+      msg: $"($script_path) must bind ref_kind from ($ref_kind_env) before clone-source.nu invocation"
+    }
+  }
+  if not (opencloud-override-clone-line-has-contract $clone_line) {
+    error make {
+      msg: $"($script_path) clone-source.nu line must include --mode, --url, --ref, --ref-kind $ref_kind, --cache-dir, and --dest"
+    }
+  }
+  let local_dir_flag = $"--local-dir ($local_mount)"
+  if not ($clone_line | str contains $local_dir_flag) {
+    error make {
+      msg: $"($script_path) must pass ($local_dir_flag) to clone-source.nu"
+    }
+  }
+  let mount_copy = (
+    $active
+    | where {|t| ($t | str starts-with "^cp -a") and ($t | str contains $local_mount)}
+  )
+  if ($mount_copy | length) > 0 {
+    error make {
+      msg: $"($script_path) must use clone-source.nu for local copy from ($local_mount)"
+    }
+  }
+  let direct_cache_copy = (
+    $active
+    | where {|t|
+        ($t | str starts-with "^cp -a") and (
+          ($t | str contains "git_cache") or ($t | str contains '$"($git_cache)')
+        )
+      }
+  )
+  if ($direct_cache_copy | length) > 0 {
+    error make {
+      msg: $"($script_path) must not copy directly from git cache to work dir"
+    }
+  }
+  let cache_path_copy = (
+    $active
+    | where {|t| ($t | str contains '$"($git_cache)/."') and not ($t | str contains "clone-source.nu")}
+  )
+  if ($cache_path_copy | length) > 0 {
+    error make {
+      msg: $"($script_path) must not copy directly from git cache to work dir"
+    }
+  }
+  if not (opencloud-override-has-guarded-sha-checkout $content) {
+    error make {
+      msg: $"($script_path) must guard SHA checkout behind git mode and non-empty SHA"
+    }
+  }
+  if not (opencloud-override-has-fetch-capable-checkout-sha-helper $content) {
+    error make {
+      msg: $"($script_path) checkout-sha helper must retry via 'git fetch --depth 1 origin \$sha' and raise a clear error if the retried checkout still fails"
     }
   }
 }
@@ -2141,6 +2544,81 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test39t)
+
+  let test39v = (run-test "Test 39v: Dockerfile drift - opencloud clone-source contract and SHA checkout guard" {
+    assert-opencloud-dockerfile-clone-source-contract "services/opencloud/Dockerfile.alpine"
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39v)
+
+  let test39w = (run-test "Test 39w: opencloud override scripts use clone-source.nu contract" {
+    assert-opencloud-override-uses-clone-source "services/opencloud/scripts/build/web-override.nu" "/mnt/web" "OPENCLOUD_WEB_REF_KIND"
+    assert-opencloud-override-uses-clone-source "services/opencloud/scripts/build/reva-override.nu" "/mnt/reva" "OPENCLOUD_REVA_REF_KIND"
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39w)
+
+  let test39y = (run-test "Test 39y: Dockerfile drift - opencloud web/reva override script COPY and RUN wiring" {
+    assert-opencloud-dockerfile-override-wiring "services/opencloud/Dockerfile.alpine"
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39y)
+
+  let test39x = (run-test "Test 39x: Real manifest - opencloud v6.1.0 and main alpine OPENCLOUD_REF_KIND build args" {
+    let svc = "opencloud"
+    let platform = "alpine"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let meta = (detect-build)
+    let tls_meta = (create-test-tls-meta)
+    let ssh_meta = {
+      enabled: false,
+      mode: "disabled",
+      default_user: "root",
+      port: 22,
+      listen: "0.0.0.0"
+    }
+
+    let version_tag = "v6.1.0"
+    let vspec_tag = (get-version-or-null $vm $version_tag)
+    let cfg_tag = (load-service-config $svc $vspec_tag $platform $pm)
+    let opencloud_ref_tag = (try { $cfg_tag.sources.opencloud.ref } catch { "" })
+    if $opencloud_ref_tag != "v6.1.0" {
+      error make {msg: $"Expected opencloud ref 'v6.1.0' from tracked manifest, got: ($opencloud_ref_tag)"}
+    }
+    let source_types_tag = (detect-all-source-types $cfg_tag.sources)
+    let source_ref_kinds_tag = (extract-source-ref-kinds $cfg_tag.sources $source_types_tag)
+    let build_args_tag = (
+      generate-build-args $version_tag $cfg_tag $meta {} $tls_meta $ssh_meta "" false {} $source_types_tag {} "tracked" $source_ref_kinds_tag
+    )
+    if (try { $build_args_tag.OPENCLOUD_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: $"Expected OPENCLOUD_REF_KIND=ref for tag v6.1.0, got: ($build_args_tag.OPENCLOUD_REF_KIND?)"}
+    }
+
+    let version_main = "main"
+    let vspec_main = (get-version-or-null $vm $version_main)
+    let cfg_main = (load-service-config $svc $vspec_main $platform $pm)
+    let opencloud_ref_main = (try { $cfg_main.sources.opencloud.ref } catch { "" })
+    if $opencloud_ref_main != "main" {
+      error make {msg: $"Expected opencloud ref 'main' from tracked manifest, got: ($opencloud_ref_main)"}
+    }
+    let source_types_main = (detect-all-source-types $cfg_main.sources)
+    let source_ref_kinds_main = (extract-source-ref-kinds $cfg_main.sources $source_types_main)
+    let build_args_main = (
+      generate-build-args $version_main $cfg_main $meta {} $tls_meta $ssh_meta "" false {} $source_types_main {} "tracked" $source_ref_kinds_main
+    )
+    if (try { $build_args_main.OPENCLOUD_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: $"Expected OPENCLOUD_REF_KIND=ref for branch main, got: ($build_args_main.OPENCLOUD_REF_KIND?)"}
+    }
+
+    if $verbose_flag {
+      print $"    v6.1.0 OPENCLOUD_REF_KIND=($build_args_tag.OPENCLOUD_REF_KIND)"
+      print $"    main OPENCLOUD_REF_KIND=($build_args_main.OPENCLOUD_REF_KIND)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39x)
 
   let test39u = (run-test "Test 39u: Real manifest - cernbox-web master mixed REF_KIND build args" {
     let svc = "cernbox-web"

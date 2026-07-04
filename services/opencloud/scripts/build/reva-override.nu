@@ -22,6 +22,7 @@ def main [] {
     let url = $env.OPENCLOUD_REVA_URL? | default ""
     let ref_ = $env.OPENCLOUD_REVA_REF? | default ""
     let sha = $env.OPENCLOUD_REVA_SHA? | default ""
+    let ref_kind = $env.OPENCLOUD_REVA_REF_KIND? | default ""
     let goproxy = $env.GO_BUILD_GOPROXY? | default ""
 
     let override_enabled = (($mode == "local") or (not ($url | is-empty)))
@@ -36,20 +37,15 @@ def main [] {
 
     let work_dir = "/src/opencloud-reva"
     let git_cache = "/src/opencloud-reva-git-cache"
+    let clone_mode = (if $mode == "local" { "local" } else { "git" })
 
     ^rm -rf $work_dir
     ^mkdir -p $work_dir
 
-    if $mode == "local" {
-        ^cp -a "/mnt/reva/." $work_dir
-    } else {
-        if not ($"($git_cache)/.git" | path exists) {
-            ^git clone --depth 1 --recursive --shallow-submodules --branch $ref_ $url $git_cache
-        }
-        ^cp -a $"($git_cache)/." $work_dir
-        if not ($sha | is-empty) {
-            checkout-sha $work_dir $sha
-        }
+    ^nu /usr/local/bin/clone-source.nu --mode $clone_mode --url $url --ref $ref_ --ref-kind $ref_kind --local-dir /mnt/reva --cache-dir $git_cache --dest $work_dir
+
+    if ($clone_mode == "git") and (not ($sha | is-empty)) {
+        checkout-sha $work_dir $sha
     }
 
     ^go mod edit $"-replace=github.com/opencloud-eu/reva/v2=($work_dir)"
