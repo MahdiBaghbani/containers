@@ -26,6 +26,11 @@ ARG TLS_MODE="disabled"
 ARG TLS_CERT_NAME=""
 ARG TLS_CA_NAME=""
 
+################################
+###  Common Tools (nu)       ###
+################################
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools-builder
+
 ############################################
 ###  Build opencloudmesh-go from source  ###
 ############################################
@@ -50,29 +55,33 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
+COPY --chmod=755 --from=common-tools-builder /usr/local/bin/nu /usr/local/bin/nu
+RUN nu --version || (echo "Nushell verification failed" && exit 1)
+
 WORKDIR /
 
 ARG OCM_GO_URL="https://github.com/MahdiBaghbani/opencloudmesh-go"
 ARG OCM_GO_REF="master"
 ARG OCM_GO_SHA=""
+ARG OCM_GO_REF_KIND=""
 ARG OCM_GO_PATH=""
 ARG OCM_GO_MODE=""
 ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
 
-# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+# Clone or copy opencloudmesh-go source via shared helper (local bind mount or git cache).
 RUN --mount=type=cache,id=opencloudmesh-go-git-${CACHEBUST:-${OCM_GO_REF}},target=/src/ocm-go-git-cache,sharing=shared \
     --mount=type=bind,source=${OCM_GO_PATH:-.},target=/src/local-ocm-go,ro \
-    if [ "$OCM_GO_MODE" = "local" ]; then \
-    mkdir -p /ocm-go-git && \
-    cp -a /src/local-ocm-go/. /ocm-go-git; \
-    else \
-    mkdir -p /src/ocm-go-git-cache && \
-    if [ ! -d /src/ocm-go-git-cache/.git ]; then \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${OCM_GO_REF}" ${OCM_GO_URL} /src/ocm-go-git-cache; \
-    fi && \
-    cp -a /src/ocm-go-git-cache/. /ocm-go-git; \
-    fi
+    nu /tmp/clone-source.nu \
+    --mode "${OCM_GO_MODE:-git}" \
+    --url "${OCM_GO_URL}" \
+    --ref "${OCM_GO_REF}" \
+    --ref-kind "${OCM_GO_REF_KIND}" \
+    --local-dir /src/local-ocm-go \
+    --cache-dir /src/ocm-go-git-cache \
+    --dest /ocm-go-git
 
 WORKDIR /ocm-go-git
 RUN --mount=type=cache,id=opencloudmesh-go-go-mod-cache,target=/go/pkg/mod,sharing=locked \

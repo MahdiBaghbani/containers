@@ -2115,6 +2115,18 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test39r)
 
+  let test39s = (run-test "Test 39s: Dockerfile drift - opencloudmesh-go passes --ref-kind on clone-source.nu calls" {
+    let dockerfiles = [
+      "services/opencloudmesh-go/Dockerfile.development"
+    ]
+    let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "OCM_GO_REF_KIND")]
+    for df in $dockerfiles {
+      assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39s)
+
   let test39q = (run-test "Test 39q: Dockerfile drift - nextcloud local-mode cleanup removes config and data paths" {
     assert-dockerfile-nextcloud-local-mode-cleanup "services/nextcloud/Dockerfile"
     true
