@@ -41,19 +41,19 @@ For the authoritative schema file, see
 
 ## Local-Plane Root (Off-Git)
 
-DockyPody supports a `--plane local` mode on `build` and `validate`. The
-local plane stores per-service versions manifest fragments off-git under
-`.dockypody.local/` at the repository root (git-ignored). Each tracked
-service may have its own
+DockyPody supports a `--plane local` mode on `build`, `validate`, and
+`inspect effective-config`. The local plane stores per-service versions
+manifest fragments off-git under `.dockypody.local/` at the repository root
+(git-ignored). Each tracked service may have its own
 `.dockypody.local/services/<service>/versions.nuon`.
 
 **Tracked plane (default):** Service configurations are discovered from
 tracked manifests under `services/` as documented in [Schema
 Location](#schema-location).
 
-**Local plane:** Pass `--plane local` on `build` or `validate`; the default
-is `--plane tracked`. Requires `.dockypody.local/` to exist at the repo
-root.
+**Local plane:** Pass `--plane local` on `build`, `validate`, or
+`inspect effective-config`; the default is `--plane tracked`. Requires
+`.dockypody.local/` to exist at the repo root.
 
 **Root presence rules:**
 
@@ -88,7 +88,8 @@ for tracked services.
 (never local). `--plane local` is rejected at `build --matrix-json`,
 `ci workflow`, and `ci ghcr-purge`. `ci list-deps` always operates on
 tracked manifests (tracked-only by data; it does not reject the flag).
-Use `--plane local` for local dev `build` and `validate` only.
+Use `--plane local` for local dev `build`, `validate`, and
+`inspect effective-config` only.
 
 For CLI details, see [`--plane` in the CLI
 reference](cli-reference.md#config-plane-flag).

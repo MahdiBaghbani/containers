@@ -137,9 +137,24 @@ for:
 - **Usage**: Set `CONTACTS_ENABLE_OCM_INVITES=true` to enable OCM
   functionality
 
-A `local` variant builds the contacts app from a local checkout
-(`../nextcloud-contacts`) and is what the bundled example deploys. The
-`sta-ocm-m6` variant is also tracked for milestone-specific testing.
+The `sta-ocm-m6` variant is also tracked for milestone-specific testing.
+
+### Local-plane dev version (off-git, not tracked)
+
+The bundled `examples/nextcloud-contacts` stack uses image tag `local`, but
+that name is **not** a tracked manifest version. Define it in the off-git
+local plane instead:
+
+- Fragment path:
+  `.dockypody.local/services/nextcloud-contacts/versions.nuon`
+- Build with:
+  `nu scripts/dockypody.nu build --plane local --service nextcloud-contacts --version local`
+- Typical override: `contacts` source `path` pointing at a sibling checkout
+  such as `../nextcloud-contacts`
+
+This is a **local-plane version workflow** (merge tracked service config with
+an off-git versions fragment). It is not the same as a tracked version whose
+`overrides.sources` switch a git ref to another upstream URL.
 
 ## OCM Invites Feature
 
@@ -240,8 +255,11 @@ nu scripts/dockypody.nu build --service nextcloud-contacts
 # Build specific OCM-enabled version
 nu scripts/dockypody.nu build --service nextcloud-contacts --version v8.1.0-ocm-nc-master
 
-# Build with local source
-CONTACTS_MODE=local CONTACTS_PATH=/path/to/contacts nu scripts/dockypody.nu build --service nextcloud-contacts
+# Build local-plane dev version (requires off-git fragment; see Versions)
+nu scripts/dockypody.nu build --plane local --service nextcloud-contacts --version local
+
+# Preview merged config for the local-plane build
+nu scripts/dockypody.nu inspect effective-config --plane local --service nextcloud-contacts --version local
 ```
 
 ## Troubleshooting

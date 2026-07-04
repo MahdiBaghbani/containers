@@ -72,6 +72,7 @@ def main [
     --cert-name: string = "",    # Service certificate name
     --source-certs: string = "", # Source directory for service certificates
     --dest: string,              # Destination directory
+    --runtime-owner: string = "", # Build-time only: "uid:gid" or "user:group" to chown dest; empty leaves files as-is
 ] {
     # Normalize all string parameters - they may contain quotes from Docker/shell
     let enabled_norm = (normalize-bool $enabled "--enabled")
@@ -80,8 +81,9 @@ def main [
     let cert_name_norm = (strip-quotes $cert_name)
     let source_certs_norm = (strip-quotes $source_certs)
     let dest_norm = (strip-quotes $dest)
-    
-    copy-tls-internal $enabled_norm $mode_norm $ca_name_norm $cert_name_norm $source_certs_norm $dest_norm
+    let runtime_owner_norm = (strip-quotes $runtime_owner)
+
+    copy-tls-internal $enabled_norm $mode_norm $ca_name_norm $cert_name_norm $source_certs_norm $dest_norm $runtime_owner_norm
 }
 
 # Exported function for use by other Nushell scripts (values already normalized)
@@ -92,6 +94,7 @@ export def copy-tls [
     --cert-name: string = "",    # Service certificate name
     --source-certs: string = "", # Source directory for service certificates
     --dest: string,              # Destination directory
+    --runtime-owner: string = "", # Build-time only: "uid:gid" or "user:group" to chown dest; empty leaves files as-is
 ] {
     # Normalize inputs in case called from contexts with quoted values
     let enabled_norm = (normalize-bool $enabled "--enabled")
@@ -100,8 +103,9 @@ export def copy-tls [
     let cert_name_norm = (strip-quotes $cert_name)
     let source_certs_norm = (strip-quotes $source_certs)
     let dest_norm = (strip-quotes $dest)
-    
-    copy-tls-internal $enabled_norm $mode_norm $ca_name_norm $cert_name_norm $source_certs_norm $dest_norm
+    let runtime_owner_norm = (strip-quotes $runtime_owner)
+
+    copy-tls-internal $enabled_norm $mode_norm $ca_name_norm $cert_name_norm $source_certs_norm $dest_norm $runtime_owner_norm
 }
 
 # Internal implementation - expects normalized values
@@ -112,6 +116,7 @@ def copy-tls-internal [
     cert_name: string,     # normalized cert name
     source_certs: string,  # normalized source path
     dest: string,          # normalized destination path
+    runtime_owner: string = "", # normalized "uid:gid"/"user:group"; empty = no chown
 ] {
     if $enabled != "true" {
         print "TLS disabled, skipping certificate copy"
@@ -150,6 +155,15 @@ def copy-tls-internal [
         print $"Copying service key: ($cert_name).key"
         cp $cert_key ($dest | path join $"($cert_name).key")
     }
-    
+
+    let dest_crt = ($dest | path join $"($cert_name).crt")
+    let dest_key = ($dest | path join $"($cert_name).key")
+    if ($dest_crt | path exists) { ^chmod 0644 $dest_crt }
+    if ($dest_key | path exists) { ^chmod 0600 $dest_key }
+    if ($runtime_owner | str trim | is-not-empty) {
+        ^chown -R $runtime_owner $dest
+        print $"OK: TLS ownership set to ($runtime_owner) on ($dest)"
+    }
+
     print $"OK: TLS certificates copied: ($cert_name).{{crt,key}}"
 }

@@ -29,6 +29,12 @@
     "cert_name": "idp",
     "instances": 1,
     "domain_suffix": "docker",
-    "sans": ["DNS:idp.docker"]
+    "sans": [
+      "DNS:idp.docker",
+      "DNS:idp1.docker",
+      "DNS:idp2.docker",
+      "DNS:idp3.docker",
+      "DNS:idp4.docker"
+    ]
   }
 }

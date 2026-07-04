@@ -37,6 +37,90 @@ def has-eagain-error [] {
   ($text | str contains "eagain") or ($text | str contains "err_pnpm_eagain")
 }
 
+# Parse comma-separated package names from CLI or Dockerfile ARG
+export def parse-comma-list [raw: string] {
+  if ($raw | str trim | is-empty) {
+    return []
+  }
+  $raw
+  | split row ","
+  | each {|name| $name | str trim }
+  | where {|name| not ($name | is-empty) }
+}
+
+export def reserved-package-names [] {
+  [".", "..", ".git", ".github"]
+}
+
+def find-duplicate-names [names: list<string>] {
+  mut seen = []
+  mut dupes = []
+  for name in $names {
+    if $name in $seen {
+      if not ($name in $dupes) {
+        $dupes = ($dupes | append $name)
+      }
+    } else {
+      $seen = ($seen | append $name)
+    }
+  }
+  $dupes
+}
+
+export def discover-packages [extensions_dir: string] {
+  let exclude_dirs = (reserved-package-names)
+  ls -a $extensions_dir
+  | where type == "dir"
+  | where {|item| not ($item.name in $exclude_dirs)}
+  | get name
+}
+
+# Returns {valid, reason} for unit tests and plan-packages
+export def check-only-list [names: list<string>, extensions_dir: string] {
+  let dupes = (find-duplicate-names $names)
+  if ($dupes | length) > 0 {
+    return {valid: false, reason: $"duplicate package names: ($dupes | str join ', ')"}
+  }
+
+  let reserved = (reserved-package-names)
+  for name in $names {
+    if $name in $reserved {
+      return {valid: false, reason: $"reserved package name: ($name)"}
+    }
+    let pkg_path = $"($extensions_dir)/($name)"
+    if not ($pkg_path | path exists) {
+      return {valid: false, reason: $"missing package: ($name)"}
+    }
+    if (($pkg_path | path type) != "dir") {
+      return {valid: false, reason: $"not a directory: ($name)"}
+    }
+  }
+
+  {valid: true, reason: ""}
+}
+
+# Resolve build order; allowlist mode ignores skip
+export def plan-packages [
+  only_list: list<string>,
+  skip_list: list<string>,
+  extensions_dir: string
+] {
+  if ($only_list | length) > 0 {
+    let check = (check-only-list $only_list $extensions_dir)
+    if not $check.valid {
+      return {ok: false, error: $check.reason, packages: [], skip_list: []}
+    }
+    return {ok: true, error: "", packages: $only_list, skip_list: []}
+  }
+
+  {
+    ok: true,
+    error: "",
+    packages: (discover-packages $extensions_dir),
+    skip_list: $skip_list
+  }
+}
+
 # Build all web extensions with retry logic for pnpm install
 # Handles network reliability issues and EAGAIN errors
 def retry-pnpm-install [package_dir: string, max_retries: int] {
@@ -127,19 +211,31 @@ def has-release-target [package_path: string] {
   }
 }
 
-# Build a single package
-def build-package [package_name: string, output_dir: string, retry_count: int] {
+def fail-required [package_name: string, reason: string] {
+  print $"Error: required extension ($package_name) failed: ($reason)"
+  exit 1
+}
+
+# Build a single package; returns true when built or intentionally skipped
+def build-package [
+  package_name: string,
+  output_dir: string,
+  retry_count: int,
+  skip_list: list<string>
+] {
+  if $package_name in $skip_list {
+    print $"Skipping ($package_name): listed in --skip"
+    return true
+  }
+
   print $"Building package: ($package_name)"
   
   let package_path = $package_name
   
-  # Check if package has release target
   if not (has-release-target $package_path) {
-    print $"Skipping ($package_name): No release target in Makefile"
-    return
+    fail-required $package_name "no release target in Makefile"
   }
   
-  # Install dependencies with retry logic if package.json exists
   let package_json_path = $"($package_path)/package.json"
   if ($package_json_path | path exists) {
     let install_result = (retry-pnpm-install $package_path $retry_count)
@@ -147,66 +243,63 @@ def build-package [package_name: string, output_dir: string, retry_count: int] {
     if not $install_result.success {
       let attempts_made = $install_result.attempts
       if $install_result.was_eagain {
-        print $"Warning: Failed to install dependencies for ($package_name) after ($attempts_made) attempts due to EAGAIN errors, skipping..."
+        fail-required $package_name $"pnpm install failed after ($attempts_made) attempts due to EAGAIN errors"
       } else {
-        print $"Warning: Failed to install dependencies for ($package_name) \(non-retryable error\), skipping..."
+        fail-required $package_name "pnpm install failed (non-retryable error)"
       }
-      return
     }
   }
   
-  # Build the package
-  let build_result = (try {
+  try {
     cd $package_path
     make release
     cd ..
-    true
   } catch {|err|
     cd ..
-    print $"Warning: Failed to build ($package_name), skipping..."
-    false
-  })
-  
-  if not $build_result {
-    return
+    fail-required $package_name $"make release failed: ($err.msg)"
   }
   
-  # Extract the release archive if it exists
   let release_file = $"($package_path)/release/($package_name).tar.gz"
-  if ($release_file | path exists) {
-    let output_package_dir = $"($output_dir)/($package_name)"
-    mkdir $output_package_dir
-    
-    try {
-      tar -xzf $release_file -C $output_package_dir --strip-components=0
-      print $"Successfully built and extracted ($package_name)"
-    } catch {|err|
-      print $"Error extracting ($package_name): ($err)"
-    }
+  if not ($release_file | path exists) {
+    fail-required $package_name $"release archive missing after make release: ($release_file)"
   }
+
+  let output_package_dir = $"($output_dir)/($package_name)"
+  mkdir $output_package_dir
+
+  try {
+    tar -xzf $release_file -C $output_package_dir --strip-components=0
+    print $"Successfully built and extracted ($package_name)"
+  } catch {|err|
+    fail-required $package_name $"failed to extract release archive: ($err.msg)"
+  }
+
+  true
 }
 
 def main [
   extensions_dir: string = ".",
   output_dir: string = "/build/cernbox",
-  --retry-count: int = 10
+  --retry-count: int = 10,
+  --skip: string = "",
+  --only: string = ""
 ] {
+  let only_list = (parse-comma-list $only)
+  let skip_list = (parse-comma-list $skip)
+
+  let plan = (plan-packages $only_list $skip_list $extensions_dir)
+  if not $plan.ok {
+    print $"Error: ($plan.error)"
+    exit 1
+  }
+
   mkdir $output_dir
   cd $extensions_dir
-  
-  # Find all directories, excluding special directories
-  let exclude_dirs = [".", "..", ".git", ".github"]
-  let packages = (
-    ls -a
-    | where type == "dir"
-    | where {|item| not ($item.name in $exclude_dirs)}
-    | get name
-  )
 
-  for package in $packages {
-    build-package $package $output_dir $retry_count
+  for package in $plan.packages {
+    build-package $package $output_dir $retry_count $plan.skip_list
   }
-  
+
   cd ..
   print "Finished building all packages"
 }

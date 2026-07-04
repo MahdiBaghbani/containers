@@ -26,10 +26,123 @@ use ../lib/build/dependencies.nu [resolve-dep-node resolve-dep-platforms]
 use ../lib/build/config.nu [load-service-config]
 use ../lib/build/disk.nu [extract-root-mount extract-root-avail-gb is-low-disk filter-df-summary-lines parse-size-to-gb]
 use ../lib/manifest/core.nu [get-default-version get-version-or-null load-versions-manifest]
-use ../lib/platforms/core.nu [load-platforms-manifest]
+use ../lib/platforms/core.nu [get-default-platform load-platforms-manifest]
 use ./mocks.nu [detect-build get-mock-service-config build-mock-version-manifest build-mock-platform-manifest check-platforms-manifest-exists check-versions-manifest-exists build-dependency-graph-with-mocks get-default-platform set-mock-platform-behavior]
 use ./helpers.nu [setup-test-environment setup-test-service-with-deps cleanup-test-environment with-test-cleanup create-test-dependency create-test-deps-resolved create-test-tls-meta create-test-registry-info assert-cache-bust-format assert-cache-bust-value assert-build-args-contain assert-build-order assert-graph-structure]
 use ./lib.nu [run-test print-test-summary]
+
+const SYNTH_DEP_TOOLS = "synth-dep-tools"
+const SYNTH_BASE_SVC = "synth-base-svc"
+const SYNTH_PARENT_SVC = "synth-parent-svc"
+const SYNTH_PARENT_VERSION = "v2.0.0"
+
+def make-temp-repo [] {
+  let tmp = (^mktemp -d | str trim)
+  mkdir $tmp
+  mkdir ($tmp | path join "services")
+  ^git -C $tmp init -q
+  $tmp
+}
+
+def rm-temp-repo [dir: string] {
+  try { rm -rf $dir } catch { }
+}
+
+def run-in-temp-repo [repo: string, block: closure] {
+  do -i { cd $repo; do $block }
+}
+
+def seed-minimal-service-base [repo: string, name: string] {
+  {
+    name: $name
+    context: $"services/($name)"
+    dockerfile: $"services/($name)/Dockerfile"
+    sources: {
+      app: { url: "https://example.com/app.git", ref: "main" }
+    }
+    external_images: {
+      build: { name: "golang", tag: "1.25-trixie", build_arg: "BASE_BUILD_IMAGE" }
+    }
+  } | save -f ($repo | path join $"services/($name).nuon")
+  mkdir ($repo | path join $"services/($name)")
+}
+
+def seed-debian-platforms [repo: string, name: string] {
+  {
+    default: "debian"
+    platforms: [
+      {
+        name: "debian"
+        dockerfile: $"services/($name)/Dockerfile.debian"
+        external_images: {
+          build: { name: "golang", build_arg: "BASE_BUILD_IMAGE" }
+        }
+      }
+      {
+        name: "alpine"
+        dockerfile: $"services/($name)/Dockerfile.alpine"
+        external_images: {
+          build: { name: "golang", build_arg: "BASE_BUILD_IMAGE" }
+        }
+      }
+    ]
+  } | save -f ($repo | path join $"services/($name)/platforms.nuon")
+}
+
+def seed-prod-dev-platforms [repo: string, name: string] {
+  {
+    default: "production"
+    platforms: [
+      {
+        name: "production"
+        dockerfile: $"services/($name)/Dockerfile.production"
+        external_images: {
+          build: { name: "golang", build_arg: "BASE_BUILD_IMAGE" }
+        }
+      }
+      {
+        name: "development"
+        dockerfile: $"services/($name)/Dockerfile.development"
+        external_images: {
+          build: { name: "golang", build_arg: "BASE_BUILD_IMAGE" }
+        }
+      }
+    ]
+  } | save -f ($repo | path join $"services/($name)/platforms.nuon")
+}
+
+def seed-synth-dep-tools-fixture [repo: string] {
+  seed-minimal-service-base $repo $SYNTH_DEP_TOOLS
+  seed-debian-platforms $repo $SYNTH_DEP_TOOLS
+  {
+    default: "v1.0.0"
+    versions: [{ name: "v1.0.0", overrides: {} }]
+  } | save -f ($repo | path join $"services/($SYNTH_DEP_TOOLS)/versions.nuon")
+}
+
+def seed-synth-base-svc-fixture [repo: string] {
+  seed-minimal-service-base $repo $SYNTH_BASE_SVC
+  seed-prod-dev-platforms $repo $SYNTH_BASE_SVC
+  {
+    default: "master"
+    versions: [{ name: "master", overrides: {} }]
+  } | save -f ($repo | path join $"services/($SYNTH_BASE_SVC)/versions.nuon")
+}
+
+def seed-synth-parent-graph-fixture [repo: string] {
+  seed-synth-dep-tools-fixture $repo
+  seed-minimal-service-base $repo $SYNTH_PARENT_SVC
+  seed-prod-dev-platforms $repo $SYNTH_PARENT_SVC
+  {
+    default: $SYNTH_PARENT_VERSION
+    defaults: {
+      dependencies: {
+        ($SYNTH_DEP_TOOLS): { version: "v1.0.0-debian" }
+      }
+    }
+    versions: [{ name: $SYNTH_PARENT_VERSION, overrides: {} }]
+  } | save -f ($repo | path join $"services/($SYNTH_PARENT_SVC)/versions.nuon")
+}
 
 def main [--verbose] {
   let verbose_flag = (try { $verbose } catch { false })
@@ -1030,79 +1143,92 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test32)
 
-  # Real-Manifest Dependency Resolution Regression Tests
-  # These exercise the shared resolver (resolve-dep-node) against the real
-  # service manifests to lock in platform-suffixed dependency node keys.
+  # Synthetic Dependency Resolution Regression Tests
+  # Exercise resolve-dep-node and build-dependency-graph against seeded
+  # temp-repo manifests so tests do not depend on live service names.
 
-  # Test 33: revad-base production depends on common-tools:v1.0.0:debian
+  # Test 33: parent production depends on dep-tools:v1.0.0:debian
   # The dependency version "v1.0.0-debian" carries an explicit platform suffix
-  # for common-tools (which has platforms.nuon), so the node key must split the
-  # debian platform out: common-tools:v1.0.0:debian.
-  let test33 = (run-test "Test 33: Real manifest - revad-base prod dep common-tools:v1.0.0:debian" {
-    let svc = "revad-base"
-    let vm = (load-versions-manifest $svc)
-    let pm = (load-platforms-manifest $svc)
-    let vspec = (get-version-or-null $vm "v3.3.3")
-    let cfg = (load-service-config $svc $vspec "production" $pm)
-    let dep_config = ($cfg.dependencies | get "common-tools")
-    let dep_service = (try { $dep_config.service } catch { "common-tools" })
-    let resolved = (resolve-dep-node $dep_config $dep_service "v3.3.3" "production" true)
+  # for dep-tools (which has platforms.nuon), so the node key must split the
+  # debian platform out: dep-tools:v1.0.0:debian.
+  let test33 = (run-test "Test 33: Synthetic fixture - prod dep dep-tools:v1.0.0:debian" {
+    let repo = (make-temp-repo)
+    seed-synth-dep-tools-fixture $repo
+    let resolved = (try {
+      run-in-temp-repo $repo {||
+        let dep_config = { version: "v1.0.0-debian" }
+        resolve-dep-node $dep_config $SYNTH_DEP_TOOLS $SYNTH_PARENT_VERSION "production" true
+      }
+    } catch {|err|
+      rm-temp-repo $repo
+      error make {msg: $err.msg}
+    })
+    rm-temp-repo $repo
 
-    if $resolved.node_key != "common-tools:v1.0.0:debian" {
-      error make {msg: $"Expected 'common-tools:v1.0.0:debian', got '($resolved.node_key)'"}
+    if $resolved.node_key != $"($SYNTH_DEP_TOOLS):v1.0.0:debian" {
+      error make {msg: $"Expected '($SYNTH_DEP_TOOLS):v1.0.0:debian', got '($resolved.node_key)'"}
     }
 
     if $verbose_flag {
-      print $"    revad-base prod -> ($resolved.node_key)"
+      print $"    parent prod -> ($resolved.node_key)"
     }
 
     true
   } $verbose_flag)
   $results = ($results | append $test33)
 
-  # Test 34: cernbox-revad production depends on revad-base:master:production
-  # The production platform override sets revad-base version "master-production",
-  # which has a platform suffix for revad-base (production/development), so the
-  # node key must be revad-base:master:production.
-  let test34 = (run-test "Test 34: Real manifest - cernbox-revad prod dep revad-base:master:production" {
-    let svc = "cernbox-revad"
-    let vm = (load-versions-manifest $svc)
-    let pm = (load-platforms-manifest $svc)
-    let vspec = (get-version-or-null $vm "master")
-    let cfg = (load-service-config $svc $vspec "production" $pm)
-    let dep_config = ($cfg.dependencies | get "revad-base")
-    let dep_service = (try { $dep_config.service } catch { "revad-base" })
-    let resolved = (resolve-dep-node $dep_config $dep_service "master" "production" true)
+  # Test 34: consumer production depends on base-svc:master:production
+  # The production platform override sets base-svc version "master-production",
+  # which has a platform suffix for base-svc (production/development), so the
+  # node key must be base-svc:master:production.
+  let test34 = (run-test "Test 34: Synthetic fixture - prod dep base-svc:master:production" {
+    let repo = (make-temp-repo)
+    seed-synth-base-svc-fixture $repo
+    let resolved = (try {
+      run-in-temp-repo $repo {||
+        let dep_config = { version: "master-production" }
+        resolve-dep-node $dep_config $SYNTH_BASE_SVC "master" "production" true
+      }
+    } catch {|err|
+      rm-temp-repo $repo
+      error make {msg: $err.msg}
+    })
+    rm-temp-repo $repo
 
-    if $resolved.node_key != "revad-base:master:production" {
-      error make {msg: $"Expected 'revad-base:master:production', got '($resolved.node_key)'"}
+    if $resolved.node_key != $"($SYNTH_BASE_SVC):master:production" {
+      error make {msg: $"Expected '($SYNTH_BASE_SVC):master:production', got '($resolved.node_key)'"}
     }
 
     if $verbose_flag {
-      print $"    cernbox-revad prod -> ($resolved.node_key)"
+      print $"    consumer prod -> ($resolved.node_key)"
     }
 
     true
   } $verbose_flag)
   $results = ($results | append $test34)
 
-  # Test 39: Real manifest integration - the original bug lived in the graph
-  # caller (order.nu), not just the helper. This drives the real
-  # build-dependency-graph for revad-base production and proves the shared
-  # resolver's platform-suffixed node key (common-tools:v1.0.0:debian) actually
-  # lands in the graph nodes and edges, not only when resolve-dep-node is called
-  # directly. build-dependency-graph does no docker I/O, so this is safe to run.
-  let test39 = (run-test "Test 39: Real manifest integration - build-dependency-graph revad-base prod contains common-tools:v1.0.0:debian" {
-    let svc = "revad-base"
-    let vm = (load-versions-manifest $svc)
-    let pm = (load-platforms-manifest $svc)
-    let vspec = (get-version-or-null $vm "v3.3.3")
-    let cfg = (load-service-config $svc $vspec "production" $pm)
+  # Test 39: Synthetic integration - build-dependency-graph for parent-svc
+  # production proves the platform-suffixed node key (dep-tools:v1.0.0:debian)
+  # lands in graph nodes and edges. build-dependency-graph does no docker I/O.
+  let test39 = (run-test "Test 39: Synthetic integration - build-dependency-graph parent prod contains dep-tools:v1.0.0:debian" {
+    let repo = (make-temp-repo)
+    seed-synth-parent-graph-fixture $repo
+    let graph = (try {
+      run-in-temp-repo $repo {||
+        let vm = (load-versions-manifest $SYNTH_PARENT_SVC)
+        let pm = (load-platforms-manifest $SYNTH_PARENT_SVC)
+        let vspec = (get-version-or-null $vm $SYNTH_PARENT_VERSION)
+        let cfg = (load-service-config $SYNTH_PARENT_SVC $vspec "production" $pm)
+        build-dependency-graph $SYNTH_PARENT_SVC $vspec $cfg "production" $pm false {}
+      }
+    } catch {|err|
+      rm-temp-repo $repo
+      error make {msg: $err.msg}
+    })
+    rm-temp-repo $repo
 
-    let graph = (build-dependency-graph $svc $vspec $cfg "production" $pm false {})
-
-    let parent_node = "revad-base:v3.3.3:production"
-    let dep_node = "common-tools:v1.0.0:debian"
+    let parent_node = $"($SYNTH_PARENT_SVC):($SYNTH_PARENT_VERSION):production"
+    let dep_node = $"($SYNTH_DEP_TOOLS):v1.0.0:debian"
 
     if not ($parent_node in $graph.nodes) {
       error make {msg: $"Expected parent node '($parent_node)' in graph, got: ($graph.nodes | to nuon)"}
@@ -1123,6 +1249,94 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test39)
+
+  # Bounded tracked-manifest smoke: one live service proves build-dependency-graph
+  # still matches resolve-dep-node for current defaults (no hardcoded version tags).
+  let test39_tracked = (run-test "Test 39-tracked: Real manifest - kasm-base default graph contains common-tools dep" {
+    let svc = "kasm-base"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let version = (get-default-version $vm)
+    let platform = (get-default-platform $pm)
+    let vspec = (get-version-or-null $vm $version)
+    let cfg = (load-service-config $svc $vspec $platform $pm)
+
+    let dep_config = ($cfg.dependencies | get "common-tools")
+    let dep_service = (try { $dep_config.service } catch { "common-tools" })
+    let resolved = (resolve-dep-node $dep_config $dep_service $version $platform true)
+
+    let graph = (build-dependency-graph $svc $vspec $cfg $platform $pm false {})
+
+    let parent_node = $"($svc):($version):($platform)"
+    let dep_node = $resolved.node_key
+
+    if not ($parent_node in $graph.nodes) {
+      error make {msg: $"Expected parent node '($parent_node)' in graph, got: ($graph.nodes | to nuon)"}
+    }
+    if not ($dep_node in $graph.nodes) {
+      error make {msg: $"Expected dependency node '($dep_node)' in graph, got: ($graph.nodes | to nuon)"}
+    }
+
+    let has_edge = ($graph.edges | any {|e| $e.from == $parent_node and $e.to == $dep_node})
+    if not $has_edge {
+      error make {msg: $"Expected edge ($parent_node) -> ($dep_node), got: ($graph.edges | to nuon)"}
+    }
+
+    if $verbose_flag {
+      print $"    kasm-base ($version)/($platform) -> ($dep_node)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39_tracked)
+
+  # Test 39-tracked-master-production: cernbox-revad master + production
+  # Platform override merge yields revad-base dep version "master-production";
+  # graph must contain revad-base:master:production via load-service-config.
+  let test39_tracked_mp = (run-test "Test 39-tracked-master-production: Real manifest - cernbox-revad master production revad-base dep" {
+    let svc = "cernbox-revad"
+    let version = "master"
+    let platform = "production"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let vspec = (get-version-or-null $vm $version)
+    let cfg = (load-service-config $svc $vspec $platform $pm)
+
+    let dep_config = ($cfg.dependencies | get "revad-base")
+    if ($dep_config.version? | default "") != "master-production" {
+      error make {msg: $"Expected merged revad-base version 'master-production', got: ($dep_config | to nuon)"}
+    }
+
+    let dep_service = (try { $dep_config.service } catch { "revad-base" })
+    let resolved = (resolve-dep-node $dep_config $dep_service $version $platform true)
+
+    let graph = (build-dependency-graph $svc $vspec $cfg $platform $pm false {})
+
+    let parent_node = $"($svc):($version):($platform)"
+    let dep_node = $resolved.node_key
+
+    if $dep_node != "revad-base:master:production" {
+      error make {msg: $"Expected dep node 'revad-base:master:production', got '($dep_node)'"}
+    }
+    if not ($parent_node in $graph.nodes) {
+      error make {msg: $"Expected parent node '($parent_node)' in graph, got: ($graph.nodes | to nuon)"}
+    }
+    if not ($dep_node in $graph.nodes) {
+      error make {msg: $"Expected dependency node '($dep_node)' in graph, got: ($graph.nodes | to nuon)"}
+    }
+
+    let has_edge = ($graph.edges | any {|e| $e.from == $parent_node and $e.to == $dep_node})
+    if not $has_edge {
+      error make {msg: $"Expected edge ($parent_node) -> ($dep_node), got: ($graph.edges | to nuon)"}
+    }
+
+    if $verbose_flag {
+      print $"    cernbox-revad ($version)/($platform) -> ($dep_node)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39_tracked_mp)
 
   # Test 40: Fail-closed dependency platforms-manifest load
   # Regression guard: when a dependency reports check-platforms-manifest-exists

@@ -208,6 +208,7 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
         if [ ! -f /tmp/copy-tls.nu ]; then \
             echo "Error: copy-tls.nu not found. This should not happen for non-ca-only modes." && exit 1; \
         fi && \
+        # Root-effective runtime: omit --runtime-owner (see note below)
         nu /tmp/copy-tls.nu \
         --enabled "'$TLS_ENABLED'" \
         --mode "'$TLS_MODE'" \
@@ -220,6 +221,32 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
         rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
     fi
 ```
+
+The snippet above is the **root-effective runtime** path: omit
+`--runtime-owner` when the process that reads `/tls/*.key` at startup
+remains `root`.
+
+When the **effective runtime process** is non-root, add
+`--runtime-owner` to the same `nu` invocation (the `RUN` still executes
+as `root`; the helper `chown`s the destination to that owner):
+
+```dockerfile
+        nu /tmp/copy-tls.nu \
+        --enabled "'$TLS_ENABLED'" \
+        --mode "'$TLS_MODE'" \
+        --ca-name "'$TLS_CA_NAME'" \
+        --cert-name "'$TLS_CERT_NAME'" \
+        --source-certs /tmp/tls-source/certificates/ \
+        --dest /tls/ \
+        --runtime-owner "'1000:1000'" && \
+        rm -rf /tmp/tls-source /tmp/copy-tls.nu; \
+```
+
+Examples: `idp` uses `'1000:1000'` (Keycloak runs as UID 1000).
+`cernbox-web` uses `'nginx:nginx'`. `ocis` and `opencloud` keep
+`USER root` in the Dockerfile but drop privileges with `su-exec` before
+starting the app; they still pass `--runtime-owner "'1000:1000'"` because
+UID 1000 reads the key at runtime, not root.
 
 ## Helper Scripts
 
@@ -238,6 +265,39 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
   - `--cert-name`: Service certificate name (required for ca-and-cert and cert-only modes)
   - `--source-certs`: Source directory for service certificates
   - `--dest`: Destination directory
+  - `--runtime-owner`: Optional `uid:gid` or `user:group` for the
+    effective runtime process that reads `/tls/*.key` (build-time only;
+    empty leaves files `root:root`)
+
+### Runtime ownership (build-time)
+
+The `RUN` block that calls `copy-tls.nu` executes as `root`. After
+copying, the helper finalizes permissions so the certificate is
+world-readable and the private key is owner-only:
+
+- `<cert-name>.crt` is set to mode `0644`
+- `<cert-name>.key` is set to mode `0600`
+- when `--runtime-owner` is non-empty, the destination directory is
+  `chown -R`ed to that owner
+
+The decisive question is **who reads `/tls/*.key` at runtime**, not
+whether the Dockerfile's final `USER` line is `root` or non-root. Any
+image whose effective runtime process is not `root` must pass
+`--runtime-owner` matching that process instead of adding an inline
+`chown -R ... /tls` after the call. Keycloak (`idp`) runs as UID
+`1000` and `cernbox-web` runs as `nginx`; without handing ownership of
+the `0600` key to that process the service fails to read its key at
+startup (for example Keycloak throws `AccessDeniedException`). Images
+that keep `USER root` but drop privileges with `su-exec` or an
+equivalent wrapper before the app starts still require
+`--runtime-owner` for the dropped-to identity (`ocis` and `opencloud`
+use `'1000:1000'`). Only images where `root` remains the process that
+reads the key at startup omit the flag.
+
+Ownership is finalized at build time only. There is no longer any
+host-side `chown` of generated certificates during `tls certs`
+generation; certificate ownership on the host is irrelevant because the
+image build re-owns the material from inside the `RUN` as root.
 
 ## Certificate Generation
 

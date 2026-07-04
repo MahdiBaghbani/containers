@@ -2,11 +2,24 @@
 
 ## Docker Health Checks
 
-### High Priority
+### Done (development images)
 
-- [ ] Add HEALTHCHECK instruction to `services/revad-base/Dockerfile`
-- [ ] Add HEALTHCHECK instruction to `services/cernbox-web/Dockerfile`
-- [ ] Add HEALTHCHECK instruction to `services/cernbox-revad/Dockerfile`
+- [x] Add `HEALTHCHECK` to `services/revad-base/Dockerfile.development` via
+  `/usr/bin/healthcheck.nu` (Nushell lane owns the script)
+- [x] Add `HEALTHCHECK` to `services/idp/Dockerfile` (Keycloak
+  `http://127.0.0.1:9000/health/ready`)
+- [x] Add `HEALTHCHECK` to `services/cernbox-web/Dockerfile` (curl HTTPS root)
+- [x] Drop redundant compose healthchecks in CERNBox examples and
+  `ocm-test-suite` cernbox sender cookbook; use `service_healthy` where images
+  expose baked checks
+- [x] Add Nextcloud app healthcheck in `examples/nextcloud` (parity with
+  `nextcloud-contacts`)
+
+### Remaining
+
+- [ ] Rebuild and smoke-test images after `healthcheck.nu` lands in revad-base
+- [ ] Consider baked health for other DockyPody services as needed (production
+  / distroless paths intentionally omit `HEALTHCHECK`)
 
 ## Keycloak Configuration
 

@@ -20,23 +20,15 @@
 # CERNBox web frontend configuration script
 # Configures nginx templates and frontend config.json based on environment variables
 
+use ./lib/tls.nu [resolve-revad-tls-enabled resolve-web-tls-enabled]
+
 def main [] {
     let cernbox_web_hostname = (try { $env.CERNBOX_WEB_HOSTNAME } catch {
         print "Error: CERNBOX_WEB_HOSTNAME is required"
         exit 1
     })
     
-    # Derive REVAD_* vars from REVAD_TLS_ENABLED (backend sets this, web follows)
-    let revad_tls_enabled = (try {
-        let val = $env.REVAD_TLS_ENABLED
-        if ($val | str trim | is-empty) {
-            try { $env.TLS_ENABLED } catch { "true" }
-        } else {
-            $val
-        }
-    } catch {
-        try { $env.TLS_ENABLED } catch { "true" }
-    })
+    let revad_tls_enabled = (resolve-revad-tls-enabled)
     
     let revad_protocol = (if $revad_tls_enabled == "false" {
         try { $env.REVAD_PROTOCOL } catch { "http" }
@@ -74,8 +66,7 @@ def main [] {
     $env.TLS_CRT = (try { $env.TLS_CRT } catch { "/tls/server.crt" })
     $env.TLS_KEY = (try { $env.TLS_KEY } catch { "/tls/server.key" })
     
-    # Frontend TLS can be controlled independently from backend
-    let web_tls_enabled = (try { $env.WEB_TLS_ENABLED } catch { $revad_tls_enabled })
+    let web_tls_enabled = (resolve-web-tls-enabled)
     
     let templates_dir = "/etc/nginx/templates-available"
     let nginx_conf = "/etc/nginx/conf.d/cernbox.conf"
@@ -172,13 +163,5 @@ def main [] {
         let idp_host_port = ($idp_url_final | str replace -a "https://" "" | str replace -a "http://" "")
         let idp_pattern = "your-idp.org:your-idp-port"
         ^sed -i $"s|($idp_pattern)|($idp_host_port)|g" $config_dest
-    }
-    
-    # Replace mesh directory endpoint in built JS files
-    let meshdir_original = "sciencemesh.cesnet.cz/iop"
-    let meshdir_replacement = (try { $env.MESHDIR_DOMAIN } catch { "meshdir.docker" })
-    let find_result = (^find /var/www/web -name "web-app-science*.mjs" -type f 2>/dev/null | complete)
-    if $find_result.exit_code == 0 and ($find_result.stdout | str trim | str length) > 0 {
-        ^find /var/www/web -name "web-app-science*.mjs" -type f -exec sed -i $"s|($meshdir_original)|($meshdir_replacement)|g" {} \;
     }
 }

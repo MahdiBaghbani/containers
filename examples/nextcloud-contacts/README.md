@@ -33,11 +33,49 @@ make tls all
 ```bash
 nu scripts/dockypody.nu build --service mitmproxy --version v12.2.2
 nu scripts/dockypody.nu build --service firefox --version v150.0.0
-nu scripts/dockypody.nu build --service nextcloud-contacts --version local
+```
+
+- A local-plane versions fragment for `nextcloud-contacts` (git-ignored).
+  The `local` image tag is **not** a tracked manifest version; it lives only
+  in the off-git local plane.
+
+  1. Create the local plane root (once):
+
+```bash
+mkdir -p .dockypody.local/services/nextcloud-contacts
+```
+
+  2. Add a versions fragment (sample only; same JSONC style as tracked
+     manifests):
+
+```nuon
+{
+  "versions": [
+    {
+      "name": "local",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "path": "../nextcloud-contacts"
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+Save as `.dockypody.local/services/nextcloud-contacts/versions.nuon`.
+
+3. Build the local-plane version:
+
+```bash
+nu scripts/dockypody.nu build --plane local --service nextcloud-contacts --version local
 ```
 
 This example uses `IMAGE_NEXTCLOUD_CONTACTS=local` in `.env`, so build the
-`local` Contacts image first.
+local-plane `local` Contacts image before `docker compose up`.
 
 ### Configuration
 
@@ -120,7 +158,12 @@ Then open mitmweb and confirm there is a flow for
 ### Troubleshooting
 
 - If `docker compose up` fails because `nextcloud-contacts:local` is missing,
-  rebuild it with `nu scripts/dockypody.nu build --service nextcloud-contacts --version local`.
+  confirm `.dockypody.local/services/nextcloud-contacts/versions.nuon` exists,
+  then rebuild with
+  `nu scripts/dockypody.nu build --plane local --service nextcloud-contacts --version local`.
+- If build fails with a tracked-plane "version not found" error for `local`,
+  retry with `--plane local`. That version name exists only in the local
+  fragment, not in tracked `services/nextcloud-contacts/versions.nuon`.
 - If Firefox shows TLS warnings, regenerate TLS material with `make tls all`
   and rebuild the local images.
 - If OCM invites do not appear, make sure you are using the `local` image and

@@ -70,6 +70,9 @@ ARG CACHEBUST="default"
 ARG WEB_EXTENSIONS_URL=https://github.com/cernbox/web-extensions
 ARG WEB_EXTENSIONS_REF=main
 ARG PNPM_RETRY_COUNT="10"
+ARG PNPM_VERSION="9.12.3"
+ARG WEB_EXT_ALLOW=""
+ARG WEB_EXT_SKIP="codimd,data-repositories,draw-io,ms-tracing"
 
 # Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
 RUN --mount=type=cache,id=cernbox-web-web-git-${CACHEBUST:-${WEB_REF}},target=/src/web-git-cache,sharing=shared \
@@ -89,7 +92,7 @@ RUN --mount=type=cache,id=cernbox-web-web-git-${CACHEBUST:-${WEB_REF}},target=/s
 
 WORKDIR /build/web
 
-RUN corepack prepare pnpm@9 --activate
+RUN corepack prepare pnpm@${PNPM_VERSION} --activate
 
 # Configure pnpm for better network reliability and caching
 # This is needed for places that have bad internet connection.
@@ -126,7 +129,14 @@ WORKDIR /build
 RUN --mount=type=cache,id=cernbox-web-web-extensions-git-${CACHEBUST:-${WEB_EXTENSIONS_REF}},target=/src/web-extensions-git-cache,sharing=shared \
     mkdir -p /src/web-extensions-git-cache && \
     if [ ! -d /src/web-extensions-git-cache/.git ]; then \
+    if echo "${WEB_EXTENSIONS_REF}" | grep -Eq '^[0-9a-fA-F]{40}$'; then \
+    git -C /src/web-extensions-git-cache init && \
+    git -C /src/web-extensions-git-cache remote add origin "${WEB_EXTENSIONS_URL}" && \
+    git -C /src/web-extensions-git-cache fetch --depth 1 origin "${WEB_EXTENSIONS_REF}" && \
+    git -C /src/web-extensions-git-cache checkout FETCH_HEAD; \
+    else \
     git clone --depth 1 --branch "${WEB_EXTENSIONS_REF}" ${WEB_EXTENSIONS_URL} /src/web-extensions-git-cache; \
+    fi; \
     fi && \
     cp -a /src/web-extensions-git-cache/. /build/web-extensions
 
@@ -138,7 +148,10 @@ COPY --chmod=755 ./scripts/build-extensions.nu /usr/local/bin/build-extensions.n
 # Build all packages with retry logic and BuildKit cache mount
 RUN --mount=type=cache,id=cernbox-web-pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
     --mount=type=cache,id=cernbox-web-pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
-    nu /usr/local/bin/build-extensions.nu . /build/cernbox --retry-count $PNPM_RETRY_COUNT
+    nu /usr/local/bin/build-extensions.nu . /build/cernbox \
+      --retry-count $PNPM_RETRY_COUNT \
+      --only "$WEB_EXT_ALLOW" \
+      --skip "$WEB_EXT_SKIP"
 
 ###############################
 ###   Common Tools Runtime  ###
@@ -159,7 +172,8 @@ ARG TLS_CA_NAME
 
 RUN --mount=type=cache,id=common-tools-alpine-apk-cache,target=/var/cache/apk,sharing=locked \
     apk add \
-    bash;
+    bash \
+    curl;
 
 RUN mkdir -p /etc/ssl/certs /tmp
 COPY --from=common-tools-runtime /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
@@ -191,8 +205,8 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
     --ca-name "'$TLS_CA_NAME'" \
     --cert-name "'$TLS_CERT_NAME'" \
     --source-certs /tmp/tls-source/certificates/ \
-    --dest /tls/ && \
-    if [ -d /tls ]; then chown -R nginx:nginx /tls/; fi && \
+    --dest /tls/ \
+    --runtime-owner "'nginx:nginx'" && \
     rm -rf /tmp/tls-source /tmp/copy-tls.nu; \
     else \
     rm -rf /tmp/tls-source /tmp/copy-tls.nu || true; \
@@ -216,10 +230,14 @@ COPY --chown=nginx:nginx ./configs/nginx-https.conf.template /etc/nginx/template
 # Entrypoint scripts to replace lots of placeholders in frontend
 # Wrapper shell script (for nginx entrypoint compatibility) and nushell implementation
 COPY --chmod=755 --chown=nginx:nginx ./scripts/cernbox.sh /docker-entrypoint.d/cernbox.sh
-COPY --chmod=755 --chown=nginx:nginx ./scripts/cernbox.nu /docker-entrypoint.d/cernbox.nu
+COPY --chmod=755 ./scripts/cernbox.nu /usr/bin/cernbox.nu
+COPY --chmod=755 ./scripts/lib/tls.nu /usr/bin/lib/tls.nu
+COPY --chmod=755 ./scripts/healthcheck.nu /usr/bin/healthcheck.nu
 
 COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
 COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
+
+HEALTHCHECK --interval=5s --timeout=5s --start-period=90s --retries=36 CMD ["/usr/local/bin/nu", "/usr/bin/healthcheck.nu"]

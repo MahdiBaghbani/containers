@@ -1,5 +1,5 @@
 {
-  "default": "v3.3.3",
+  "default": "master",
 
   "defaults": {
     "build_args": {
@@ -8,7 +8,7 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "v3.3.3"
+        "ref": "master"
       }
     },
     "external_images": {
@@ -48,17 +48,23 @@
           "revad": {
             "ref": "master"
           }
+        },
+        "build_args": {
+          "REVA_CONFIG_BAND": "master"
         }
       }
     },
     {
-      "name": "v3.3.3",
+      "name": "v3.10.1",
       "latest": true,
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "v3.3.3"
+            "ref": "v3.10.1"
           }
+        },
+        "build_args": {
+          "REVA_CONFIG_BAND": "v3.10.1"
         }
       }
     }

@@ -1,21 +1,16 @@
 {
-  "default": "v1.0.13",
+  "default": "master",
 
   "defaults": {
     "sources": {
       "web": {
-        "url": "https://github.com/cernbox/web",
-        "ref": "v1.0.13"
+        "url": "https://github.com/cernbox/web"
       },
       "web_extensions": {
-        "url": "https://github.com/cernbox/web-extensions",
-        "ref": "main"
+        "url": "https://github.com/cernbox/web-extensions"
       }
     },
     "external_images": {
-      "build": {
-        "tag": "20-trixie-slim"
-      },
       "runtime": {
         "tag": "1.29-alpine3.22-slim"
       }
@@ -35,36 +30,48 @@
 
   "versions": [
     {
-      "name": "testing",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "web": {
-            "url": "https://github.com/MahdiBaghbani/web",
-            "ref": "cernbox/feature/ocm-wayf"
-          }
-        }
-      }
-    },
-    {
       "name": "master",
       "latest": false,
       "overrides": {
         "sources": {
           "web": {
             "ref": "cernbox"
+          },
+          "web_extensions": {
+            "ref": "dffaad6cecf755782c7ce4289f21b4f155c35e7c"
           }
+        },
+        "external_images": {
+          "build": {
+            "tag": "20-trixie-slim"
+          }
+        },
+        "build_args": {
+          "PNPM_VERSION": "9.12.3",
+          "WEB_EXT_ALLOW": "cernbox-integration,ifc-js,jupyter,lightweight-accounts,ndmspc-reader,old-web-redirector,open-in-swan,otg,rootjs,search-in-folder,tours,theme-cernbox,tours-cernbox"
         }
       }
     },
     {
-      "name": "v1.0.13",
+      "name": "v1.0.25",
       "latest": true,
       "overrides": {
         "sources": {
           "web": {
-            "ref": "v1.0.13"
+            "ref": "v1.0.25"
+          },
+          "web_extensions": {
+            "ref": "dffaad6cecf755782c7ce4289f21b4f155c35e7c"
           }
+        },
+        "external_images": {
+          "build": {
+            "tag": "20-trixie-slim"
+          }
+        },
+        "build_args": {
+          "PNPM_VERSION": "9.12.3",
+          "WEB_EXT_ALLOW": "cernbox-integration,ifc-js,jupyter,lightweight-accounts,ndmspc-reader,old-web-redirector,open-in-swan,otg,rootjs,search-in-folder,tours,theme-cernbox,tours-cernbox"
         }
       }
     }

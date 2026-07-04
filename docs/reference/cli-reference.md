@@ -82,6 +82,7 @@ nu scripts/dockypody.nu docs lint --fix
 | `build` | Build container images | `build/cli.nu [build-cli]` |
 | `test` | Run test suites (`--suite`, `--verbose`) | `test/cli.nu [test-cli]` |
 | `validate` | Validate service configurations | `validate/cli.nu [validate-cli]` |
+| `inspect` | Print guard-owned effective merged config | `inspect/cli.nu [inspect-cli]` |
 | `tls ca` | Generate CA certificate | `tls/cli.nu [tls-cli]` |
 | `tls certs` | Generate service certificates | `tls/cli.nu [tls-cli]` |
 | `tls clean` | Remove TLS artifacts | `tls/cli.nu [tls-cli]` |
@@ -119,7 +120,8 @@ DockyPody owns the positional `help` contract:
 - Routed domains: `nu scripts/dockypody.nu tls help`,
   `nu scripts/dockypody.nu ssh help`,
   `nu scripts/dockypody.nu ci help`,
-  `nu scripts/dockypody.nu docs help`
+  `nu scripts/dockypody.nu docs help`,
+  `nu scripts/dockypody.nu inspect help`
 
 Nushell intercepts `--help` and `-h` before `dockypody.nu`'s `main` body runs,
 so those flag forms are Nushell help, not DockyPody-owned command help.
@@ -139,6 +141,8 @@ Build-related: `--service`, `--all-services`, `--push`, `--latest`,
 Test: `--suite`, `--verbose`.
 
 Validate: `--service`, `--all-services`, `--manifests-only`, `--plane`.
+
+Inspect: `--service`, `--version`, `--platform`, `--plane`.
 
 TLS: `--service` (comma-separated service names passed to clean), `--filter`
 (comma list for cert generation subset), `--service-ca-only`, `--skip-shared-ca`,
@@ -191,6 +195,33 @@ nu scripts/dockypody.nu validate [--service <name>] [--all-services]
   `services/*.nuon` only. Tracked CI generation consumes only tracked
   versions; `--plane local` is rejected at `build --matrix-json`, `ci
   workflow`, and `ci ghcr-purge`.
+
+### inspect
+
+Subcommands: `effective-config`.
+
+```bash
+nu scripts/dockypody.nu inspect effective-config --service <name>
+     [--version <ver>] [--platform <plat>] [--plane tracked|local]
+```
+
+- `--service`: required for `effective-config`.
+- `--version`: optional; defaults to the manifest default for the active
+  plane.
+- `--platform`: optional; required only for multi-platform services when you
+  need a specific platform slice.
+- `--plane`: config plane for this invocation. `tracked` (default) uses
+  tracked manifests under `services/`. `local` merges optional
+  `.dockypody.local/services/<service>/versions.nuon` fragments; the command
+  hard-errors when `.dockypody.local/` is missing. Use `--plane local` when
+  previewing or debugging dev-only version names that exist only in the local
+  fragment.
+
+Example (local-only version name):
+
+```bash
+nu scripts/dockypody.nu inspect effective-config --plane local --service nextcloud-contacts --version local
+```
 
 ### tls
 
@@ -323,7 +354,14 @@ nu scripts/dockypody.nu build --service gaia --plane local
   `ci ghcr-purge`. `ci list-deps` always operates on tracked manifests
   (tracked-only by data; it does not reject the flag).
 
-`--plane` is also accepted on `validate` with the same modes and rules.
+`--plane` is also accepted on `validate` and `inspect effective-config` with
+the same modes and rules.
+
+Example (preview a local-plane merge without building):
+
+```bash
+nu scripts/dockypody.nu inspect effective-config --plane local --service gaia --version dev
+```
 
 ## Service Selection Flags
 

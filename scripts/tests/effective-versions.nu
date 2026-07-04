@@ -19,10 +19,14 @@
 
 # Effective versions manifest tests (local-plane L1 foundation)
 
+use ../lib/inspect/effective-config.nu [resolve-inspect-version-spec]
 use ../lib/plane/versions.nu [
   load-effective-versions-manifest
   merge-version-universe
   resolve-tracked-source-id-universe
+  describe-version-universe
+  version-local-only-in-fragment
+  format-version-miss-error
 ]
 use ../lib/plane/guard.nu [PLANE_TRACKED PLANE_LOCAL guard-local-plane-presence]
 use ../lib/plane/presence.nu [local-root-path local-services-path]
@@ -567,6 +571,281 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test_source_id_universe)
+
+  let test_describe_universe_local_only = (run-test "describe-version-universe lists local-only names on tracked plane" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    save-local-fragment $repo "test-svc" {
+      versions: [
+        { name: "local-only-v" }
+      ]
+    }
+    mkdir (local-root-path $repo)
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let universe = (run-in-temp-repo $repo {||
+      describe-version-universe "test-svc" $plane_ctx
+    })
+    if $universe.plane != $PLANE_TRACKED {
+      error make {msg: $"Expected tracked plane, got ($universe.plane)"}
+    }
+    if not $universe.fragment_present {
+      error make {msg: "Expected fragment_present true"}
+    }
+    if $universe.local_only_names != ["local-only-v"] {
+      error make {msg: $"Expected local_only_names [local-only-v], got ($universe.local_only_names | to json)"}
+    }
+    if $universe.tracked_names != ["v1"] {
+      error make {msg: $"Expected tracked_names [v1], got ($universe.tracked_names | to json)"}
+    }
+    let expected_fragment = (local-services-path $repo | path join "test-svc" | path join $LOCAL_MIRROR_FILE)
+    if ($universe.fragment_path | path expand) != ($expected_fragment | path expand) {
+      error make {msg: $"Expected fragment_path ($expected_fragment), got ($universe.fragment_path)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_describe_universe_local_only)
+
+  let test_local_only_detector = (run-test "version-local-only-in-fragment detects tracked-plane local-only miss" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    save-local-fragment $repo "test-svc" {
+      versions: [{ name: "devlocal" }]
+    }
+    mkdir (local-root-path $repo)
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let universe = (run-in-temp-repo $repo {||
+      describe-version-universe "test-svc" $plane_ctx
+    })
+    if not (version-local-only-in-fragment $universe "devlocal") {
+      error make {msg: "Expected devlocal to be local-only in fragment"}
+    }
+    if (version-local-only-in-fragment $universe "v1") {
+      error make {msg: "Tracked version v1 must not be classified local-only"}
+    }
+    if (version-local-only-in-fragment $universe "missing") {
+      error make {msg: "Unknown version must not be classified local-only"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_local_only_detector)
+
+  let test_format_miss_local_only = (run-test "format-version-miss-error guides --plane local for tracked-plane local-only miss" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    save-local-fragment $repo "test-svc" {
+      versions: [{ name: "devlocal" }]
+    }
+    mkdir (local-root-path $repo)
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let msg = (run-in-temp-repo $repo {||
+      format-version-miss-error "test-svc" "devlocal" $plane_ctx --style build
+    })
+    if not ($msg | str contains "--plane local") {
+      error make {msg: $"Expected --plane local guidance, got: ($msg)"}
+    }
+    let expected_fragment = (local-services-path $repo | path join "test-svc" | path join $LOCAL_MIRROR_FILE | path expand)
+    if not ($msg | str contains ($expected_fragment | into string)) {
+      error make {msg: $"Expected fragment path ($expected_fragment) in message, got: ($msg)"}
+    }
+    if not ($msg | str contains "local fragment") {
+      error make {msg: $"Expected local fragment mention, got: ($msg)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_format_miss_local_only)
+
+  let test_format_miss_generic = (run-test "format-version-miss-error keeps generic tracked miss without local-only guidance" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let msg = (run-in-temp-repo $repo {||
+      format-version-miss-error "test-svc" "nope" $plane_ctx --style short
+    })
+    if ($msg | str contains "--plane local") {
+      error make {msg: $"Generic miss must not mention --plane local, got: ($msg)"}
+    }
+    if not ($msg | str contains "Available versions: v1") {
+      error make {msg: $"Expected available versions list, got: ($msg)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_format_miss_generic)
+
+  let test_describe_universe_no_fragment = (run-test "describe-version-universe reports fragment_present false without mirror" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let universe = (run-in-temp-repo $repo {||
+      describe-version-universe "test-svc" $plane_ctx
+    })
+    if $universe.fragment_present {
+      error make {msg: "Expected fragment_present false when no local mirror exists"}
+    }
+    if $universe.local_only_names != [] {
+      error make {msg: $"Expected empty local_only_names, got ($universe.local_only_names | to json)"}
+    }
+    if $universe.effective_names != ["v1"] {
+      error make {msg: $"Expected effective_names [v1] on tracked plane, got ($universe.effective_names | to json)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_describe_universe_no_fragment)
+
+  let test_describe_universe_overlap = (run-test "describe-version-universe separates overlapping and local-only fragment names" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [
+        { name: "v1" }
+        { name: "v2" }
+      ]
+    }
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo "test-svc" {
+      versions: [
+        { name: "v2", overrides: {} }
+        { name: "devlocal", overrides: {} }
+      ]
+    }
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let universe = (run-in-temp-repo $repo {||
+      describe-version-universe "test-svc" $plane_ctx
+    })
+    if not $universe.fragment_present {
+      error make {msg: "Expected fragment_present true when mirror exists"}
+    }
+    if $universe.tracked_names != ["v1" "v2"] {
+      error make {msg: $"Expected tracked_names [v1, v2], got ($universe.tracked_names | to json)"}
+    }
+    if $universe.local_only_names != ["devlocal"] {
+      error make {msg: $"Expected local_only_names [devlocal], got ($universe.local_only_names | to json)"}
+    }
+    if $universe.effective_names != ["v1" "v2"] {
+      error make {msg: $"Tracked plane effective_names must stay tracked-only, got ($universe.effective_names | to json)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_describe_universe_overlap)
+
+  let test_format_miss_fragment_generic = (run-test "format-version-miss-error does not suggest --plane local for generic miss with fragment present" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo "test-svc" {
+      versions: [{ name: "devlocal" }]
+    }
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let msg = (run-in-temp-repo $repo {||
+      format-version-miss-error "test-svc" "typo" $plane_ctx --style build
+    })
+    if ($msg | str contains "--plane local") {
+      error make {msg: $"Generic miss with fragment present must not mention --plane local, got: ($msg)"}
+    }
+    if not ($msg | str contains "Available versions: v1") {
+      error make {msg: $"Expected available versions list, got: ($msg)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_format_miss_fragment_generic)
+
+  let test_format_miss_inspect_generic = (run-test "format-version-miss-error inspect style uses tracked-version options for generic miss" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let msg = (run-in-temp-repo $repo {||
+      format-version-miss-error "test-svc" "nope" $plane_ctx --style inspect
+    })
+    if ($msg | str contains "--plane local") {
+      error make {msg: $"Inspect generic miss must not mention --plane local, got: ($msg)"}
+    }
+    if not ($msg | str contains "Use one of the available tracked versions") {
+      error make {msg: $"Expected inspect tracked-version option, got: ($msg)"}
+    }
+    if not ($msg | str contains "Available versions: v1") {
+      error make {msg: $"Expected available versions list, got: ($msg)"}
+    }
+    rm-temp-repo $repo
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_format_miss_inspect_generic)
+
+  let test_resolve_inspect_generic_miss = (run-test "resolve-inspect-version-spec routes generic miss through inspect formatter" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let ok = (run-in-temp-repo $repo {||
+      expect-error {||
+        resolve-inspect-version-spec "test-svc" "nope" $plane_ctx
+      } "Use one of the available tracked versions"
+    })
+    rm-temp-repo $repo
+    $ok
+  } $verbose_flag)
+  $results = ($results | append $test_resolve_inspect_generic_miss)
+
+  let test_resolve_inspect_fragment_generic_miss = (run-test "resolve-inspect-version-spec generic miss with fragment does not suggest --plane local" {
+    let repo = (make-temp-repo)
+    seed-tracked-versions $repo {
+      default: "v1"
+      versions: [{ name: "v1" }]
+    }
+    mkdir (local-root-path $repo)
+    save-local-fragment $repo "test-svc" {
+      versions: [{ name: "devlocal" }]
+    }
+    let plane_ctx = { plane: $PLANE_TRACKED, repo_root: $repo }
+    let result = (run-in-temp-repo $repo {||
+      try {
+        resolve-inspect-version-spec "test-svc" "typo" $plane_ctx
+        { ok: true }
+      } catch {|err|
+        { ok: false, msg: $err.msg }
+      }
+    })
+    rm-temp-repo $repo
+    if $result.ok {
+      error make {msg: "Expected resolve-inspect-version-spec to fail for generic miss"}
+    }
+    if ($result.msg | str contains "--plane local") {
+      error make {msg: $"Generic inspect miss with fragment must not mention --plane local, got: ($result.msg)"}
+    }
+    if not ($result.msg | str contains "Available versions: v1") {
+      error make {msg: $"Expected available versions in inspect miss, got: ($result.msg)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test_resolve_inspect_fragment_generic_miss)
 
   print-test-summary $results
   if ($results | where {|r| not $r} | is-empty) {

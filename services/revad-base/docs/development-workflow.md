@@ -26,6 +26,9 @@ When a development container starts:
 
 1. **Entrypoint**: `entrypoint.sh` -> `entrypoint-init.nu`
 2. **Initialization**: Scripts process configs:
+   - `/configs/revad` in the image is already band-resolved at build time
+     (`REVA_CONFIG_BAND` / `resolve_configs`); startup only copies templates
+     and processes placeholders
    - Copy templates from `/configs/revad` (image) -> `/etc/revad` (volume)
    - Process placeholders using environment variables
    - Write processed configs to `/etc/revad` (volume)
@@ -59,6 +62,17 @@ volumes:
 - Users can manually edit configs in volume
 - Scripts preserve edits (skip copy if exists)
 - Scripts still process placeholders (updates values)
+
+## Baked healthchecks
+
+Development images include `HEALTHCHECK` in `Dockerfile.development`. Compose
+files and examples should rely on the image probe (`healthcheck.nu`) and
+`docker compose up --wait` instead of duplicating per-service health blocks.
+
+Production/distroless Dockerfiles omit `HEALTHCHECK` by design.
+
+Third-party or minimal images (MariaDB without a probe, mitmproxy) may still
+use `service_started` until a valid health signal exists.
 
 ## Production Images
 
@@ -145,7 +159,7 @@ Update docker-compose to use production images:
 ```yaml
 services:
   gateway:
-    image: "revad-base:v3.3.3-production" # Production image
+    image: "revad-base:v3.10.1-production" # Production image
     # Same volumes (configs already populated)
     volumes:
       - "${PWD}/volumes/config/reva-gateway:/etc/revad"

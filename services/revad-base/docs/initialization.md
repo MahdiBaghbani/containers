@@ -79,6 +79,28 @@ After initialization, the script starts the Reva daemon:
 - Redirects output to log file
 - Container continues with `tail -F` to keep running
 
+## Baked healthchecks (development only)
+
+Development images (`Dockerfile.development`) ship a Dockerfile `HEALTHCHECK`
+that runs `/usr/local/bin/nu /usr/bin/healthcheck.nu`. The script probes the
+gRPC listen port for the active `REVAD_CONTAINER_MODE` (same signal the compose
+cookbooks used to duplicate inline).
+
+**Why bake health in the image:**
+
+- One probe definition per Reva mode, shared by compose, test harnesses, and
+  `docker compose up --wait`
+- Compose files can use `depends_on: condition: service_healthy` without
+  repeating Nushell one-liners per sidecar
+
+**Production / distroless:**
+
+- `Dockerfile` production paths omit `HEALTHCHECK` (no `nu`, no
+  `healthcheck.nu`). Orchestrators that need readiness must define their own
+  probe or rely on process-level checks.
+
+See also [Development Workflow](development-workflow.md#baked-healthchecks).
+
 ## Configuration Copy Logic
 
 The initialization scripts use a copy-on-write pattern:

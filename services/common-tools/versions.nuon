@@ -7,6 +7,10 @@
         "url": "https://github.com/nushell/nushell",
         "ref": "0.108.0"
       },
+      "tini": {
+        "url": "https://github.com/krallin/tini",
+        "ref": "v0.19.0"
+      },
       "upx": {
         "url": "https://github.com/upx/upx",
         "ref": "v5.0.2"

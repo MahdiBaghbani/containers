@@ -1,0 +1,39 @@
+# Share providers configuration for multi-container CERNBox deployment
+# This config runs share-related providers (usershareprovider, publicshareprovider, ocmshareprovider, ocmincoming)
+# User/group providers run in separate groupuserproviders container
+
+[log]
+output = "{{placeholder:log-output}}"
+level = "{{placeholder:log-level:debug}}"
+
+[shared]
+gatewaysvc = "{{placeholder:gateway-svc}}"
+jwt_secret = "{{placeholder:jwt-secret:reva-secret}}"
+skip_user_groups_in_token = true
+
+[grpc]
+address = "{{placeholder:grpc-address}}"
+
+[grpc.services.usershareprovider]
+driver = "memory"
+
+[grpc.services.publicshareprovider]
+driver = "memory"
+
+[grpc.services.ocmshareprovider]
+driver = "json"
+provider_domain = "{{placeholder:provider-domain}}"
+webdav_endpoint = "{{placeholder:external-reva-endpoint}}"
+webapp_endpoint = "{{placeholder:external-reva-endpoint}}/external/sciencemesh"
+
+[grpc.services.ocmshareprovider.drivers.json]
+file = "{{placeholder:ocmshares-json-file}}"
+
+[grpc.services.ocmincoming]
+driver = "json"
+
+[grpc.services.ocmincoming.drivers.json]
+# Note: ocmincoming and ocmshareprovider should use the same file for storing shares
+file = "{{placeholder:ocmshares-json-file}}"
+
+[tracing]

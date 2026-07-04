@@ -21,6 +21,9 @@
 # Tests dataprovider initialization workflow for all supported types
 
 use ../scripts/lib/merge-partials.nu [merge_partial_configs]
+use ../scripts/init-dataprovider.nu [init_dataprovider]
+
+const SERVICE_ROOT = (path self | path dirname | path join '..' | path expand)
 
 # Test dataprovider type validation
 # Verifies that only valid dataprovider types are accepted
@@ -54,7 +57,7 @@ def test_dataprovider_type_validation [] {
     print "  [PASS] Type validation: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Type validation: FAILED (" + $failed_str + " errors)"
+    print $"  [FAIL] Type validation: FAILED ($failed_str) errors"
   }
   
   return {passed: $passed, failed: $failed}
@@ -104,7 +107,7 @@ def test_dataprovider_config_copy [] {
     print "  [PASS] Config copy for all types: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Config copy: FAILED (" + $failed_str + " errors)"
+    print $"  [FAIL] Config copy: FAILED ($failed_str) errors"
   }
   
   rm -rf $test_config_dir $test_source_dir
@@ -216,7 +219,7 @@ machine_api_key = "{{placeholder:machine-api-key}}"
   
   let placeholder_map = {
     "data-server-url-internal.localhome": "http://localhome.test:80/data"
-    "gateway-svc": "gateway.test:19000"
+    "gateway-svc": "gateway.test:9142"
     "config-dir": "/etc/revad"
     "machine-api-key": "test-api-key"
   }
@@ -226,7 +229,7 @@ machine_api_key = "{{placeholder:machine-api-key}}"
   let result = (open --raw $test_file)
   
   let has_url = ($result | str contains "http://localhome.test:80/data")
-  let has_gateway = ($result | str contains "gateway.test:19000")
+  let has_gateway = ($result | str contains "gateway.test:9142")
   let has_config_dir = ($result | str contains "/etc/revad")
   let has_api_key = ($result | str contains "test-api-key")
   let no_placeholders = (not ($result | str contains "{{placeholder:"))
@@ -241,6 +244,85 @@ machine_api_key = "{{placeholder:machine-api-key}}"
     rm $test_file
     return false
   }
+}
+
+# Test init_dataprovider gateway gRPC port default
+# Unset REVAD_GATEWAY_GRPC_PORT must yield revad-gateway:9142 in generated config
+def test_dataprovider_init_gateway_default [] {
+  print "Testing init_dataprovider gateway gRPC port default..."
+
+  let config_template_name = "dataprovider-localhome.toml"
+  let shipped_template_path = ($SERVICE_ROOT | path join "configs" $config_template_name)
+  let test_source_dir = "/tmp/test_dataprovider_init_gateway_source"
+  let test_runtime_dir = "/tmp/test_dataprovider_init_gateway"
+  let expected_gatewaysvc = 'gatewaysvc = "revad-gateway:9142"'
+
+  let saved = {
+    runtime_config: (try { $env.REVAD_CONFIG_DIR } catch { null })
+    domain: (try { $env.DOMAIN } catch { null })
+    dp_grpc: (try { $env.REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT } catch { null })
+    gateway_port: (try { $env.REVAD_GATEWAY_GRPC_PORT } catch { null })
+    gateway_host: (try { $env.REVAD_GATEWAY_HOST } catch { null })
+  }
+
+  mut passed = 0
+  mut failed = 0
+
+  let result = (try {
+    if not ($shipped_template_path | path exists) {
+      error make { msg: $"shipped template not found: ($shipped_template_path)" }
+    }
+
+    rm -rf $test_source_dir $test_runtime_dir
+    ^mkdir -p $test_source_dir $test_runtime_dir
+    ^cp $shipped_template_path $"($test_source_dir)/($config_template_name)"
+
+    $env.REVAD_CONFIG_DIR = $test_runtime_dir
+    $env.DOMAIN = "test.local"
+    $env.REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT = "9143"
+    $env.REVAD_GATEWAY_GRPC_PORT = null
+    $env.REVAD_GATEWAY_HOST = null
+
+    init_dataprovider "localhome" --source-config-dir $test_source_dir
+    let config_path = $"($test_runtime_dir)/dataprovider-localhome.toml"
+    let content = (open --raw $config_path)
+    let gatewaysvc_line = (
+      $content
+      | lines
+      | where {|line| ($line | str trim | str starts-with "gatewaysvc =") }
+      | first
+      | default ""
+      | str trim
+    )
+
+    if $gatewaysvc_line == $expected_gatewaysvc {
+      { ok: true, msg: "" }
+    } else {
+      {
+        ok: false
+        msg: $"expected ($expected_gatewaysvc); gatewaysvc line: ($gatewaysvc_line)"
+      }
+    }
+  } catch {|err|
+    { ok: false, msg: $err.msg }
+  })
+
+  $env.REVAD_CONFIG_DIR = $saved.runtime_config
+  $env.DOMAIN = $saved.domain
+  $env.REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT = $saved.dp_grpc
+  $env.REVAD_GATEWAY_GRPC_PORT = $saved.gateway_port
+  $env.REVAD_GATEWAY_HOST = $saved.gateway_host
+  rm -rf $test_source_dir $test_runtime_dir
+
+  if $result.ok {
+    print "  [PASS] init_dataprovider gateway default: PASSED"
+    $passed = ($passed + 1)
+  } else {
+    print $"  [FAIL] init_dataprovider gateway default: FAILED - ($result.msg)"
+    $failed = ($failed + 1)
+  }
+
+  return {passed: $passed, failed: $failed}
 }
 
 # Test dataprovider data server URL construction
@@ -291,7 +373,7 @@ def test_dataprovider_data_server_url_construction [] {
     print "  [PASS] Data server URL construction: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Data server URL construction: FAILED (" + $failed_str + " errors)"
+    print $"  [FAIL] Data server URL construction: FAILED ($failed_str) errors"
   }
   
   return {passed: $passed, failed: $failed}
@@ -321,9 +403,13 @@ def main [
   let test4 = (test_dataprovider_placeholder_processing)
   if $test4 { $total_passed = ($total_passed + 1) } else { $total_failed = ($total_failed + 1) }
   
-  let test5 = (test_dataprovider_data_server_url_construction)
+  let test5 = (test_dataprovider_init_gateway_default)
   $total_passed = ($total_passed + $test5.passed)
   $total_failed = ($total_failed + $test5.failed)
+
+  let test6 = (test_dataprovider_data_server_url_construction)
+  $total_passed = ($total_passed + $test6.passed)
+  $total_failed = ($total_failed + $test6.failed)
   
   print ""
   print $"Tests: ($total_passed) passed, ($total_failed) failed"

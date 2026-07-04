@@ -31,7 +31,7 @@ use ../platforms/core.nu [
 use ../plane/guard.nu [PLANE_LOCAL PLANE_TRACKED]
 use ../plane/presence.nu [local-root-path local-services-path]
 use ../plane/effective-config.nu [load-local-fragment]
-use ../plane/versions.nu [load-effective-versions-manifest]
+use ../plane/versions.nu [load-effective-versions-manifest format-version-miss-error]
 
 export def resolve-inspect-version-spec [
   service: string,
@@ -59,6 +59,15 @@ export def resolve-inspect-version-spec [
   } else {
     get-default-version $manifest
   })
+  let in_manifest = (
+    try { $manifest.versions } catch { [] }
+    | any {|v| (try { $v.name } catch { "" }) == $version_name}
+  )
+  if not $in_manifest {
+    error make {
+      msg: (format-version-miss-error $service $version_name $plane_ctx --style inspect)
+    }
+  }
   let version_spec = (get-version-spec $manifest $version_name)
   apply-version-defaults $manifest $version_spec
 }

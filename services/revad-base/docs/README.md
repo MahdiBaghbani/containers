@@ -26,6 +26,8 @@ The `revad-base` service provides:
 - **Configuration Templates**: Generic Reva configuration files
 - **Initialization Scripts**: Nushell scripts for runtime configuration processing
 - **Container Modes**: Support for multiple container modes via `REVAD_CONTAINER_MODE`
+- **Baked health (dev)**: `Dockerfile.development` exposes `HEALTHCHECK` via
+  `healthcheck.nu`; production images do not
 
 ## Key Concepts
 

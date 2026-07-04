@@ -30,8 +30,12 @@ Hostnames (inside the compose network):
 From this directory:
 
 ```bash
-docker compose up -d
+docker compose up -d --wait
 ```
+
+`--wait` blocks until both Nextcloud app containers pass their `status.php`
+healthcheck (and Valkey caches are healthy). Firefox starts only after the apps
+report ready.
 
 ### Firefox UI (host port)
 

@@ -24,7 +24,6 @@ driver = "memory"
 driver = "json"
 provider_domain = "{{placeholder:provider-domain}}"
 webdav_endpoint = "{{placeholder:external-reva-endpoint}}"
-webdav_prefix = "{{placeholder:external-reva-endpoint}}/remote.php/dav/files"
 webapp_template = "{{placeholder:external-reva-endpoint}}/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"
 
 [grpc.services.ocmshareprovider.drivers.json]

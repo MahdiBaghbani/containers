@@ -223,31 +223,41 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 }
 ```
 
-#### Example: Git Source to Local Source (Type Switch)
+#### Example: Local-plane dev versions (off-git)
+
+For dev-only versions that point sources at a local checkout, use the off-git
+local plane instead of adding a tracked `"name": "local"` entry:
+
+1. Create `.dockypody.local/services/<service>/` at the repo root.
+2. Add `.dockypody.local/services/<service>/versions.nuon` with the same
+   `versions: [...]` schema as tracked manifests.
+3. Build or inspect with `--plane local`:
+
+```bash
+nu scripts/dockypody.nu build --plane local --service my-service --version dev
+nu scripts/dockypody.nu inspect effective-config --plane local --service my-service --version dev
+```
+
+**Local-plane rules:**
+
+- Same-name versions fully replace tracked versions; new names are appended.
+- Local fragments may only override source ids already present in the tracked
+  manifest.
+- Service discovery still uses tracked `services/*.nuon` only.
+- Tracked CI generators never consume local fragments.
+
+**Example fragment** (`.dockypody.local/services/my-service/versions.nuon`):
 
 ```nuon
 {
-  "default": "local",
-  "defaults": {
-    "sources": {
-      "gaia": {
-        "url": "https://github.com/example/gaia",
-        "ref": "v1.0.0"
-      },
-      "nushell": {
-        "url": "https://github.com/nushell/nushell",
-        "ref": "0.108.0"
-      }
-    }
-  },
   "versions": [
     {
-      "name": "local",
+      "name": "dev",
+      "latest": false,
       "overrides": {
         "sources": {
           "gaia": {
             "path": ".repos/gaia"
-            // nushell omitted - will be preserved from defaults
           }
         }
       }
@@ -256,12 +266,15 @@ Source configurations use **type-aware merging** that supports partial Git sourc
 }
 ```
 
-**Result for `local` version:**
+**Result for `dev` on `--plane local`:**
 
-- `sources.gaia`: Only `path` field (no `url`/`ref`) - **replaced**
-- `sources.nushell`: `url` and `ref` from defaults - **preserved**
+- `sources.gaia`: only `path` (local checkout) - **replaced**
+- Other tracked sources and defaults: **preserved** from tracked manifests
 
-**Important Notes:**
+See [Config Schema Reference](../reference/config-schema.md#local-plane-root-off-git)
+and [CLI `--plane`](../reference/cli-reference.md#config-plane-flag).
+
+**Important Notes (tracked manifests):**
 
 - Source replacement is **per-key only** - only source keys explicitly defined in overrides are replaced
 - Other fields (`dependencies`, `external_images`, `build_args`, etc.) continue using normal deep-merge
@@ -454,7 +467,10 @@ When building a service, the version is resolved in this order:
 2. **Manifest `default` field** - If no `--version` specified, uses the default version from the manifest
 3. **Error if not found** - Build fails if version not in manifest
 
-**Note:** All services MUST have a version manifest. There are no fallbacks to Git tags or "local" versions.
+**Note:** All services MUST have a tracked version manifest. There are no
+fallbacks to Git tags. Dev-only version names that exist only under
+`.dockypody.local/` require `--plane local` (see
+[Local-plane dev versions](#example-local-plane-dev-versions-off-git)).
 
 ### Tags
 
@@ -875,9 +891,32 @@ nu scripts/dockypody.nu build --service revad-base --all-versions
 **Solution:** Create `services/{name}/versions.nuon` or remove
 version-specific flags.
 
-### Error: "Version 'x' not found in manifest"
+### Error: "Version 'x' not found in manifest" (tracked plane)
 
-**Solution:** Either add the version to the manifest or build without specifying a version.
+**Symptom:** `--version x` fails on the default tracked plane and the error
+lists versions from `services/<service>/versions.nuon`.
+
+**Solution:** Add `x` to the tracked manifest, pick an existing tracked
+version name, or omit `--version` to use the manifest default.
+
+### Error: "Version 'x' not found" with local-plane guidance
+
+**Symptom:** The error mentions
+`.dockypody.local/services/<service>/versions.nuon` or tells you to retry
+with `--plane local`.
+
+**Cause:** Version `x` exists only in the off-git local-plane fragment, not
+in the tracked manifest.
+
+**Solution:** Retry with `--plane local`:
+
+```bash
+nu scripts/dockypody.nu build --plane local --service my-service --version x
+nu scripts/dockypody.nu inspect effective-config --plane local --service my-service --version x
+```
+
+If the fragment path is missing, create `.dockypody.local/` and add the
+local `versions.nuon` for that service first.
 
 ### Dependency Version Mismatch
 

@@ -31,6 +31,9 @@ ARG SSH_DEFAULT_USER="root"
 ARG SSH_PORT="22"
 ARG SSH_LISTEN="0.0.0.0"
 
+ARG COMPOSER_URL
+ARG COMPOSER_REF
+
 FROM ${COMMON_TOOLS_IMAGE} AS common-tools
 
 FROM ${BASE_RUNTIME_IMAGE}
@@ -47,6 +50,8 @@ ARG SSH_PORT
 ARG SSH_LISTEN
 
 ARG COMMON_TOOLS_IMAGE
+ARG COMPOSER_URL
+ARG COMPOSER_REF
 
 ENV PHP_MEMORY_LIMIT=512M
 ENV PHP_UPLOAD_LIMIT=512M
@@ -304,11 +309,25 @@ RUN { \
 RUN echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf; \
     a2enconf servername
 
-# Install Composer
-RUN --mount=type=cache,id=nextcloud-composer-cache,target=/root/.composer/cache,sharing=locked \
-    curl --silent --show-error https://getcomposer.org/installer -o /root/composer-setup.php && \
-    php /root/composer-setup.php --install-dir=/usr/local/bin --filename=composer && \
-    rm /root/composer-setup.php
+# Download a pinned Composer phar into a dedicated artifact cache.
+# /root/.composer/cache is only for Composer package-manager work, not bootstrap.
+RUN --mount=type=cache,id=nextcloud-base-composer-dl-v1-${COMPOSER_REF},target=/var/cache/dockypody/composer,sharing=locked \
+    set -eu; \
+    cached="/var/cache/dockypody/composer/composer-${COMPOSER_REF}.phar"; \
+    if [ -s "$cached" ]; then \
+      php "$cached" --version >/dev/null 2>&1 || rm -f "$cached"; \
+    fi; \
+    if [ ! -s "$cached" ]; then \
+      tmp="${cached}.tmp"; \
+      rm -f "$tmp"; \
+      curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 --max-time 600 \
+        -o "$tmp" \
+        "${COMPOSER_URL}/releases/download/${COMPOSER_REF}/composer.phar"; \
+      mv "$tmp" "$cached"; \
+    fi; \
+    install -m 0755 "$cached" /usr/local/bin/composer; \
+    composer --version | grep -F "${COMPOSER_REF}" >/dev/null 2>&1 || \
+      (echo "Composer version mismatch after install (expected ${COMPOSER_REF})" && exit 1)
 
 # Copy entrypoint scripts and libraries
 COPY ./scripts/upgrade.exclude /upgrade.exclude

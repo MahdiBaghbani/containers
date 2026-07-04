@@ -19,4 +19,4 @@
 
 # Wrapper script for cernbox.nu
 # Calls the nushell script that contains the actual logic
-exec nu /docker-entrypoint.d/cernbox.nu
+exec /usr/bin/cernbox.nu

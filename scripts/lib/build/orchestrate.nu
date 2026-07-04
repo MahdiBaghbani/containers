@@ -36,7 +36,11 @@ use ./hash.nu [compute-service-def-hash-graph]
 use ./pull.nu [run-pulls print-pull-summary compute-canonical-image-ref]
 use ./docker.nu [get-service-def-hash-from-image]
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest filter-versions get-version-or-null resolve-version-name get-version-spec apply-version-defaults get-default-version]
-use ../plane/versions.nu [load-effective-versions-manifest resolve-build-node-version-spec]
+use ../plane/versions.nu [
+  load-effective-versions-manifest
+  resolve-build-node-version-spec
+  format-version-miss-error
+]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-default-platform get-platform-names expand-version-to-platforms strip-platform-suffix]
 use ../services/core.nu [list-service-names]
 use ../registries/info.nu [get-registry-info]
@@ -582,14 +586,8 @@ def run-single-service-build [ctx: record] {
       let version_spec = (get-version-or-null $versions_manifest $version_resolved.base_name)
       
       if $version_spec == null {
-        let available_versions = (try {
-          $versions_manifest.versions | each {|v| $v.name} | str join ", "
-        } catch {
-          "unknown"
-        })
-        error make { 
-          msg: ($"Version '($version_resolved.base_name)' not found in manifest for service '($f.service)'.\n\n" +
-                $"Available versions: ($available_versions)")
+        error make {
+          msg: (format-version-miss-error $f.service $version_resolved.base_name $plane_ctx --style short)
         }
       }
       
@@ -898,23 +896,8 @@ def run-single-service-build [ctx: record] {
   let version_spec = (get-version-or-null $versions_manifest $version_resolved.base_name)
   
   if $version_spec == null {
-    let available_versions = (try {
-      $versions_manifest.versions | each {|v| $v.name} | str join ", "
-    } catch {
-      "unknown"
-    })
-    let first_version = (try {
-      $available_versions | split row ", " | first
-    } catch {
-      "unknown"
-    })
-    error make { 
-      msg: ($"Version '($version_resolved.base_name)' not found in manifest for service '($f.service)'.\n\n" +
-            $"Available versions: ($available_versions)\n" +
-            "Options:\n" +
-            $"1. Use one of the available versions: --version ($first_version)\n" +
-            $"2. Add the version to services/($f.service)/versions.nuon\n" +
-            "3. Check for typos in the version name")
+    error make {
+      msg: (format-version-miss-error $f.service $version_resolved.base_name $plane_ctx --style build)
     }
   }
   

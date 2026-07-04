@@ -19,13 +19,16 @@
 # Merges tracked versions.nuon with optional local fragment mirror.
 
 use ../core/records.nu [find-duplicates]
+use ../core/repo.nu [get-repo-root]
 use ../manifest/core.nu [load-versions-manifest]
 use ./effective-config.nu [
   load-local-fragment
+  local-fragment-path
   validate-local-plane-source-entry
 ]
 
 const PLANE_LOCAL = "local"
+const PLANE_TRACKED = "tracked"
 
 export def merge-version-universe [
   tracked_versions: list,
@@ -143,6 +146,142 @@ def is-local-plane [plane_ctx: any] {
   (try { $plane_ctx.plane } catch { "" }) == $PLANE_LOCAL
 }
 
+def resolve-plane-for-universe [plane_ctx: any] {
+  if $plane_ctx == null {
+    return $PLANE_TRACKED
+  }
+  (try { $plane_ctx.plane } catch { $PLANE_TRACKED })
+}
+
+def resolve-repo-root-for-universe [plane_ctx: any] {
+  if $plane_ctx != null {
+    try {
+      return ($plane_ctx.repo_root | path expand)
+    } catch { }
+  }
+  get-repo-root
+}
+
+def version-names-from-list [versions: list] {
+  $versions | each {|v| (try { $v.name } catch { "" })}
+}
+
+# Describe tracked vs local fragment version names for diagnostics (no merge I/O).
+export def describe-version-universe [
+  service: string,
+  plane_ctx: any
+] {
+  let plane = (resolve-plane-for-universe $plane_ctx)
+  let repo_root = (resolve-repo-root-for-universe $plane_ctx)
+  let tracked = (load-versions-manifest $service)
+  let tracked_versions = (try { $tracked.versions } catch { [] })
+  let tracked_names = (version-names-from-list $tracked_versions)
+
+  let fragment = (load-local-fragment $service $repo_root)
+  let fragment_path = (local-fragment-path $service $repo_root)
+  let fragment_versions = (
+    if $fragment != null {
+      try { $fragment.versions } catch { [] }
+    } else {
+      []
+    }
+  )
+  let fragment_names = (version-names-from-list $fragment_versions)
+  let local_only_names = ($fragment_names | where {|n| ($n | str length) > 0 and not ($n in $tracked_names)})
+
+  let effective_names = (
+    if $plane == $PLANE_LOCAL and $fragment != null {
+      version-names-from-list (merge-version-universe $tracked_versions $fragment_versions)
+    } else {
+      $tracked_names
+    }
+  )
+
+  {
+    plane: $plane
+    service: $service
+    tracked_names: $tracked_names
+    effective_names: $effective_names
+    fragment_present: ($fragment != null)
+    fragment_path: $fragment_path
+    local_only_names: $local_only_names
+  }
+}
+
+export def version-local-only-in-fragment [
+  universe: record,
+  version_name: string
+] {
+  if ($version_name | str length) == 0 {
+    return false
+  }
+  $universe.fragment_present and ($version_name in $universe.local_only_names)
+}
+
+# Plane-aware version miss text for tracked-plane local-only names (style: short | build | inspect).
+export def format-version-miss-error [
+  service: string,
+  version_name: string,
+  plane_ctx: any,
+  --style: string = "short"
+] {
+  let universe = (describe-version-universe $service $plane_ctx)
+  let available_list = (
+    if $universe.plane == $PLANE_LOCAL {
+      $universe.effective_names
+    } else {
+      $universe.tracked_names
+    }
+  )
+  let available = ($available_list | str join ", ")
+  let is_local_only = (
+    ($universe.plane == $PLANE_TRACKED) and (version-local-only-in-fragment $universe $version_name)
+  )
+
+  if $is_local_only {
+    mut options = [
+      $"1. Use --plane local to resolve this local-only version: --plane local --version ($version_name)"
+      $"2. Add the version to services/($service)/versions.nuon"
+    ]
+    if $style == "build" {
+      $options = ($options | append "3. Check for typos in the version name")
+    } else if $style == "inspect" {
+      $options = ($options | append "3. Check for typos in the version name")
+    }
+    return (
+      $"Version '($version_name)' not found in tracked manifest for service '($service)'.\n\n"
+      + $"This version is defined only in the local fragment: ($universe.fragment_path)\n\n"
+      + "Options:\n"
+      + ($options | str join "\n")
+    )
+  }
+
+  if $style == "build" {
+    let first_version = (try { $available | split row ", " | first } catch { "unknown" })
+    return (
+      $"Version '($version_name)' not found in manifest for service '($service)'.\n\n"
+      + $"Available versions: ($available)\n"
+      + "Options:\n"
+      + $"1. Use one of the available versions: --version ($first_version)\n"
+      + $"2. Add the version to services/($service)/versions.nuon\n"
+      + "3. Check for typos in the version name"
+    )
+  }
+
+  if $style == "inspect" {
+    return (
+      $"Version '($version_name)' not found in manifest for service '($service)'.\n\n"
+      + $"Available versions: ($available)\n"
+      + "Options:\n"
+      + $"1. Use one of the available tracked versions\n"
+      + $"2. Add the version to services/($service)/versions.nuon\n"
+      + "3. Check for typos in the version name"
+    )
+  }
+
+  $"Version '($version_name)' not found in manifest for service '($service)'.\n\nAvailable versions: ($available)"
+}
+
 export def load-effective-versions-manifest [
   service: string,
   plane_ctx: any
@@ -251,7 +390,7 @@ export def resolve-build-node-version-spec [
   let version_spec = (get-version-or-null $versions_manifest $version_resolved.base_name)
   if $version_spec == null {
     error make {
-      msg: $"Version '($version_resolved.base_name)' not found in manifest for service '($service)'"
+      msg: (format-version-miss-error $service $version_resolved.base_name $plane_ctx --style short)
     }
   }
 

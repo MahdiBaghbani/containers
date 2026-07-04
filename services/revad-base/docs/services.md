@@ -27,9 +27,25 @@ The gateway container runs multiple services:
 - Application registry management
 - User preferences management
 
+### Config Band Note
+
+The `master` band overlay replaces whole `gateway.toml` (for example
+`enable_code_flow = true`); the `v3.10.1` core-only band keeps core defaults.
+Band resolution runs during the development image build only. See
+[Configuration](configuration.md#config-band-resolver) and
+[Architecture](architecture.md#build-tuple-and-config-bands) for field-level
+differences.
+
 ## Share Providers Service
 
 **Config File:** `shareproviders.toml`
+
+### Config Band Note
+
+The `master` band replaces whole `shareproviders.toml` (`webapp_endpoint` vs
+core `webapp_template`); `v3.10.1` keeps the core file. This is a band
+overlay difference, not a global field rename. See
+[Configuration](configuration.md#example-master-vs-v3101).
 
 ### Share Provider Services
 
@@ -181,6 +197,6 @@ Services communicate via gRPC:
 
 ## Related Documentation
 
-- [Architecture](architecture.md) - Service architecture overview
+- [Architecture](architecture.md) - Service architecture and version tuple
 - [Container Modes](container-modes.md) - Container mode system
-- [Configuration](configuration.md) - Configuration details
+- [Configuration](configuration.md) - Band resolver and configuration details

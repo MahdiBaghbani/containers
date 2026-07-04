@@ -23,6 +23,13 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders, validate-and-filter-urls]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/ports.nu [
+    resolve-gateway-grpc-port
+    resolve-dataprovider-registry-grpc-port
+    resolve-authprovider-grpc-port
+    resolve-shareproviders-grpc-port
+    resolve-groupuserproviders-grpc-port
+]
 
 const CONFIG_DIR = "/configs/revad"
 const GATEWAY_CONFIG_FILE = "gateway.toml"
@@ -79,7 +86,7 @@ export def init_gateway [] {
   let gateway_host = (get_env_or_default "REVAD_GATEWAY_HOST" $domain)
   let gateway_port = (get_env_or_default "REVAD_GATEWAY_PORT" "80")
   let gateway_protocol = (get_env_or_default "REVAD_GATEWAY_PROTOCOL" "http")
-  let gateway_grpc_port = (get_env_or_default "REVAD_GATEWAY_GRPC_PORT" "9142")
+  let gateway_grpc_port = (resolve-gateway-grpc-port)
   
   # Get logging and security configuration
   let log_level = (get_env_or_default "REVAD_LOG_LEVEL" "debug")
@@ -146,27 +153,27 @@ export def init_gateway [] {
   # Gateway needs these to route requests to appropriate dataproviders
   # Defaults use generic names (ports match common patterns: 9143-9147)
   let dataprovider_localhome_host = (get_env_or_default "REVAD_DATAPROVIDER_LOCALHOME_HOST" "revad-dataprovider-localhome")
-  let dataprovider_localhome_grpc_port = (get_env_or_default "REVAD_DATAPROVIDER_LOCALHOME_GRPC_PORT" "9143")
+  let dataprovider_localhome_grpc_port = (resolve-dataprovider-registry-grpc-port "localhome")
   let dataprovider_ocm_host = (get_env_or_default "REVAD_DATAPROVIDER_OCM_HOST" "revad-dataprovider-ocm")
-  let dataprovider_ocm_grpc_port = (get_env_or_default "REVAD_DATAPROVIDER_OCM_GRPC_PORT" "9146")
+  let dataprovider_ocm_grpc_port = (resolve-dataprovider-registry-grpc-port "ocm")
   let dataprovider_sciencemesh_host = (get_env_or_default "REVAD_DATAPROVIDER_SCIENCEMESH_HOST" "revad-dataprovider-sciencemesh")
-  let dataprovider_sciencemesh_grpc_port = (get_env_or_default "REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT" "9147")
+  let dataprovider_sciencemesh_grpc_port = (resolve-dataprovider-registry-grpc-port "sciencemesh")
   
   # Get auth provider addresses for auth registry
   # Gateway needs these to route authentication requests to appropriate auth providers
   # Defaults use generic names (ports match common patterns: 9158=OIDC, 9166=Machine, 9160=Public Shares, 9278=OCM Shares)
   let authprovider_oidc_host = (get_env_or_default "REVAD_AUTHPROVIDER_OIDC_HOST" "revad-authprovider-oidc")
-  let authprovider_oidc_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_OIDC_GRPC_PORT" "9158")
+  let authprovider_oidc_grpc_port = (resolve-authprovider-grpc-port "oidc")
   let authprovider_machine_host = (get_env_or_default "REVAD_AUTHPROVIDER_MACHINE_HOST" "revad-authprovider-machine")
-  let authprovider_machine_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_MACHINE_GRPC_PORT" "9166")
+  let authprovider_machine_grpc_port = (resolve-authprovider-grpc-port "machine")
   let authprovider_publicshares_host = (get_env_or_default "REVAD_AUTHPROVIDER_PUBLICSHARES_HOST" "revad-authprovider-publicshares")
-  let authprovider_publicshares_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_PUBLICSHARES_GRPC_PORT" "9160")
+  let authprovider_publicshares_grpc_port = (resolve-authprovider-grpc-port "publicshares")
   let authprovider_ocmshares_host = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARES_HOST" "revad-authprovider-ocmshares")
-  let authprovider_ocmshares_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARES_GRPC_PORT" "9278")
+  let authprovider_ocmshares_grpc_port = (resolve-authprovider-grpc-port "ocmshares")
   let authprovider_ocmsharecode_host = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARECODE_HOST" "revad-authprovider-ocmsharecode")
-  let authprovider_ocmsharecode_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_OCMSHARECODE_GRPC_PORT" "9280")
+  let authprovider_ocmsharecode_grpc_port = (resolve-authprovider-grpc-port "ocmsharecode")
   let authprovider_ocmexchangedtoken_host = (get_env_or_default "REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_HOST" "revad-authprovider-ocmexchangedtoken")
-  let authprovider_ocmexchangedtoken_grpc_port = (get_env_or_default "REVAD_AUTHPROVIDER_OCMEXCHANGEDTOKEN_GRPC_PORT" "9282")
+  let authprovider_ocmexchangedtoken_grpc_port = (resolve-authprovider-grpc-port "ocmexchangedtoken")
   
   # Get OCM code-flow configuration
   let enable_code_flow_raw = (get_env_or_default "OCM_ENABLE_CODE_FLOW" "false" | str trim)
@@ -177,9 +184,9 @@ export def init_gateway [] {
   # Gateway needs these to route requests to appropriate providers
   # Defaults use generic names (ports match common patterns: 9144=Share Providers, 9145=User/Group Providers)
   let shareproviders_host = (get_env_or_default "REVAD_SHAREPROVIDERS_HOST" "revad-shareproviders")
-  let shareproviders_grpc_port = (get_env_or_default "REVAD_SHAREPROVIDERS_GRPC_PORT" "9144")
+  let shareproviders_grpc_port = (resolve-shareproviders-grpc-port)
   let groupuserproviders_host = (get_env_or_default "REVAD_GROUPUSERPROVIDERS_HOST" "revad-groupuserproviders")
-  let groupuserproviders_grpc_port = (get_env_or_default "REVAD_GROUPUSERPROVIDERS_GRPC_PORT" "9145")
+  let groupuserproviders_grpc_port = (resolve-groupuserproviders-grpc-port)
   
   # Build placeholder map
   let placeholder_map = {
