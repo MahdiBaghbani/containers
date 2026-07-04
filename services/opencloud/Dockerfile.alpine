@@ -45,12 +45,14 @@ ARG OPENCLOUD_MODE=""
 ARG OPENCLOUD_URL="https://github.com/opencloud-eu/opencloud"
 ARG OPENCLOUD_REF="main"
 ARG OPENCLOUD_SHA=""
+ARG OPENCLOUD_REF_KIND=""
 ARG OPENCLOUD_PATH=""
 
 ARG OPENCLOUD_WEB_MODE=""
 ARG OPENCLOUD_WEB_URL=""
 ARG OPENCLOUD_WEB_REF=""
 ARG OPENCLOUD_WEB_SHA=""
+ARG OPENCLOUD_WEB_REF_KIND=""
 ARG OPENCLOUD_WEB_PATH=""
 ARG OPENCLOUD_WEB_NODE_OPTIONS="--max-old-space-size=4096"
 
@@ -75,21 +77,27 @@ RUN --mount=type=cache,id=opencloud-debian-apt-cache,target=/var/cache/apt,shari
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 ./scripts/lib/clone-source.nu /usr/local/bin/clone-source.nu
 COPY --chmod=755 ./scripts/build/web-override.nu /usr/local/bin/web-override.nu
 
 WORKDIR /opencloud
 
+# Clone or copy opencloud source via shared helper (local bind mount or git cache).
 RUN --mount=type=bind,source=${OPENCLOUD_PATH:-.},target=/mnt/src,ro \
     --mount=type=cache,id=opencloud-git-${CACHEBUST:-${OPENCLOUD_REF}},target=/src/opencloud-git-cache,sharing=shared \
-    if [ "$OPENCLOUD_MODE" = "local" ]; then \
-      mkdir -p /opencloud && cp -a /mnt/src/. /opencloud/; \
-    else \
-      mkdir -p /src/opencloud-git-cache && \
-      if [ ! -d /src/opencloud-git-cache/.git ]; then \
-        git clone --depth 1 --recursive --shallow-submodules --branch "$OPENCLOUD_REF" "$OPENCLOUD_URL" /src/opencloud-git-cache; \
-      fi && \
-      cp -a /src/opencloud-git-cache/. /opencloud/ && \
-      if [ -n "$OPENCLOUD_SHA" ]; then git -C /opencloud checkout "$OPENCLOUD_SHA"; fi; \
+    nu /usr/local/bin/clone-source.nu \
+    --mode "${OPENCLOUD_MODE:-git}" \
+    --url "${OPENCLOUD_URL}" \
+    --ref "${OPENCLOUD_REF}" \
+    --ref-kind "${OPENCLOUD_REF_KIND}" \
+    --local-dir /mnt/src \
+    --cache-dir /src/opencloud-git-cache \
+    --dest /opencloud && \
+    if [ "${OPENCLOUD_MODE:-git}" != "local" ] && [ -n "$OPENCLOUD_SHA" ]; then \
+      if ! git -C /opencloud checkout "$OPENCLOUD_SHA"; then \
+        git -C /opencloud fetch --depth 1 origin "$OPENCLOUD_SHA" && \
+        git -C /opencloud checkout "$OPENCLOUD_SHA"; \
+      fi; \
     fi
 
 RUN corepack enable
@@ -110,6 +118,7 @@ ARG OPENCLOUD_REVA_MODE=""
 ARG OPENCLOUD_REVA_URL=""
 ARG OPENCLOUD_REVA_REF=""
 ARG OPENCLOUD_REVA_SHA=""
+ARG OPENCLOUD_REVA_REF_KIND=""
 ARG OPENCLOUD_REVA_PATH=""
 ARG CACHEBUST="default"
 
@@ -127,6 +136,7 @@ WORKDIR /opencloud
 COPY --from=generate /opencloud/ /opencloud/
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 ./scripts/lib/clone-source.nu /usr/local/bin/clone-source.nu
 COPY --chmod=755 ./scripts/build/reva-override.nu /usr/local/bin/reva-override.nu
 
 ENV EDITION="${EDITION}"

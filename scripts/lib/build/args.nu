@@ -19,6 +19,7 @@
 # See docs/concepts/build-system.md for architecture
 
 use ./config.nu [process-sources-to-build-args process-external-images-to-build-args]
+use ./sources.nu [classify-ref-kind-from-ref]
 use ../plane/guard.nu [PLANE_LOCAL]
 
 # Generate build arguments (priority order documented in docs/concepts/build-system.md)
@@ -34,7 +35,8 @@ export def generate-build-args [
     source_shas: record = {},
     source_types: record = {},
     local_source_paths: record = {},
-    plane: string = "tracked"
+    plane: string = "tracked",
+    source_ref_kinds: record = {}
 ] {
     let commit_sha = (if ($meta.sha | str length) > 0 { $meta.sha } else { "local" })
     let version = $version_tag
@@ -74,6 +76,12 @@ export def generate-build-args [
             let sha_value = ($source_shas | get $sha_key)
             $acc | upsert $sha_key $sha_value
         })
+
+        # Merge explicit ref-kind args (host-side classification; overrides process-sources defaults when set)
+        $build_args = ($source_ref_kinds | columns | reduce --fold $build_args {|kind_key, acc|
+            let kind_value = ($source_ref_kinds | get $kind_key)
+            $acc | upsert $kind_key $kind_value
+        })
     }
     
     let cfg_external_images = (try { $cfg.external_images } catch { {} })
@@ -97,6 +105,32 @@ export def generate-build-args [
         if ($env_val != null) and ($env_val | str length) > 0 {
             $build_args = ($build_args | upsert $arg_name $env_val)
         }
+    }
+
+    # Recompute *_REF_KIND from effective *_REF after env overrides (manifest-derived kinds go stale otherwise).
+    let cfg_sources = (try { $cfg.sources } catch { {} })
+    if not ($cfg_sources | is-empty) {
+        $build_args = ($cfg_sources | columns | reduce --fold $build_args {|source_key, acc|
+            let source_type = (if ($source_types | is-empty) {
+                if "path" in (($cfg_sources | get $source_key) | columns) { "local" } else { "git" }
+            } else {
+                (try { $source_types | get $source_key } catch { "git" })
+            })
+            let source_key_upper = ($source_key | str upcase)
+            let ref_kind_key = $"($source_key_upper)_REF_KIND"
+
+            if $source_type == "local" {
+                $acc | upsert $ref_kind_key "local"
+            } else {
+                let ref_key = $"($source_key_upper)_REF"
+                let effective_ref = (try { $acc | get $ref_key } catch { "" })
+                if ($effective_ref | str length) > 0 {
+                    $acc | upsert $ref_kind_key (classify-ref-kind-from-ref $effective_ref "git")
+                } else {
+                    $acc
+                }
+            }
+        })
     }
     
     $build_args = ($build_args | merge $deps_resolved)

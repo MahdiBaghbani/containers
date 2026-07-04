@@ -31,8 +31,8 @@ use ../validate/ssh.nu [validate-ssh-config-merged]
 use ../core/repo.nu [get-repo-root]
 use ../tls/lib.nu [read-ca-name]
 use ./tags.nu [generate-tags]
-use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context extract-ssh-metadata prepare-ssh-context cleanup-ssh-context]
-use ./sources.nu [prepare-local-sources-context extract-source-shas]
+use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context extract-ssh-metadata prepare-ssh-context cleanup-ssh-context detect-clone-source-requirements prepare-clone-source-context cleanup-clone-source-context]
+use ./sources.nu [prepare-local-sources-context extract-source-shas extract-source-ref-kinds]
 use ./labels.nu [generate-labels]
 use ./args.nu [generate-build-args]
 use ./order.nu [build-dependency-graph topological-sort-dfs]
@@ -249,6 +249,12 @@ export def build-single-version [
   let source_shas = $source_shas_result.shas
   $current_cache = ($current_cache | merge $source_shas_result.cache)
 
+  let source_ref_kinds = (if ($cfg_sources | is-empty) {
+    {}
+  } else {
+    extract-source-ref-kinds $cfg_sources $source_types
+  })
+
   let is_local_plane = ($plane == $PLANE_LOCAL)
   let effective_push = (if $is_local_plane { false } else { $push_val })
   let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform $is_local_plane)
@@ -456,11 +462,13 @@ export def build-single-version [
     {}
   })
 
-  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths $plane)
+  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths $plane $source_ref_kinds)
+
+  # Read Dockerfile once for just-in-time context staging decisions.
+  let dockerfile_text = (try { open $dockerfile } catch { "" })
 
   # Detect which CA files the Dockerfile actually needs, then stage them just-in-time.
   let ca_reqs = (if $tls_meta.enabled {
-    let dockerfile_text = (try { open $dockerfile } catch { "" })
     detect-ca-requirements $dockerfile_text $tls_meta.ca_name $tls_meta.mode
   } else {
     {needs_ca_crt: false, needs_ca_key: false}
@@ -468,6 +476,9 @@ export def build-single-version [
   let ca_context = (prepare-ca-context $context $tls_meta $ca_reqs)
 
   let ssh_context = (prepare-ssh-context $service $context $ssh_meta.enabled $ssh_meta.mode)
+
+  let clone_reqs = (detect-clone-source-requirements $dockerfile_text)
+  let clone_context = (prepare-clone-source-context $service $context $clone_reqs)
 
   print ""
   print $"=== Building ($service):($version_tag) ==="
@@ -485,6 +496,7 @@ export def build-single-version [
   cleanup-tls-context $context $tls_context
   cleanup-ca-context $context $ca_context
   cleanup-ssh-context $context $ssh_context
+  cleanup-clone-source-context $context $clone_context
 
   if $build_error != null {
     error make {msg: $build_error}

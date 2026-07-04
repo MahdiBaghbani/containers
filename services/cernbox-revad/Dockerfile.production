@@ -28,6 +28,11 @@ ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
 FROM ${GAIA_IMAGE} AS gaia
 
 ################################
+###  Common Tools (nu)       ###
+################################
+FROM ${COMMON_TOOLS_IMAGE} AS common-tools-builder
+
+################################
 ###  Build Reva with Gaia    ###
 ################################
 FROM ${BASE_BUILD_IMAGE} AS build
@@ -51,39 +56,47 @@ RUN --mount=type=cache,id=common-tools-debian-apt-cache,target=/var/cache/apt,sh
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=gaia /usr/local/bin/gaia /usr/local/bin/gaia
+COPY --chmod=755 --from=common-tools-builder /usr/local/bin/nu /usr/local/bin/nu
+RUN nu --version || (echo "Nushell verification failed" && exit 1)
 
 WORKDIR /
 
 ARG REVAD_URL="https://github.com/cs3org/reva"
 ARG REVAD_REF="v3.3.3"
 ARG REVAD_SHA=""
+ARG REVAD_REF_KIND=""
 ARG REVAD_PATH=""
 ARG REVAD_MODE=""
 ARG REVAD_PLUGINS_URL="https://github.com/cernbox/reva-plugins"
 ARG REVAD_PLUGINS_REF="master"
+ARG REVAD_PLUGINS_REF_KIND=""
 ARG GO_BUILD_GOPROXY=""
 ARG CACHEBUST="default"
 
-# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+# Clone or copy reva source via shared helper (local bind mount or git cache).
+# The helper auto-detects ref vs SHA and manages the shared git cache.
 RUN --mount=type=cache,id=cernbox-revad-reva-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
     --mount=type=bind,source=${REVAD_PATH:-.},target=/tmp/local-reva,ro \
-    if [ "$REVAD_MODE" = "local" ]; then \
-    mkdir -p /reva-git && \
-    cp -a /tmp/local-reva/. /reva-git; \
-    else \
-    mkdir -p /src/reva-git-cache && \
-    if [ ! -d /src/reva-git-cache/.git ]; then \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_REF}" ${REVAD_URL} /src/reva-git-cache; \
-    fi && \
-    cp -a /src/reva-git-cache/. /reva-git; \
-    fi
+    nu /tmp/clone-source.nu \
+    --mode "${REVAD_MODE:-git}" \
+    --url "${REVAD_URL}" \
+    --ref "${REVAD_REF}" \
+    --ref-kind "${REVAD_REF_KIND}" \
+    --local-dir /tmp/local-reva \
+    --cache-dir /src/reva-git-cache \
+    --dest /reva-git
 
+# Clone reva-plugins source via shared helper (git cache).
 RUN --mount=type=cache,id=cernbox-revad-reva-plugins-git-${CACHEBUST:-${REVAD_PLUGINS_REF}},target=/src/reva-plugins-git-cache,sharing=shared \
-    mkdir -p /src/reva-plugins-git-cache && \
-    if [ ! -d /src/reva-plugins-git-cache/.git ]; then \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_PLUGINS_REF}" ${REVAD_PLUGINS_URL} /src/reva-plugins-git-cache; \
-    fi && \
-    cp -a /src/reva-plugins-git-cache/. /reva-plugins-git
+    nu /tmp/clone-source.nu \
+    --mode git \
+    --url "${REVAD_PLUGINS_URL}" \
+    --ref "${REVAD_PLUGINS_REF}" \
+    --ref-kind "${REVAD_PLUGINS_REF_KIND}" \
+    --cache-dir /src/reva-plugins-git-cache \
+    --dest /reva-plugins-git
 
 RUN --mount=type=cache,id=cernbox-revad-go-mod-cache,target=/go/pkg/mod,sharing=locked \
     --mount=type=cache,id=cernbox-revad-go-build-cache,target=/root/.cache/go-build,sharing=locked \

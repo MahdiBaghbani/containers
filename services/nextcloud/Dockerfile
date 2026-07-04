@@ -30,25 +30,27 @@ WORKDIR /
 ARG NEXTCLOUD_URL="https://github.com/nextcloud/server"
 ARG NEXTCLOUD_REF="v32.0.2"
 ARG NEXTCLOUD_SHA=""
+ARG NEXTCLOUD_REF_KIND=""
 ARG NEXTCLOUD_PATH=""
 ARG NEXTCLOUD_MODE=""
 ARG CACHEBUST="default"
 
-# Clone or copy Nextcloud source (follows revad-base pattern)
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+# Clone or copy Nextcloud source via shared helper (local bind mount or git cache).
 RUN --mount=type=cache,id=nextcloud-server-git-${CACHEBUST:-${NEXTCLOUD_REF}},target=/src/nextcloud-git-cache,sharing=shared \
     --mount=type=bind,source=${NEXTCLOUD_PATH:-.},target=/src/local-nextcloud,ro \
+    nu /tmp/clone-source.nu \
+    --mode "${NEXTCLOUD_MODE:-git}" \
+    --url "${NEXTCLOUD_URL}" \
+    --ref "${NEXTCLOUD_REF}" \
+    --ref-kind "${NEXTCLOUD_REF_KIND}" \
+    --local-dir /src/local-nextcloud \
+    --cache-dir /src/nextcloud-git-cache \
+    --dest /nextcloud-source && \
     if [ "$NEXTCLOUD_MODE" = "local" ]; then \
-    mkdir -p /nextcloud-source && \
-    cp -a /src/local-nextcloud/. /nextcloud-source && \
     rm -f /nextcloud-source/config/config.php && \
     rm -rf /nextcloud-source/data /nextcloud-source/data-autotest; \
-    else \
-    mkdir -p /src/nextcloud-git-cache && \
-    if [ ! -d /src/nextcloud-git-cache/.git ]; then \
-    rm -rf /src/nextcloud-git-cache/* /src/nextcloud-git-cache/.[!.]* 2>/dev/null || true; \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${NEXTCLOUD_REF}" ${NEXTCLOUD_URL} /src/nextcloud-git-cache; \
-    fi && \
-    cp -a /src/nextcloud-git-cache/. /nextcloud-source; \
     fi
 
 # Remove unnecessary files (.git, tests, docs) to reduce image size

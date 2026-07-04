@@ -41,8 +41,8 @@ Create `services/my-service.nuon`:
   "context": "services/my-service",
   "dockerfile": "services/my-service/Dockerfile",
   "sources": {
-    "my-source": {
-      "url": "https://github.com/example/my-source",
+    "my_source": {
+      "url": "https://github.com/example/my_source",
       "ref": "v1.0.0"
     }
   },
@@ -72,7 +72,7 @@ Create `services/my-service.nuon`:
       "latest": true,
       "overrides": {
         "sources": {
-          "my-source": {"ref": "v1.0.0"}
+          "my_source": {"ref": "v1.0.0"}
         },
         "external_images": {
           "build": {"tag": "1.25-trixie"},
@@ -92,10 +92,21 @@ Create `services/my-service/Dockerfile`:
 ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
 ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
 
-ARG MY_SOURCE_URL="https://github.com/example/my-source"
+ARG MY_SOURCE_URL="https://github.com/example/my_source"
 ARG MY_SOURCE_REF="v1.0.0"
+ARG MY_SOURCE_REF_KIND=""
 
 FROM ${BASE_BUILD_IMAGE} AS build
+
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+RUN nu /tmp/clone-source.nu \
+    --mode git \
+    --url "${MY_SOURCE_URL}" \
+    --ref "${MY_SOURCE_REF}" \
+    --ref-kind "${MY_SOURCE_REF_KIND}" \
+    --dest /src/my_source
+
+WORKDIR /src/my_source
 # ... build steps ...
 
 FROM ${BASE_RUNTIME_IMAGE}
@@ -314,12 +325,15 @@ For local development, Dockerfiles can support both Git sources (for CI/producti
 
 ### Dual-Mode Dockerfile Pattern
 
-To support both Git and local sources, declare ARGs for both modes and use conditional logic:
+To support both Git and local sources, declare ARGs for both modes and invoke
+`clone-source.nu` once (see
+[services/revad-base/Dockerfile.production](../../services/revad-base/Dockerfile.production)):
 
 ```dockerfile
 # Git source args (for CI/production)
 ARG REVAD_URL="https://github.com/cs3org/reva"
 ARG REVAD_REF="v3.3.3"
+ARG REVAD_REF_KIND=""
 ARG REVAD_SHA=""
 
 # Local source args (for development)
@@ -328,14 +342,18 @@ ARG REVAD_MODE=""
 
 FROM ${BASE_BUILD_IMAGE} AS build
 
-# Conditional logic: use local path if MODE is "local", otherwise use git clone
-RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/tmp/local-revad,ro \
-    if [ "$REVAD_MODE" = "local" ]; then \
-      mkdir -p /revad-git && \
-      cp -a /tmp/local-revad/. /revad-git; \
-    else \
-      git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git; \
-    fi
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
+    --mount=type=cache,id=revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
+    nu /tmp/clone-source.nu \
+    --mode "${REVAD_MODE:-git}" \
+    --url "${REVAD_URL}" \
+    --ref "${REVAD_REF}" \
+    --ref-kind "${REVAD_REF_KIND}" \
+    --local-dir /src/local-revad \
+    --cache-dir /src/reva-git-cache \
+    --dest /revad-git
 
 WORKDIR /revad-git
 # ... rest of build steps ...
@@ -343,43 +361,48 @@ WORKDIR /revad-git
 
 ### Pattern Explanation
 
-1. **Declare all ARGs** - Include both Git args (`_URL`, `_REF`, `_SHA`) and local args (`_PATH`, `_MODE`)
-2. **Check MODE** - Use `REVAD_MODE="local"` to detect local source mode
-3. **Conditional logic** - Use shell `if` statement to choose between `cp` (local) or `git clone` (Git)
+1. **Declare all ARGs** - Include Git args (`_URL`, `_REF`, `_REF_KIND`,
+   optional `_SHA`) and local args (`_PATH`, `_MODE`, `_REF_KIND`)
+2. **Use clone-source.nu** - One helper handles local copy and git clone
+   (branch/tag via `ref`, full SHA via `sha`)
+3. **Bind mount local path** - Required so Docker can see `.build-sources/...`
 
 **Why the bind mount matters:** local source directories are prepared inside the service context (for example `.build-sources/revad`). Docker build stages cannot see the host filesystem directly, so you must re-mount the prepared path inside the `RUN` step. Skipping the bind mount causes `cp` to fail with "No such file or directory," which was the root cause of recent local-source build failures.
 
 ### Example with Cache Mount
 
-For better performance with Git sources, you can combine cache mounts with conditional logic:
+For better performance with Git sources, pass a cache directory to
+`clone-source.nu`:
 
 ```dockerfile
 ARG REVAD_URL="https://github.com/cs3org/reva"
 ARG REVAD_REF="v3.3.3"
+ARG REVAD_REF_KIND=""
 ARG REVAD_PATH=""
 ARG REVAD_MODE=""
 ARG CACHEBUST="default"
 
 FROM ${BASE_BUILD_IMAGE} AS build
 
-RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/tmp/local-revad,ro \
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
     --mount=type=cache,id=revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
-    if [ "$REVAD_MODE" = "local" ]; then \
-      mkdir -p /revad-git && \
-      cp -a /tmp/local-revad/. /revad-git; \
-    else \
-      mkdir -p /src/reva-git-cache && \
-      if [ ! -d /src/reva-git-cache/.git ]; then \
-        git clone --depth 1 --recursive --shallow-submodules --branch "${REVAD_REF}" ${REVAD_URL} /src/reva-git-cache; \
-      fi && \
-      cp -a /src/reva-git-cache/. /revad-git; \
-    fi
+    nu /tmp/clone-source.nu \
+    --mode "${REVAD_MODE:-git}" \
+    --url "${REVAD_URL}" \
+    --ref "${REVAD_REF}" \
+    --ref-kind "${REVAD_REF_KIND}" \
+    --local-dir /src/local-revad \
+    --cache-dir /src/reva-git-cache \
+    --dest /revad-git
 
 WORKDIR /revad-git
 # ... rest of build steps ...
 ```
 
-**Note:** Cache mounts are only used for Git sources. Local sources are copied directly without cache.
+**Note:** Cache mounts are only used for Git sources. Local sources are copied
+directly without cache.
 
 ### Migration from Git-Only Dockerfiles
 
@@ -392,20 +415,24 @@ To migrate an existing Dockerfile to support local sources:
    ARG REVAD_MODE=""
    ```
 
-2. **Wrap git clone in conditional with a bind mount**:
+2. **Replace bare git clone with clone-source.nu** (add `_REF_KIND` ARG and
+   COPY helper):
 
    ```dockerfile
-   # Before:
+   # Before (legacy):
    RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git
 
    # After:
-   RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/tmp/local-revad,ro \
-       if [ "$REVAD_MODE" = "local" ]; then \
-         mkdir -p /revad-git && \
-         cp -a /tmp/local-revad/. /revad-git; \
-       else \
-         git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git; \
-       fi
+   ARG REVAD_REF_KIND=""
+   COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+   RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
+       nu /tmp/clone-source.nu \
+       --mode "${REVAD_MODE:-git}" \
+       --url "${REVAD_URL}" \
+       --ref "${REVAD_REF}" \
+       --ref-kind "${REVAD_REF_KIND}" \
+       --local-dir /src/local-revad \
+       --dest /revad-git
    ```
 
 3. **Test both modes**:
@@ -415,7 +442,7 @@ To migrate an existing Dockerfile to support local sources:
    nu scripts/dockypody.nu build --service my-service
 
    # Test with local source
-   export REVA_PATH="../reva"
+   export REVAD_PATH="../reva"
    nu scripts/dockypody.nu build --service my-service
    ```
 

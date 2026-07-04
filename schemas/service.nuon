@@ -30,8 +30,12 @@
   //           All other fields (dockerfile, sources, external_images, dependencies, build_args) are FORBIDDEN
   //           ERROR: "Service 'X': external_images.build: Field forbidden when platforms.nuon exists. Move to platforms.nuon (infrastructure) or versions.nuon (versions)."
 
-  // Source repositories - build args auto-generated: {SOURCE_KEY}_REF and {SOURCE_KEY}_URL (git) or {SOURCE_KEY}_PATH and {SOURCE_KEY}_MODE (local)
-  // See docs/concepts/service-configuration.md#source-build-arguments-convention for complete convention
+  // Source repositories - build args auto-generated from source keys:
+  //   Git:   {SOURCE_KEY}_REF, {SOURCE_KEY}_URL, {SOURCE_KEY}_REF_KIND
+  //          (+ optional {SOURCE_KEY}_SHA label metadata)
+  //   Local: {SOURCE_KEY}_PATH, {SOURCE_KEY}_MODE, {SOURCE_KEY}_REF_KIND="local"
+  // Dockerfiles should fetch Git sources via clone-source.nu and pass *_REF_KIND.
+  // See docs/source-build-args.md and docs/concepts/service-configuration.md
   // VALIDATION: Source keys must match ^[a-z0-9_]+$ (lowercase alphanumeric with underscores only)
   // VALIDATION: build_arg field is FORBIDDEN (auto-generated, will cause validation error)
   // VALIDATION: path and url/ref are MUTUALLY EXCLUSIVE (cannot have both in same source)
@@ -52,14 +56,14 @@
   //       under repos/.
   "sources": {
     "revad": {
-      // Git source example - generates: REVAD_REF and REVAD_URL
+      // Git source example - generates: REVAD_REF, REVAD_URL, REVAD_REF_KIND
       "url": "https://github.com/cs3org/reva", // string (required for git sources) - repository URL
-      "ref": "v3.3.3" // string (required for git sources) - branch/tag/commit
+      "ref": "v3.3.3" // string (required for git sources) - branch, tag, or full 40-hex SHA
       // OR use path for local development:
       // "path": "../reva" // string (required for local sources) - relative or absolute path to local directory (mutually exclusive with url/ref)
     },
     "nushell": {
-      // Git source example - generates: NUSHELL_REF and NUSHELL_URL
+      // Git source example - generates: NUSHELL_REF, NUSHELL_URL, NUSHELL_REF_KIND
       "url": "https://github.com/nushell/nushell",
       "ref": "0.108.0"
       // OR use path for local development:

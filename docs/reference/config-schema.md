@@ -114,8 +114,12 @@ reference](cli-reference.md#config-plane-flag).
 - **Without `platforms.nuon`**: Sources are allowed in base config, but they
   are not required there. They may live entirely in `versions.nuon` defaults
   or overrides if the merged config is still complete.
-- **Services using `platforms.nuon`**: Sources are **FORBIDDEN** in base config
-  and must live in `versions.nuon` defaults or overrides.
+- **Multi-platform** (services using `platforms.nuon`): Sources are
+  **FORBIDDEN** in base config and `platforms.nuon`; they must live in
+  `versions.nuon` defaults or overrides.
+
+**TLS vs SSH placement:** TLS is base-config only. SSH is allowed in base
+config, `platforms.nuon`, and `versions.nuon`.
 
 ### Single-Platform Example
 
@@ -132,13 +136,19 @@ reference](cli-reference.md#config-plane-flag).
 
 // services/my-service/versions.nuon (optional override)
 {
-  "overrides": {
-    "sources": {
-      "reva": {
-        "ref": "v3.3.3-custom"
+  "default": "v1.0.0",
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "overrides": {
+        "sources": {
+          "reva": {
+            "ref": "v3.3.3-custom"
+          }
+        }
       }
     }
-  }
+  ]
 }
 ```
 
@@ -153,14 +163,20 @@ reference](cli-reference.md#config-plane-flag).
 
 // services/my-service/versions.nuon (sources defined here)
 {
-  "overrides": {
-    "sources": {
-      "reva": {
-        "url": "https://github.com/cs3org/reva",
-        "ref": "v3.3.3"
+  "default": "v1.0.0",
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "overrides": {
+        "sources": {
+          "reva": {
+            "url": "https://github.com/cs3org/reva",
+            "ref": "v3.3.3"
+          }
+        }
       }
     }
-  }
+  ]
 }
 ```
 
@@ -170,7 +186,8 @@ Sources can be either **Git repositories** or **local folders** (development onl
 
 #### Git Sources
 
-Git sources use `url` and `ref` fields:
+Git sources use `url` and `ref` fields. `ref` may be a branch name, tag, or
+full 40-character hexadecimal commit SHA:
 
 ```nuon
 {
@@ -183,7 +200,8 @@ Git sources use `url` and `ref` fields:
 }
 ```
 
-**Build args generated:** `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
+**Build args generated:** `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`,
+`{SOURCE_KEY}_REF_KIND`, and optionally `{SOURCE_KEY}_SHA` (label metadata)
 
 #### Local Sources (Development Only)
 
@@ -199,7 +217,8 @@ Local sources use `path` field (mutually exclusive with `url`/`ref`):
 }
 ```
 
-**Build args generated:** `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE="local"`
+**Build args generated:** `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE="local"`,
+`{SOURCE_KEY}_REF_KIND="local"`
 
 **CRITICAL RESTRICTIONS:**
 
@@ -208,7 +227,7 @@ Local sources use `path` field (mutually exclusive with `url`/`ref`):
 - **Path validation** - Paths must exist, be directories, and stay within the
   repository root, or within a sibling `repos/` workspace parent when this repo
   itself lives under `repos/`
-- **No SHA generation** - Local sources do not generate `{SOURCE_KEY}_SHA`
+- **No SHA metadata** - Local sources do not generate `{SOURCE_KEY}_SHA`
   build args
 
 **Path Resolution:**
@@ -224,11 +243,18 @@ For complete details, see [Source Build Arguments Convention](../concepts/servic
 ### Naming Convention
 
 - Source key must be lowercase alphanumeric with underscores: `^[a-z0-9_]+$`
+- Source-entry `build_arg` is **FORBIDDEN** (source build args are
+  auto-generated from the source key). See
+  [Service Configuration](../concepts/service-configuration.md#validation).
 - Build args are auto-generated based on source type:
-  - Git sources: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
-  - Local sources: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`
-- Example: `"web_extensions"` (Git) -> `WEB_EXTENSIONS_REF`, `WEB_EXTENSIONS_URL`, `WEB_EXTENSIONS_SHA`
-- Example: `"reva"` (local) -> `REVA_PATH`, `REVA_MODE="local"`
+  - Git sources: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_REF_KIND`
+    (+ optional `{SOURCE_KEY}_SHA` metadata)
+  - Local sources: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`,
+    `{SOURCE_KEY}_REF_KIND="local"`
+- Example: `"web_extensions"` (Git) -> `WEB_EXTENSIONS_REF`,
+  `WEB_EXTENSIONS_URL`, `WEB_EXTENSIONS_REF_KIND`
+- Example: `"reva"` (local) -> `REVA_PATH`, `REVA_MODE="local"`,
+  `REVA_REF_KIND="local"`
 
 ## External Images
 
@@ -414,7 +440,11 @@ Merged config: external_images.build: Missing required field 'tag'. Define in ve
 
 ### Dependencies: Validation Rules
 
-- Each dependency MUST include `build_arg` field
+- In base config or `platforms.nuon`, each dependency MUST include
+  `build_arg` (and `service` when the key differs from the service name)
+- `versions.nuon` dependency overrides are version-only: `version`
+  (required) and optional `single_platform`; `build_arg` is
+  **FORBIDDEN** there
 - `version` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)
 - `single_platform` field is **FORBIDDEN** in base config and `platforms.nuon` (must be in `versions.nuon` overrides)
 - `single_platform` must be boolean if present
@@ -604,8 +634,10 @@ When using source keys with underscores, build args are generated with uppercase
 
 ### Generated Build Args
 
-- `WEB_EXTENSIONS_REF`, `WEB_EXTENSIONS_URL`
-- `CUSTOM_LIB_REF`, `CUSTOM_LIB_URL`
+- `WEB_EXTENSIONS_REF`, `WEB_EXTENSIONS_URL`, `WEB_EXTENSIONS_REF_KIND`
+  (+ optional `WEB_EXTENSIONS_SHA`)
+- `CUSTOM_LIB_REF`, `CUSTOM_LIB_URL`, `CUSTOM_LIB_REF_KIND`
+  (+ optional `CUSTOM_LIB_SHA`)
 
 ### Complex Dependency Chain
 
@@ -629,21 +661,24 @@ Service depending on multiple services with different versions:
   }
 }
 
-// versions.nuon overrides
+// services/my-service/versions.nuon
 {
-  "overrides": {
-    "dependencies": {
-      "revad-base": {
-        "version": "v3.3.3"
-      },
-      "common-tools-builder": {
-        "version": "v1.0.0-debian"
-      },
-      "common-tools-runtime": {
-        "version": "v1.0.0-alpine"
+  "versions": [{
+    "name": "v1.0.0",
+    "overrides": {
+      "dependencies": {
+        "revad-base": {
+          "version": "v3.3.3"
+        },
+        "common-tools-builder": {
+          "version": "v1.0.0-debian"
+        },
+        "common-tools-runtime": {
+          "version": "v1.0.0-alpine"
+        }
       }
     }
-  }
+  }]
 }
 ```
 

@@ -43,12 +43,14 @@ ARG OCIS_MODE=""
 ARG OCIS_URL="https://github.com/owncloud/ocis"
 ARG OCIS_REF="master"
 ARG OCIS_SHA=""
+ARG OCIS_REF_KIND=""
 ARG OCIS_PATH=""
 
 ARG OCIS_WEB_MODE=""
 ARG OCIS_WEB_URL=""
 ARG OCIS_WEB_REF=""
 ARG OCIS_WEB_SHA=""
+ARG OCIS_WEB_REF_KIND=""
 ARG OCIS_WEB_PATH=""
 ARG OCIS_WEB_NODE_OPTIONS="--max-old-space-size=4096"
 
@@ -73,21 +75,27 @@ RUN --mount=type=cache,id=ocis-debian-apt-cache,target=/var/cache/apt,sharing=lo
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 ./scripts/lib/clone-source.nu /usr/local/bin/clone-source.nu
 COPY --chmod=755 ./scripts/build/web-override.nu /usr/local/bin/web-override.nu
 
 WORKDIR /ocis
 
+# Clone or copy ocis source via shared helper (local bind mount or git cache).
 RUN --mount=type=bind,source=${OCIS_PATH:-.},target=/mnt/src,ro \
     --mount=type=cache,id=ocis-git-${CACHEBUST:-${OCIS_REF}},target=/src/ocis-git-cache,sharing=shared \
-    if [ "$OCIS_MODE" = "local" ]; then \
-      mkdir -p /ocis && cp -a /mnt/src/. /ocis/; \
-    else \
-      mkdir -p /src/ocis-git-cache && \
-      if [ ! -d /src/ocis-git-cache/.git ]; then \
-        git clone --depth 1 --recursive --shallow-submodules --branch "$OCIS_REF" "$OCIS_URL" /src/ocis-git-cache; \
-      fi && \
-      cp -a /src/ocis-git-cache/. /ocis/ && \
-      if [ -n "$OCIS_SHA" ]; then git -C /ocis checkout "$OCIS_SHA"; fi; \
+    nu /usr/local/bin/clone-source.nu \
+    --mode "${OCIS_MODE:-git}" \
+    --url "${OCIS_URL}" \
+    --ref "${OCIS_REF}" \
+    --ref-kind "${OCIS_REF_KIND}" \
+    --local-dir /mnt/src \
+    --cache-dir /src/ocis-git-cache \
+    --dest /ocis && \
+    if [ "${OCIS_MODE:-git}" != "local" ] && [ -n "$OCIS_SHA" ]; then \
+      if ! git -C /ocis checkout "$OCIS_SHA"; then \
+        git -C /ocis fetch --depth 1 origin "$OCIS_SHA" && \
+        git -C /ocis checkout "$OCIS_SHA"; \
+      fi; \
     fi
 
 RUN corepack enable
@@ -106,6 +114,7 @@ ARG OCIS_REVA_MODE=""
 ARG OCIS_REVA_URL=""
 ARG OCIS_REVA_REF=""
 ARG OCIS_REVA_SHA=""
+ARG OCIS_REVA_REF_KIND=""
 ARG OCIS_REVA_PATH=""
 ARG CACHEBUST="default"
 
@@ -123,6 +132,7 @@ WORKDIR /ocis
 COPY --from=generate /ocis/ /ocis/
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
+COPY --chmod=755 ./scripts/lib/clone-source.nu /usr/local/bin/clone-source.nu
 COPY --chmod=755 ./scripts/build/reva-override.nu /usr/local/bin/reva-override.nu
 
 RUN --mount=type=bind,source=${OCIS_REVA_PATH:-.},target=/mnt/reva,ro \

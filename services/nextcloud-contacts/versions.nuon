@@ -24,12 +24,12 @@
 
   "versions": [
     {
-      "name": "master-nc-master",
+      "name": "main-nc-master",
       "latest": false,
       "overrides": {
         "sources": {
           "contacts": {
-            "version": "master"
+            "ref": "main"
           }
         },
         "dependencies": {

@@ -90,8 +90,8 @@ Source repositories are defined in the `sources` section and auto-generate build
 - **Single-platform**: Sources are allowed in base config, but they are not
   required there. They may live entirely in `versions.nuon` defaults or
   overrides if the merged config is still complete.
-- **Multi-platform**: Sources are **FORBIDDEN** in base config and must live
-  in `versions.nuon` defaults or overrides.
+- **Multi-platform**: Sources are **FORBIDDEN** in base config and
+  `platforms.nuon`, and must live in `versions.nuon` defaults or overrides.
 
 **Single-platform example:**
 
@@ -102,7 +102,7 @@ Source repositories are defined in the `sources` section and auto-generate build
     "revad": {
       "url": "https://github.com/cs3org/reva",
       "ref": "v3.3.3"
-      // Auto-generates: REVAD_REF, REVAD_URL, and REVAD_SHA
+      // Auto-generates: REVAD_REF, REVAD_URL, REVAD_REF_KIND (+ optional REVAD_SHA)
     }
   }
 }
@@ -119,14 +119,20 @@ Source repositories are defined in the `sources` section and auto-generate build
 
 // services/my-service/versions.nuon (sources defined here)
 {
-  "overrides": {
-    "sources": {
-      "reva": {
-        "url": "https://github.com/cs3org/reva",
-        "ref": "v3.3.3"
+  "default": "v1.0.0",
+  "versions": [
+    {
+      "name": "v1.0.0",
+      "overrides": {
+        "sources": {
+          "reva": {
+            "url": "https://github.com/cs3org/reva",
+            "ref": "v3.3.3"
+          }
+        }
       }
     }
-  }
+  ]
 }
 ```
 
@@ -151,7 +157,7 @@ Local sources use the `path` field instead of `url`/`ref`:
   "sources": {
     "reva": {
       "path": "../reva"  // Relative to repository root
-      // Auto-generates: REVA_PATH and REVA_MODE="local"
+      // Auto-generates: REVA_PATH, REVA_MODE="local", REVA_REF_KIND="local"
     }
   }
 }
@@ -281,54 +287,74 @@ Source repositories automatically generate build arguments using a convention-ba
 
 The build arguments generated depend on the source type:
 
-- **Git sources** (using `url`/`ref` fields) generate: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
-- **Local sources** (using `path` field) generate: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`
+- **Git sources** (using `url`/`ref` fields) generate: `{SOURCE_KEY}_REF`,
+  `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_REF_KIND`, and optionally
+  `{SOURCE_KEY}_SHA` (label metadata)
+- **Local sources** (using `path` field) generate: `{SOURCE_KEY}_PATH`,
+  `{SOURCE_KEY}_MODE`, and `{SOURCE_KEY}_REF_KIND="local"`
+
+Dockerfiles should use the shared `clone-source.nu` helper (see
+[Source Build Args Convention](../source-build-args.md)) and pass
+`{SOURCE_KEY}_REF_KIND` so branch/tag refs and full 40-hex SHAs clone
+correctly.
 
 ### Naming Convention
 
-| Element            | Pattern                                                | Example                               |
-| ------------------ | ------------------------------------------------------ | ------------------------------------- |
-| **Source key**     | `^[a-z0-9_]+$` (lowercase, alphanumeric + underscores) | `nushell`, `web_extensions`           |
-| **REF build arg**  | `{SOURCE_KEY}_REF` (uppercase, Git only)               | `NUSHELL_REF`, `WEB_EXTENSIONS_REF`   |
-| **URL build arg**  | `{SOURCE_KEY}_URL` (uppercase, Git only)               | `NUSHELL_URL`, `WEB_EXTENSIONS_URL`   |
-| **SHA build arg**  | `{SOURCE_KEY}_SHA` (uppercase, Git only)               | `NUSHELL_SHA`, `WEB_EXTENSIONS_SHA`   |
-| **PATH build arg** | `{SOURCE_KEY}_PATH` (uppercase, local only)            | `NUSHELL_PATH`, `WEB_EXTENSIONS_PATH` |
-| **MODE build arg** | `{SOURCE_KEY}_MODE` (uppercase, local only)            | `NUSHELL_MODE`, `WEB_EXTENSIONS_MODE` |
+| Element                | Pattern                                                | Example                               |
+| ---------------------- | ------------------------------------------------------ | ------------------------------------- |
+| **Source key**         | `^[a-z0-9_]+$` (lowercase, alphanumeric + underscores) | `nushell`, `web_extensions`           |
+| **REF build arg**      | `{SOURCE_KEY}_REF` (uppercase, Git only)               | `NUSHELL_REF`, `WEB_EXTENSIONS_REF`   |
+| **URL build arg**      | `{SOURCE_KEY}_URL` (uppercase, Git only)               | `NUSHELL_URL`, `WEB_EXTENSIONS_URL`   |
+| **REF_KIND build arg** | `{SOURCE_KEY}_REF_KIND` (`ref`, `sha`, or `local`)     | `NUSHELL_REF_KIND`, `REVA_REF_KIND`   |
+| **SHA build arg**      | `{SOURCE_KEY}_SHA` (optional metadata, Git only)       | `NUSHELL_SHA`, `WEB_EXTENSIONS_SHA`   |
+| **PATH build arg**     | `{SOURCE_KEY}_PATH` (uppercase, local only)            | `NUSHELL_PATH`, `WEB_EXTENSIONS_PATH` |
+| **MODE build arg**     | `{SOURCE_KEY}_MODE` (uppercase, local only)            | `NUSHELL_MODE`, `WEB_EXTENSIONS_MODE` |
 
 ### Build Argument Generation
 
 #### Git Sources
 
-For Git sources (using `url`/`ref` fields), the build script automatically generates three build arguments:
+For Git sources (using `url`/`ref` fields), the build script automatically
+generates clone-driving build arguments:
 
-1. **`{SOURCE_KEY}_REF`** - The version/branch/tag reference
+1. **`{SOURCE_KEY}_REF`** - The git ref: branch, tag, or full 40-hex SHA
 2. **`{SOURCE_KEY}_URL`** - The repository URL
-3. **`{SOURCE_KEY}_SHA`** - The short commit SHA (7 characters) extracted from the ref
+3. **`{SOURCE_KEY}_REF_KIND`** - `ref` or `sha` (classified from `_REF`;
+   recomputed after env overrides)
+4. **`{SOURCE_KEY}_SHA`** - Optional short commit SHA for labels. Does not
+   drive clone behavior.
 
 **Example:**
 
 ```text
 Source key: "web_extensions" (Git source)
   ->
-Generates: WEB_EXTENSIONS_REF, WEB_EXTENSIONS_URL, and WEB_EXTENSIONS_SHA
+Generates: WEB_EXTENSIONS_REF, WEB_EXTENSIONS_URL, WEB_EXTENSIONS_REF_KIND
+(+ optional WEB_EXTENSIONS_SHA)
 ```
 
 #### Local Sources
 
-For local sources (using `path` field), the build script automatically generates two build arguments:
+For local sources (using `path` field), the build script automatically
+generates three build arguments:
 
-1. **`{SOURCE_KEY}_PATH`** - The path to the source directory (relative to build context root, e.g., `.build-sources/reva/`)
-2. **`{SOURCE_KEY}_MODE`** - Always set to `"local"` to indicate local source mode
+1. **`{SOURCE_KEY}_PATH`** - The path to the source directory (relative to
+   build context root, e.g., `.build-sources/reva/`)
+2. **`{SOURCE_KEY}_MODE`** - Always set to `"local"` to indicate local source
+   mode
+3. **`{SOURCE_KEY}_REF_KIND`** - Always set to `"local"`
 
 **Example:**
 
 ```text
 Source key: "reva" (local source with path="../reva")
   ->
-Generates: REVA_PATH=".build-sources/reva/" and REVA_MODE="local"
+Generates: REVA_PATH=".build-sources/reva/", REVA_MODE="local",
+REVA_REF_KIND="local"
 ```
 
-**Note:** Local sources do not generate SHA build args (no Git repository to extract from).
+**Note:** Local sources do not generate SHA build args (no Git repository to
+extract from).
 
 ### Source Key Naming Rules
 
@@ -353,30 +379,62 @@ Generates: REVA_PATH=".build-sources/reva/" and REVA_MODE="local"
 
 ### Dockerfile Requirements
 
-Dockerfiles MUST declare ARGs with sensible defaults:
+Dockerfiles MUST declare ARGs with sensible defaults and fetch sources through
+`clone-source.nu`:
 
 ```dockerfile
-# Example: For source key "revad", declare REVAD_URL and REVAD_REF
+# Example: For source key "revad"
 ARG REVAD_URL="https://github.com/cs3org/reva"
 ARG REVAD_REF="v3.3.3"
+ARG REVAD_REF_KIND=""
+ARG REVAD_PATH=""
+ARG REVAD_MODE=""
 
-RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /destination
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+RUN --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
+    nu /tmp/clone-source.nu \
+    --mode "${REVAD_MODE:-git}" \
+    --url "${REVAD_URL}" \
+    --ref "${REVAD_REF}" \
+    --ref-kind "${REVAD_REF_KIND}" \
+    --local-dir /src/local-revad \
+    --dest /revad-git
 ```
 
-**Pattern:** For any source key `{source_key}`, declare `{SOURCE_KEY}_URL` and `{SOURCE_KEY}_REF` (uppercase).
+**Pattern:** For any source key `{source_key}`, declare `{SOURCE_KEY}_URL`,
+`{SOURCE_KEY}_REF`, and `{SOURCE_KEY}_REF_KIND` (uppercase), plus local
+args when dual-mode is needed.
+
+### Clone compatibility validation
+
+`validate` checks merged/effective configs. Full-SHA `ref` values wired into
+active Dockerfile lines require `clone-source.nu` with `*_REF_KIND` (or an
+explicit SHA fetch path). Legacy `git clone --branch` for SHA refs fails
+validation.
 
 ### Cache Mount IDs
 
-When using cache mounts for git clones, include CACHEBUST in the mount ID:
+When using cache mounts with `clone-source.nu`, include CACHEBUST in the
+mount ID:
 
 ```dockerfile
 ARG CACHEBUST="default"
 ARG SOURCE_REF="v3.3.3"
+ARG SOURCE_REF_KIND=""
 RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=/cache,sharing=shared \
-    git clone --branch "${SOURCE_REF}" ${SOURCE_URL} /cache
+    nu /tmp/clone-source.nu \
+    --mode git \
+    --url "${SOURCE_URL}" \
+    --ref "${SOURCE_REF}" \
+    --ref-kind "${SOURCE_REF_KIND}" \
+    --cache-dir /cache \
+    --dest /work
 ```
 
-The nested syntax `${CACHEBUST:-${SOURCE_REF}}` provides fallback safety (tested and verified working), even though the build system ensures CACHEBUST is always non-empty.
+The nested syntax `${CACHEBUST:-${SOURCE_REF}}` provides fallback safety
+(tested and verified working), even though the build system ensures CACHEBUST
+is always non-empty.
 
 ### Examples
 
@@ -397,15 +455,23 @@ The nested syntax `${CACHEBUST:-${SOURCE_REF}}` provides fallback safety (tested
 
 - `REVAD_REF=v3.3.3`
 - `REVAD_URL=https://github.com/cs3org/reva`
-- `REVAD_SHA=2912f0a` (extracted from tag `v3.3.3`)
+- `REVAD_REF_KIND=ref`
+- `REVAD_SHA=2912f0a` (optional label metadata)
 
 **Dockerfile:**
 
 ```dockerfile
 ARG REVAD_URL="https://github.com/cs3org/reva"
 ARG REVAD_REF="v3.3.3"
+ARG REVAD_REF_KIND=""
 
-RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+RUN nu /tmp/clone-source.nu \
+    --mode git \
+    --url "${REVAD_URL}" \
+    --ref "${REVAD_REF}" \
+    --ref-kind "${REVAD_REF_KIND}" \
+    --dest /revad-git
 ```
 
 #### Example 2: Source with Underscores
@@ -425,15 +491,23 @@ RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git
 
 - `WEB_EXTENSIONS_REF=main`
 - `WEB_EXTENSIONS_URL=https://github.com/cernbox/web-extensions`
-- `WEB_EXTENSIONS_SHA=abc1234` (extracted from branch `main`)
+- `WEB_EXTENSIONS_REF_KIND=ref`
+- `WEB_EXTENSIONS_SHA=abc1234` (optional label metadata)
 
 **Dockerfile:**
 
 ```dockerfile
 ARG WEB_EXTENSIONS_URL="https://github.com/cernbox/web-extensions"
 ARG WEB_EXTENSIONS_REF="main"
+ARG WEB_EXTENSIONS_REF_KIND=""
 
-RUN git clone --branch ${WEB_EXTENSIONS_REF} ${WEB_EXTENSIONS_URL} /web-extensions
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+RUN nu /tmp/clone-source.nu \
+    --mode git \
+    --url "${WEB_EXTENSIONS_URL}" \
+    --ref "${WEB_EXTENSIONS_REF}" \
+    --ref-kind "${WEB_EXTENSIONS_REF_KIND}" \
+    --dest /web-extensions
 ```
 
 #### Example 3: Multiple Sources
@@ -459,9 +533,9 @@ RUN git clone --branch ${WEB_EXTENSIONS_REF} ${WEB_EXTENSIONS_URL} /web-extensio
 
 **Generated Build Args:**
 
-- `REVAD_REF=v3.3.3`, `REVAD_URL=https://github.com/cs3org/reva`, `REVAD_SHA=2912f0a`
-- `NUSHELL_REF=0.108.0`, `NUSHELL_URL=https://github.com/nushell/nushell`, `NUSHELL_SHA=da141be`
-- `UPX_REF=v5.0.2`, `UPX_URL=https://github.com/upx/upx`, `UPX_SHA=1234567`
+- `REVAD_REF=v3.3.3`, `REVAD_URL=...`, `REVAD_REF_KIND=ref` (+ optional SHA)
+- `NUSHELL_REF=0.108.0`, `NUSHELL_URL=...`, `NUSHELL_REF_KIND=ref` (+ optional SHA)
+- `UPX_REF=v5.0.2`, `UPX_URL=...`, `UPX_REF_KIND=ref` (+ optional SHA)
 
 ### Version Overrides
 
@@ -596,8 +670,10 @@ The build system validates source keys during service configuration loading (bef
 
 1. Source key MUST match `^[a-z0-9_]+$` (lowercase alphanumeric with underscores only)
 2. `build_arg` field is FORBIDDEN (auto-generated, cannot be specified manually)
-3. `url` field is REQUIRED (must be present and non-empty)
-4. `ref` field is REQUIRED (must be present and non-empty)
+3. Each source is either Git or local (mutually exclusive):
+   - **Git sources**: `url` and `ref` are REQUIRED (both present and non-empty)
+   - **Local sources**: `path` is REQUIRED (present, non-empty, valid directory)
+   - `path` and `url`/`ref` cannot both be set on the same source
 
 #### Error Examples
 
@@ -609,13 +685,16 @@ Error: Source 'reva' has FORBIDDEN 'build_arg' field. Build args are auto-genera
 Error: Source 'reva' missing required field 'url'
 
 Error: Source 'reva' missing required field 'ref'
+
+Error: Source 'reva': Cannot have both 'path' and 'url'/'ref' fields. They are mutually exclusive.
 ```
 
 #### Validation Location
 
-- Validation is performed in `scripts/lib/validate.nu` (see `validate-service-config` function)
+- Validation is performed in `scripts/lib/validate/core.nu` (see
+  `validate-service-config` and `validate-source-entries`)
 - All services are validated before any builds start
-- For implementation details, see: `scripts/lib/validate.nu:534-630`
+- For implementation details, see: `scripts/lib/validate/core.nu:51-119`
 
 ### Benefits
 
@@ -623,8 +702,11 @@ Error: Source 'reva' missing required field 'ref'
 
 Given a source key, you can always predict the build arg names:
 
-- `revad` -> `REVAD_REF` and `REVAD_URL`
-- `web_extensions` -> `WEB_EXTENSIONS_REF` and `WEB_EXTENSIONS_URL`
+- Git `revad` -> `REVAD_REF`, `REVAD_URL`, `REVAD_REF_KIND` (+ optional
+  `REVAD_SHA`)
+- Git `web_extensions` -> `WEB_EXTENSIONS_REF`, `WEB_EXTENSIONS_URL`,
+  `WEB_EXTENSIONS_REF_KIND` (+ optional `WEB_EXTENSIONS_SHA`)
+- Local `reva` -> `REVA_PATH`, `REVA_MODE="local"`, `REVA_REF_KIND="local"`
 
 #### 2. Single Source of Truth
 
@@ -636,7 +718,9 @@ Grep for `NUSHELL_REF` -> find `nushell` source easily.
 
 #### 4. Consistency
 
-All sources follow the same pattern: `{NAME}_REF` and `{NAME}_URL`.
+Git sources share `{NAME}_REF`, `{NAME}_URL`, `{NAME}_REF_KIND`, and optional
+`{NAME}_SHA`. Local sources share `{NAME}_PATH`, `{NAME}_MODE="local"`, and
+`{NAME}_REF_KIND="local"`.
 
 #### 5. Less Boilerplate
 
@@ -687,16 +771,19 @@ Validation ensures the convention is followed everywhere.
 
 **Problem:** Dockerfile uses old ARG names.
 
-**Solution:** Update Dockerfile to use new naming:
+**Solution:** Update Dockerfile to use current naming and `clone-source.nu`:
 
 ```dockerfile
-# Bad
+# Bad (legacy)
 ARG REVAD_BRANCH="v3.3.3"
 RUN git clone --branch ${REVAD_BRANCH} ...
 
 # Good
 ARG REVAD_REF="v3.3.3"
-RUN git clone --branch ${REVAD_REF} ...
+ARG REVAD_REF_KIND=""
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+RUN nu /tmp/clone-source.nu --mode git --url "${REVAD_URL}" \
+    --ref "${REVAD_REF}" --ref-kind "${REVAD_REF_KIND}" --dest /revad-git
 ```
 
 ### External Images
@@ -718,13 +805,16 @@ External Docker images (not built by us) use separated `name` and `tag` fields. 
 
 // services/my-service/versions.nuon
 {
-  "overrides": {
-    "external_images": {
-      "build": {
-        "tag": "1.25-trixie"
+  "versions": [{
+    "name": "v1.0.0",
+    "overrides": {
+      "external_images": {
+        "build": {
+          "tag": "1.25-trixie"
+        }
       }
     }
-  }
+  }]
 }
 ```
 
@@ -746,13 +836,16 @@ External Docker images (not built by us) use separated `name` and `tag` fields. 
 
 // services/my-service/versions.nuon
 {
-  "overrides": {
-    "external_images": {
-      "build": {
-        "tag": "1.25-trixie"
+  "versions": [{
+    "name": "v1.0.0",
+    "overrides": {
+      "external_images": {
+        "build": {
+          "tag": "1.25-trixie"
+        }
       }
     }
-  }
+  }]
 }
 ```
 
@@ -782,13 +875,16 @@ Internal service dependencies are defined in the `dependencies` section. The `ve
 
 // services/my-service/versions.nuon
 {
-  "overrides": {
-    "dependencies": {
-      "revad-base": {
-        "version": "v3.3.3"
+  "versions": [{
+    "name": "v1.0.0",
+    "overrides": {
+      "dependencies": {
+        "revad-base": {
+          "version": "v3.3.3"
+        }
       }
     }
-  }
+  }]
 }
 ```
 
@@ -801,8 +897,10 @@ contain: `name`, `context`, `tls`, `ssh`, `labels` (all metadata).
 
 All other fields (`dockerfile`, `external_images`, `sources`, `dependencies`, `build_args`) are **FORBIDDEN** in base config when `platforms.nuon` exists. These fields must be moved to:
 
-- `platforms.nuon` - For infrastructure (name, build_arg, service, dockerfile)
-- `versions.nuon` - For version control (tag, version, url, ref)
+- `platforms.nuon` - For infrastructure (name, build_arg, service, dockerfile, external_images, dependencies)
+- `versions.nuon` - For version control (tag, version, sources, url, ref)
+
+`sources` are **FORBIDDEN** in `platforms.nuon` (use `versions.nuon` defaults or overrides).
 
 **Error example:**
 

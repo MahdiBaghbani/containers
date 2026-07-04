@@ -25,6 +25,7 @@ use ../services/core.nu [get-service-config-path]
 use ../validate/core.nu [validate-merged-config validate-local-path]
 use ../plane/guard.nu [PLANE_LOCAL]
 use ../plane/effective-config.nu [apply-local-plane-effective-sources]
+use ./sources.nu [classify-source-ref-kind]
 
 # === Flag Parsing Utilities ===
 
@@ -189,12 +190,15 @@ export def process-sources-to-build-args [
                 }
             }
             
-            # Always set MODE to "local" for local sources
+            # Always set MODE and REF_KIND to "local" for local sources
             $result = ($result | upsert $mode_build_arg "local")
+            let ref_kind_build_arg = $"($source_key_upper)_REF_KIND"
+            $result = ($result | upsert $ref_kind_build_arg "local")
         } else {
-            # Git source - generate _REF and _URL args (existing behavior)
+            # Git source - generate _REF, _URL, and _REF_KIND args
             let ref_build_arg = $"($source_key_upper)_REF"
             let url_build_arg = $"($source_key_upper)_URL"
+            let ref_kind_build_arg = $"($source_key_upper)_REF_KIND"
             
             let ref_value = (try { $source.ref } catch { "" })
             if ($ref_value | str length) > 0 {
@@ -205,6 +209,8 @@ export def process-sources-to-build-args [
             if ($url_value | str length) > 0 {
                 $result = ($result | upsert $url_build_arg (get-env-or-config $url_build_arg $url_value))
             }
+
+            $result = ($result | upsert $ref_kind_build_arg (classify-source-ref-kind $source $source_type))
         }
 
         $result

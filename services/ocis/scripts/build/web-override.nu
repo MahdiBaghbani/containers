@@ -109,11 +109,26 @@ def patch-makefile [
     $lines | str join "\n" | save --force $makefile
 }
 
+def checkout-sha [work_dir: string, sha: string]: nothing -> nothing {
+    let first = (^git -C $work_dir checkout $sha | complete)
+    if $first.exit_code == 0 {
+        return
+    }
+    ^git -C $work_dir fetch --depth 1 origin $sha
+    let second = (^git -C $work_dir checkout $sha | complete)
+    if $second.exit_code != 0 {
+        error make {
+            msg: $"Failed to checkout SHA ($sha) in ($work_dir). The clone may be too shallow; ensure the SHA is reachable from REF or fetch with full depth."
+        }
+    }
+}
+
 def main [] {
     let mode = $env.OCIS_WEB_MODE? | default ""
     let url = $env.OCIS_WEB_URL? | default ""
     let ref_ = $env.OCIS_WEB_REF? | default ""
     let sha = $env.OCIS_WEB_SHA? | default ""
+    let ref_kind = $env.OCIS_WEB_REF_KIND? | default ""
     let node_opts = $env.OCIS_WEB_NODE_OPTIONS? | default ""
 
     let override_enabled = (($mode == "local") or (not ($url | is-empty)))
@@ -125,21 +140,15 @@ def main [] {
 
         let work_dir = "/tmp/ocis-web"
         let git_cache = "/src/ocis-web-git-cache"
+        let clone_mode = (if $mode == "local" { "local" } else { "git" })
 
         ^rm -rf $work_dir
         ^mkdir -p $work_dir
 
-        if $mode == "local" {
-            ^cp -a "/mnt/web/." $work_dir
-        } else {
-            ^mkdir -p $git_cache
-            if not ($"($git_cache)/.git" | path exists) {
-                ^git clone --depth 1 --recursive --shallow-submodules --branch $ref_ $url $git_cache
-            }
-            ^cp -a $"($git_cache)/." $work_dir
-            if not ($sha | is-empty) {
-                ^git -C $work_dir checkout $sha
-            }
+        ^nu /usr/local/bin/clone-source.nu --mode $clone_mode --url $url --ref $ref_ --ref-kind $ref_kind --local-dir /mnt/web --cache-dir $git_cache --dest $work_dir
+
+        if ($clone_mode == "git") and (not ($sha | is-empty)) {
+            checkout-sha $work_dir $sha
         }
 
         if not ($node_opts | is-empty) {
