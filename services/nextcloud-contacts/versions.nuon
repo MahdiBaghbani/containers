@@ -1,5 +1,5 @@
 {
-  "default": "v8.1.0-nc-master",
+  "default": "v8.7.2-nc-master",
 
   "defaults": {
     "sources": {
@@ -9,7 +9,7 @@
     },
     "external_images": {
       "build": {
-        "tag": "20-trixie-slim"
+        "tag": "24-trixie-slim"
       }
     },
     "dependencies": {
@@ -24,56 +24,33 @@
 
   "versions": [
     {
-      "name": "v8.1.0-ocm-nc-master",
+      "name": "master-nc-master",
       "latest": false,
       "overrides": {
         "sources": {
-          "contacts": {
-            "url": "https://github.com/MahdiBaghbani/nextcloud-contacts",
-            "ref": "mahdi/fix/ui-optional-email"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "24-trixie-slim"
-          }
-        },
-        "dependencies": {
           "nextcloud": {
-            "version": "sta-ocm-m6-debian"
+            "version": "master-debian"
           }
         }
       }
     },
     {
-      "name": "v8.1.0-nc-master",
-      "latest": true,
-      "overrides": {
-        "sources": {
-          "contacts": {
-            "ref": "v8.1.0"
-          }
-        }
-      }
+      "name": "v8.7.2-nc-master",
+      "latest": true
     },
     {
-      "name": "sta-ocm-m6",
+      "name": "ocm-contacts-app",
       "latest": false,
       "overrides": {
         "sources": {
           "contacts": {
-            "url": "https://github.com/MahdiBaghbani/nextcloud-contacts",
-            "ref": "mahdi/fix/ui-optional-email"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "24-trixie-slim"
+            "url": "https://github.com/sara-nl/nextcloud-contacts",
+            "ref": "invite-for-cloudid-exchange"
           }
         },
         "dependencies": {
           "nextcloud": {
-            "version": "sta-ocm-m6-debian"
+            "version": "ocm-contacts-app-debian"
           }
         }
       }

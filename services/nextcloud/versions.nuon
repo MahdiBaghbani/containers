@@ -1,11 +1,11 @@
 {
-  "default": "v33.0.3",
+  "default": "v34.0.1",
 
   "defaults": {
     "sources": {
       "nextcloud": {
         "url": "https://github.com/nextcloud/server",
-        "ref": "v33.0.3"
+        "ref": "v34.0.1"
       }
     },
     "dependencies": {
@@ -31,52 +31,39 @@
       }
     },
     {
-      "name": "v33.0.3",
+      "name": "v34.0.1",
       "latest": true
     },
     {
-      "name": "v32.0.9",
+      "name": "v33.0.6",
       "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "ref": "v32.0.9"
+            "ref": "v33.0.6"
           }
         }
       }
     },
     {
-      "name": "v34-codeflow",
+      "name": "v32.0.12",
       "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "url": "https://github.com/enriquepablo/server.git",
-            "ref": "master"
+            "ref": "v32.0.12"
           }
         }
       }
     },
     {
-      "name": "sta-ocm-m6",
+      "name": "ocm-contacts-app",
       "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
             "url": "https://github.com/redblom/nextcloud-server.git",
             "ref": "move-ocm-invite-accepted-route-impl-to-contacts-app"
-          }
-        }
-      }
-    },
-    {
-      "name": "sta-m6-nc-code-flow-arch-redesign",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "nextcloud": {
-            "url": "https://github.com/MahdiBaghbani/server.git",
-            "ref": "sta-milestone-6/ocm-architecture-redesign"
           }
         }
       }
