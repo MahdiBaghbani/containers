@@ -30,6 +30,8 @@
   // See docs/guides/multi-version-builds.md for usage examples
   "defaults": { // record (optional)
     // Default source refs - applied to all versions unless overridden
+    // ref may be a branch, tag, or full 40-hex SHA; build system sets *_REF_KIND
+    // SHA-pinned refs require clone-source.nu + *_REF_KIND in the Dockerfile
     "sources": {
       "revad": {
         "ref": "v1.0.0" // string (optional, overrides default)

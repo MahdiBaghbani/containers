@@ -14,41 +14,54 @@ Operator reality:
 
 1. **Declare every build arg with a default.**
 
-   - Sources: `{NAME}_URL`, `{NAME}_REF`, `{NAME}_SHA`, `{NAME}_PATH`, `{NAME}_MODE`
+   - Sources: `{NAME}_URL`, `{NAME}_REF`, `{NAME}_REF_KIND`, `{NAME}_SHA`
+     (optional metadata), `{NAME}_PATH`, `{NAME}_MODE`
    - Dependencies / external images: custom build args defined in the service config
    - TLS: `TLS_ENABLED`, `TLS_MODE`, etc., when applicable  
      Declaring defaults keeps `docker build` usable outside the build system and guarantees deterministic values when args are omitted.
 
-2. **Always bind-mount local sources before copying.**
+2. **Bind-mount local sources on the same `RUN` that fetches them.**
 
-   - Use `--mount=type=bind,source=${FOO_PATH:-.},target=/tmp/local-foo,ro` on the same `RUN` line that copies the Git checkout.
-   - Copy from the mounted directory: `cp -a /tmp/local-foo/. /foo-git`.
-   - Without the bind mount, Docker cannot see `.build-sources/foo`, which recreates the bug we just fixed (`cp: cannot stat '.build-sources/foo'`).  
-     See `docs/source-build-args.md` for the generated `_PATH`/`_MODE` args.
+   - For local mode, bind-mount the host path on the same `RUN` that invokes
+     `clone-source.nu` with `--local-dir`, for example
+     `--mount=type=bind,source=${FOO_PATH:-.},target=/src/local-foo,ro`.
+   - Without that mount on that `RUN`, Docker cannot see `.build-sources/foo`
+     (for example `cp: cannot stat '.build-sources/foo'`).
+   - See `docs/source-build-args.md` for the generated `_PATH`/`_MODE` args and
+     Rule 3 for the canonical `clone-source.nu` invocation.
 
-3. **Wrap Git clones in conditional logic.**
+3. **Fetch sources through `clone-source.nu`.**
+
+   Copy `scripts/lib/clone-source.nu` into the build context and invoke it
+   with `{NAME}_REF_KIND` so branch/tag refs and full 40-hex SHAs both work.
+   Local mode uses the same helper with `--mode local` and a bind-mounted
+   `--local-dir`.
 
    ```dockerfile
    ARG FOO_PATH=""
    ARG FOO_MODE=""
    ARG FOO_URL=""
    ARG FOO_REF=""
+   ARG FOO_REF_KIND=""
+   ARG CACHEBUST="default"
 
-   RUN --mount=type=bind,source=${FOO_PATH:-.},target=/tmp/local-foo,ro \
+   COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+   RUN --mount=type=bind,source=${FOO_PATH:-.},target=/src/local-foo,ro \
        --mount=type=cache,id=foo-git-${CACHEBUST:-${FOO_REF}},target=/src/foo-git-cache,sharing=shared \
-       if [ "$FOO_MODE" = "local" ]; then \
-         mkdir -p /foo-git && \
-         cp -a /tmp/local-foo/. /foo-git; \
-       else \
-         mkdir -p /src/foo-git-cache && \
-         if [ ! -d /src/foo-git-cache/.git ]; then \
-           git clone --depth 1 --recursive --shallow-submodules --branch "${FOO_REF}" ${FOO_URL} /src/foo-git-cache; \
-         fi && \
-         cp -a /src/foo-git-cache/. /foo-git; \
-       fi
+       nu /tmp/clone-source.nu \
+       --mode "${FOO_MODE:-git}" \
+       --url "${FOO_URL}" \
+       --ref "${FOO_REF}" \
+       --ref-kind "${FOO_REF_KIND}" \
+       --local-dir /src/local-foo \
+       --cache-dir /src/foo-git-cache \
+       --dest /foo-git
    ```
 
-   Local mode is CI-disabled, but developers rely on it for iterative builds. Missing the conditional forces everyone back to Git sources.
+   Local mode is CI-disabled, but developers rely on it for iterative builds.
+   Bare `git clone --branch` is legacy: it breaks SHA-pinned refs and fails
+   merged-config validation when that source is wired into active build lines.
 
 4. **Keep cache mounts deterministic.**
 

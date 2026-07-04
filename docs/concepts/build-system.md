@@ -60,8 +60,10 @@ When injecting build arguments, the build system applies them in this order (lat
    - `COMMIT_SHA`: The DockyPody repository commit that performed the build (or `"local"` for local builds)
    - `VERSION`: The service version from the version manifest (e.g., `"v1.0.0"`, `"v1.0.0-debian"`)
 2. **Source arguments** (auto-generated from `sources` section)
-   - **Git sources**: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`, `{SOURCE_KEY}_SHA`
-   - **Local sources**: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`
+   - **Git sources**: `{SOURCE_KEY}_REF`, `{SOURCE_KEY}_URL`,
+     `{SOURCE_KEY}_REF_KIND` (+ optional `{SOURCE_KEY}_SHA` label metadata)
+   - **Local sources**: `{SOURCE_KEY}_PATH`, `{SOURCE_KEY}_MODE`,
+     `{SOURCE_KEY}_REF_KIND="local"`
 3. **External image arguments** (from `external_images` section)
 4. **Config `build_args` section** (from service config)
 5. **Environment variables** (can override config values for testing/debugging)
@@ -69,6 +71,9 @@ When injecting build arguments, the build system applies them in this order (lat
    - Example: `export REVAD_REF="custom"` overrides the auto-generated `REVAD_REF` from sources config
    - Example: `export REVA_PATH="/custom/path"` overrides the local source path from config
    - Example: `export BASE_BUILD_IMAGE="custom"` overrides the external image from config
+   - **Important:** `{SOURCE_KEY}_REF_KIND` is recomputed from the effective
+     `{SOURCE_KEY}_REF` after env overrides. A stale env-provided
+     `{SOURCE_KEY}_REF_KIND` does not win over that recomputation.
    - **Important:** Environment variables CANNOT override dependency values (dependencies are applied after this step)
 6. **Dependency resolution** (HIGHEST PRIORITY - overrides environment variables)
    - Resolved dependency images always override previous values for dependency build args (e.g., `REVAD_BASE_IMAGE`)
@@ -114,19 +119,37 @@ When injecting build arguments, the build system applies them in this order (lat
 
 **Scenario:** Service `cernbox-revad` depends on `revad-base`, with various build arg sources:
 
-#### Service Config
+#### Base Config
 
 ```nuon
+// services/cernbox-revad.nuon
 {
   "dependencies": {
     "revad-base": {
-      "version": "v3.3.3",
       "build_arg": "REVAD_BASE_IMAGE"
     }
   },
   "build_args": {
     "REVAD_BASE_IMAGE": "revad-base:custom"
   }
+}
+```
+
+#### Version Override
+
+```nuon
+// services/cernbox-revad/versions.nuon
+{
+  "versions": [{
+    "name": "v1.0.0",
+    "overrides": {
+      "dependencies": {
+        "revad-base": {
+          "version": "v3.3.3"
+        }
+      }
+    }
+  }]
 }
 ```
 
@@ -202,27 +225,56 @@ nu scripts/dockypody.nu build --service cernbox-web
 
 ### Dockerfile Usage
 
-Dockerfiles can use `CACHEBUST` in source cloning steps:
+Dockerfiles should copy `clone-source.nu` and pass `{SOURCE_KEY}_REF_KIND`:
 
 ```dockerfile
 ARG CACHEBUST=""
-RUN git clone --branch ${REVAD_REF} ${REVAD_URL} /revad-git
+ARG REVAD_URL="https://github.com/cs3org/reva"
+ARG REVAD_REF="v3.3.3"
+ARG REVAD_REF_KIND=""
+ARG REVAD_PATH=""
+ARG REVAD_MODE=""
+
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+RUN --mount=type=cache,id=revad-git-${CACHEBUST:-${REVAD_REF}},target=/src/reva-git-cache,sharing=shared \
+    --mount=type=bind,source=${REVAD_PATH:-.},target=/src/local-revad,ro \
+    nu /tmp/clone-source.nu \
+    --mode "${REVAD_MODE:-git}" \
+    --url "${REVAD_URL}" \
+    --ref "${REVAD_REF}" \
+    --ref-kind "${REVAD_REF_KIND}" \
+    --local-dir /src/local-revad \
+    --cache-dir /src/reva-git-cache \
+    --dest /revad-git
 ```
 
-**Note:** `CACHEBUST` is optional in Dockerfiles. The build system always provides it, but Dockerfiles can choose to use it or ignore it.
+**Note:** `CACHEBUST` is optional in Dockerfiles. The build system always
+provides it, but Dockerfiles can choose to use it or ignore it.
 
 ### Cache Mount Invalidation
 
-Cache mounts for git clones and source downloads use CACHEBUST in their mount IDs to ensure cache invalidation when sources change:
+Cache mounts for git clones use CACHEBUST in their mount IDs so cache
+invalidates when sources change:
 
 ```dockerfile
 ARG CACHEBUST="default"
 ARG SOURCE_REF="v3.3.3"
+ARG SOURCE_REF_KIND=""
 RUN --mount=type=cache,id=service-source-git-${CACHEBUST:-${SOURCE_REF}},target=/cache,sharing=shared \
-    git clone --branch "${SOURCE_REF}" ${SOURCE_URL} /cache
+    nu /tmp/clone-source.nu \
+    --mode git \
+    --url "${SOURCE_URL}" \
+    --ref "${SOURCE_REF}" \
+    --ref-kind "${SOURCE_REF_KIND}" \
+    --cache-dir /cache \
+    --dest /work
 ```
 
-When CACHEBUST changes (SHA change, ref change, or manual override), Docker uses a new cache mount, ensuring fresh content after force-pushes. Build system always provides non-empty CACHEBUST value. CACHEBUST is computed as SHA256 hash of all source SHAs/refs (first 16 characters), using hybrid approach: SHA if available from extraction, ref if SHA extraction fails.
+When CACHEBUST changes (SHA change, ref change, or manual override), Docker
+uses a new cache mount. CACHEBUST is computed as SHA256 hash of all source
+SHAs/refs (first 16 characters), using hybrid approach: SHA if available from
+extraction, ref if SHA extraction fails.
 
 Cache mounts are also used for package managers (apt/apk/dnf). For the shared
 cache pool ids and rules, see
