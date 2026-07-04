@@ -404,3 +404,77 @@ export def cleanup-ssh-context [
 
     print "Cleaned up staged SSH material from build context"
 }
+
+# Detect whether the Dockerfile copies the shared clone-source helper into
+# the build context. Matches non-comment COPY lines that stage
+# ./scripts/lib/clone-source.nu from the build context, for example:
+#   COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+export def detect-clone-source-requirements [
+    dockerfile_text: string,
+] {
+    let helper_path = "./scripts/lib/clone-source.nu"
+    let needs = (
+        $dockerfile_text
+        | lines
+        | any {|line|
+            let stripped = ($line | str trim)
+            if ($stripped | is-empty) or ($stripped | str starts-with "#") {
+                false
+            } else {
+                (($stripped | str upcase | str starts-with "COPY")
+                    and ($line | str contains $helper_path))
+            }
+        }
+    )
+    {needs_clone_helper: $needs}
+}
+
+# Stage the shared clone-source helper into the build context just-in-time.
+# Returns {staged: bool, files: list<string>} for cleanup-clone-source-context.
+export def prepare-clone-source-context [
+    service: string,
+    context: string,
+    clone_reqs: record,  # {needs_clone_helper: bool} from detect-clone-source-requirements
+] {
+    if not ($clone_reqs.needs_clone_helper? | default false) {
+        return {staged: false, files: []}
+    }
+
+    let helper_src = "scripts/lib/build/clone-source.nu"
+    if not ($helper_src | path exists) {
+        error make {
+            msg: ($"clone-source helper not found: ($helper_src)\n\n" +
+                  "This script is required for Dockerfile COPY ./scripts/lib/clone-source.nu.\n" +
+                  "The file should be located at scripts/lib/build/clone-source.nu.\n\n")
+        }
+    }
+
+    mkdir $"($context)/scripts/lib"
+    cp $helper_src $"($context)/scripts/lib/clone-source.nu"
+    print $"Staged clone-source helper into build context for ($service): scripts/lib/clone-source.nu"
+    {staged: true, files: ["clone-source.nu"]}
+}
+
+# Remove clone-source helper staged by prepare-clone-source-context.
+export def cleanup-clone-source-context [
+    context: string,
+    clone_context: record,
+] {
+    if not ($clone_context.staged? | default false) {
+        return
+    }
+
+    let helper_path = $"($context)/scripts/lib/clone-source.nu"
+    try { rm -f $helper_path } catch { }
+
+    let lib_dir = $"($context)/scripts/lib"
+    if ($lib_dir | path exists) and ((ls -a $lib_dir | length) == 0) {
+        try { rmdir $lib_dir } catch { }
+    }
+    let scripts_dir = $"($context)/scripts"
+    if ($scripts_dir | path exists) and ((ls -a $scripts_dir | length) == 0) {
+        try { rmdir $scripts_dir } catch { }
+    }
+
+    print "Cleaned up staged clone-source helper from build context"
+}

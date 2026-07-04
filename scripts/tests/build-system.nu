@@ -25,6 +25,8 @@ use ../lib/build/docker.nu [normalize-docker-label]
 use ../lib/build/dependencies.nu [resolve-dep-node resolve-dep-platforms]
 use ../lib/build/config.nu [load-service-config]
 use ../lib/build/disk.nu [extract-root-mount extract-root-avail-gb is-low-disk filter-df-summary-lines parse-size-to-gb]
+use ../lib/build/context.nu [detect-clone-source-requirements prepare-clone-source-context cleanup-clone-source-context]
+use ../lib/build/clone-source.nu [run-clone-source]
 use ../lib/manifest/core.nu [get-default-version get-version-or-null load-versions-manifest]
 use ../lib/platforms/core.nu [get-default-platform load-platforms-manifest]
 use ./mocks.nu [detect-build get-mock-service-config build-mock-version-manifest build-mock-platform-manifest check-platforms-manifest-exists check-versions-manifest-exists build-dependency-graph-with-mocks get-default-platform set-mock-platform-behavior]
@@ -46,6 +48,107 @@ def make-temp-repo [] {
 
 def rm-temp-repo [dir: string] {
   try { rm -rf $dir } catch { }
+}
+
+def make-temp-context [] {
+  let tmp = (^mktemp -d | str trim)
+  mkdir $tmp
+  $tmp
+}
+
+def rm-temp-context [dir: string] {
+  try { rm -rf $dir } catch { }
+}
+
+def with-git-file-protocol-allowed [block: closure] {
+  let saved = {
+    count: (try { $env.GIT_CONFIG_COUNT } catch { "" })
+    key0: (try { $env.GIT_CONFIG_KEY_0 } catch { "" })
+    val0: (try { $env.GIT_CONFIG_VALUE_0 } catch { "" })
+  }
+  $env.GIT_CONFIG_COUNT = "1"
+  $env.GIT_CONFIG_KEY_0 = "protocol.file.allow"
+  $env.GIT_CONFIG_VALUE_0 = "always"
+  let result = (try { do $block } catch {|err|
+    if ($saved.count | str length) > 0 {
+      $env.GIT_CONFIG_COUNT = $saved.count
+    } else {
+      hide-env GIT_CONFIG_COUNT
+    }
+    if ($saved.key0 | str length) > 0 {
+      $env.GIT_CONFIG_KEY_0 = $saved.key0
+    } else {
+      hide-env GIT_CONFIG_KEY_0
+    }
+    if ($saved.val0 | str length) > 0 {
+      $env.GIT_CONFIG_VALUE_0 = $saved.val0
+    } else {
+      hide-env GIT_CONFIG_VALUE_0
+    }
+    error make {msg: $err.msg}
+  })
+  if ($saved.count | str length) > 0 {
+    $env.GIT_CONFIG_COUNT = $saved.count
+  } else {
+    hide-env GIT_CONFIG_COUNT
+  }
+  if ($saved.key0 | str length) > 0 {
+    $env.GIT_CONFIG_KEY_0 = $saved.key0
+  } else {
+    hide-env GIT_CONFIG_KEY_0
+  }
+  if ($saved.val0 | str length) > 0 {
+    $env.GIT_CONFIG_VALUE_0 = $saved.val0
+  } else {
+    hide-env GIT_CONFIG_VALUE_0
+  }
+  $result
+}
+
+def seed-local-git-repo [repo: string] {
+  mkdir $repo
+  "fixture" | save -f ($repo | path join "README.md")
+  ^git -C $repo init -q
+  ^git -C $repo config user.email "test@example.com"
+  ^git -C $repo config user.name "Test User"
+  ^git -C $repo add README.md
+  ^git -C $repo commit -q -m "init"
+  ^git -C $repo rev-parse HEAD
+}
+
+def seed-git-repo-with-submodule [base: string] {
+  let sub = ($base | path join "submodule")
+  let origin = ($base | path join "origin")
+
+  mkdir $sub
+  "submodule fixture" | save -f ($sub | path join "sub-marker.txt")
+  ^git -C $sub init -q
+  ^git -C $sub config user.email "test@example.com"
+  ^git -C $sub config user.name "Test User"
+  ^git -C $sub add sub-marker.txt
+  ^git -C $sub commit -q -m "sub init"
+
+  mkdir $origin
+  "parent fixture" | save -f ($origin | path join "README.md")
+  ^git -C $origin init -q
+  ^git -C $origin config user.email "test@example.com"
+  ^git -C $origin config user.name "Test User"
+  ^git -C $origin add README.md
+  ^git -C $origin commit -q -m "parent init"
+
+  let sub_url = "../submodule"
+  ^git -c protocol.file.allow=always -C $origin submodule add -q $sub_url submodule
+  ^git -C $origin commit -q -m "add submodule"
+
+  let head = (^git -C $origin rev-parse HEAD | str trim)
+  let branch = (^git -C $origin branch --show-current | str trim)
+  {
+    origin: $origin
+    sub: $sub
+    head: $head
+    branch: $branch
+    url: $"file://($origin)"
+  }
 }
 
 def run-in-temp-repo [repo: string, block: closure] {
@@ -1496,6 +1599,404 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test38)
+
+  # Test 39: clone-source helper not staged when Dockerfile does not reference it
+  let test39 = (run-test "Test 39: clone-source helper skipped when Dockerfile omits it" {
+    let dockerfile_text = "FROM debian:bookworm\nRUN echo hello"
+    let clone_reqs = (detect-clone-source-requirements $dockerfile_text)
+    if $clone_reqs.needs_clone_helper {
+      error make {msg: "Expected no clone-source helper requirement for generic Dockerfile"}
+    }
+
+    let ctx = (make-temp-context)
+    let staged = (prepare-clone-source-context "test-service" $ctx $clone_reqs)
+    if $staged.staged {
+      rm-temp-context $ctx
+      error make {msg: "Expected helper not staged when Dockerfile omits clone-source.nu"}
+    }
+
+    let helper_dest = ($ctx | path join "scripts" "lib" "clone-source.nu")
+    if ($helper_dest | path exists) {
+      rm-temp-context $ctx
+      error make {msg: "Expected no clone-source.nu in build context when not required"}
+    }
+
+    rm-temp-context $ctx
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39)
+
+  # Test 39b: clone-source helper staging matches live source and cleans up
+  let test39b = (run-test "Test 39b: clone-source helper staging fidelity and cleanup" {
+    let helper_src = "scripts/lib/build/clone-source.nu"
+    let live_content = (open $helper_src)
+    let dockerfile_text = "COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu"
+    let clone_reqs = (detect-clone-source-requirements $dockerfile_text)
+    if not $clone_reqs.needs_clone_helper {
+      error make {msg: "Expected clone-source helper requirement when Dockerfile copies it"}
+    }
+
+    let ctx = (make-temp-context)
+    let staged = (prepare-clone-source-context "test-service" $ctx $clone_reqs)
+
+    let helper_dest = ($ctx | path join "scripts" "lib" "clone-source.nu")
+    if not ($helper_dest | path exists) {
+      rm-temp-context $ctx
+      error make {msg: "Expected clone-source.nu staged into build context"}
+    }
+
+    let staged_content = (open $helper_dest)
+    if $staged_content != $live_content {
+      rm-temp-context $ctx
+      error make {msg: "Staged clone-source.nu does not match live helper source"}
+    }
+
+    cleanup-clone-source-context $ctx $staged
+    if ($helper_dest | path exists) {
+      rm-temp-context $ctx
+      error make {msg: "Expected clone-source.nu removed after cleanup"}
+    }
+
+    rm-temp-context $ctx
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39b)
+
+  # Test 39c: comment-only clone-source mention does not trigger staging
+  let test39c = (run-test "Test 39c: comment-only clone-source mention does not trigger staging" {
+    let dockerfile_text = (
+      "FROM debian:bookworm\n" +
+      "# The build uses clone-source.nu for git clones\n" +
+      "# COPY ./scripts/lib/clone-source.nu would stage the helper\n" +
+      "RUN echo hello\n"
+    )
+    let clone_reqs = (detect-clone-source-requirements $dockerfile_text)
+    if $clone_reqs.needs_clone_helper {
+      error make {msg: "Expected no clone-source helper requirement for comment-only mentions"}
+    }
+
+    let ctx = (make-temp-context)
+    let staged = (prepare-clone-source-context "test-service" $ctx $clone_reqs)
+    if $staged.staged {
+      rm-temp-context $ctx
+      error make {msg: "Expected helper not staged for comment-only clone-source mentions"}
+    }
+
+    let helper_dest = ($ctx | path join "scripts" "lib" "clone-source.nu")
+    if ($helper_dest | path exists) {
+      rm-temp-context $ctx
+      error make {msg: "Expected no clone-source.nu in build context for comment-only mentions"}
+    }
+
+    rm-temp-context $ctx
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39c)
+
+  # Test 40: clone-source local mode copies directory contents
+  let test40 = (run-test "Test 40: clone-source local mode copies directory contents" {
+    let src = (^mktemp -d | str trim)
+    let dest = (^mktemp -d | str trim)
+    "local fixture" | save -f ($src | path join "marker.txt")
+
+    run-clone-source --mode local --local-dir $src --dest $dest
+
+    if not (($dest | path join "marker.txt") | path exists) {
+      rm-temp-context $src
+      rm-temp-context $dest
+      error make {msg: "Expected marker.txt copied into destination"}
+    }
+
+    rm-temp-context $src
+    rm-temp-context $dest
+    true
+  } $verbose_flag)
+  $results = ($results | append $test40)
+
+  # Test 41: clone-source ref mode clones a local git repository
+  let test41 = (run-test "Test 41: clone-source ref mode clones local git repository" {
+    let base = (^mktemp -d | str trim)
+    let origin = ($base | path join "origin")
+    let head = (seed-local-git-repo $origin)
+    let branch = (^git -C $origin branch --show-current | str trim)
+    let dest = ($base | path join "checkout")
+    let url = $"file://($origin)"
+
+    run-clone-source --mode git --ref-kind ref --url $url --ref $branch --dest $dest
+
+    let cloned_head = (^git -C $dest rev-parse HEAD | str trim)
+    if $cloned_head != $head {
+      rm-temp-context $base
+      error make {msg: $"Expected cloned HEAD ($cloned_head) to match origin ($head)"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test41)
+
+  # Test 42: clone-source sha mode fetches a local git repository by full SHA
+  let test42 = (run-test "Test 42: clone-source sha mode fetches local git repository" {
+    let base = (^mktemp -d | str trim)
+    let origin = ($base | path join "origin")
+    let head = (seed-local-git-repo $origin)
+    let dest = ($base | path join "checkout")
+    let url = $"file://($origin)"
+
+    run-clone-source --mode git --ref-kind sha --url $url --ref $head --dest $dest
+
+    let cloned_head = (^git -C $dest rev-parse HEAD | str trim)
+    if $cloned_head != $head {
+      rm-temp-context $base
+      error make {msg: $"Expected cloned HEAD ($cloned_head) to match SHA ($head)"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test42)
+
+  # Test 43: clone-source ref mode skips submodule checkout when disabled
+  let test43 = (run-test "Test 43: clone-source ref mode skips submodules when disabled" {
+    let base = (^mktemp -d | str trim)
+    let fixture = (seed-git-repo-with-submodule $base)
+    let dest = ($base | path join "checkout")
+
+    run-clone-source --mode git --ref-kind ref --url $fixture.url --ref $fixture.branch --dest $dest --submodules "false"
+
+    let sub_marker = ($dest | path join "submodule" "sub-marker.txt")
+    if ($sub_marker | path exists) {
+      rm-temp-context $base
+      error make {msg: "Expected submodule content absent when SOURCE_SUBMODULES=false"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test43)
+
+  # Test 44: clone-source ref mode recurses submodules by default
+  let test44 = (run-test "Test 44: clone-source ref mode recurses submodules by default" {
+    let base = (^mktemp -d | str trim)
+    let fixture = (seed-git-repo-with-submodule $base)
+    let dest = ($base | path join "checkout")
+
+    with-git-file-protocol-allowed {
+      run-clone-source --mode git --ref-kind ref --url $fixture.url --ref $fixture.branch --dest $dest
+    }
+
+    let sub_marker = ($dest | path join "submodule" "sub-marker.txt")
+    if not ($sub_marker | path exists) {
+      rm-temp-context $base
+      error make {msg: "Expected submodule content present when SOURCE_SUBMODULES defaults to true"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test44)
+
+  # Test 45: clone-source sha mode recurses submodules by default
+  let test45 = (run-test "Test 45: clone-source sha mode recurses submodules by default" {
+    let base = (^mktemp -d | str trim)
+    let fixture = (seed-git-repo-with-submodule $base)
+    let dest = ($base | path join "checkout")
+
+    with-git-file-protocol-allowed {
+      run-clone-source --mode git --ref-kind sha --url $fixture.url --ref $fixture.head --dest $dest
+    }
+
+    let sub_marker = ($dest | path join "submodule" "sub-marker.txt")
+    if not ($sub_marker | path exists) {
+      rm-temp-context $base
+      error make {msg: "Expected submodule content present when SOURCE_SUBMODULES defaults to true in sha mode"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test45)
+
+  # Test 46: clone-source main entrypoint rejects invalid inputs
+  let test46 = (run-test "Test 46: clone-source main entrypoint rejects invalid inputs" {
+    let helper = "scripts/lib/build/clone-source.nu"
+    let dest = (^mktemp -d | str trim)
+
+    let bad_sha = (^nu $helper --mode git --ref-kind sha --url "https://example.com/repo.git" --ref "not-a-sha" --dest $dest | complete)
+    if $bad_sha.exit_code == 0 {
+      rm-temp-context $dest
+      error make {msg: "Expected non-zero exit for invalid SHA at main entrypoint"}
+    }
+    let bad_sha_out = ($bad_sha.stderr | str join "") + ($bad_sha.stdout | str join "")
+    if not ($bad_sha_out | str contains "40-character SHA") {
+      rm-temp-context $dest
+      error make {msg: $"Expected SHA validation error, got: ($bad_sha_out)"}
+    }
+
+    let bad_kind = (^nu $helper --mode git --ref-kind bogus --url "https://example.com/repo.git" --ref "main" --dest $dest | complete)
+    if $bad_kind.exit_code == 0 {
+      rm-temp-context $dest
+      error make {msg: "Expected non-zero exit for invalid ref-kind at main entrypoint"}
+    }
+    let bad_kind_out = ($bad_kind.stderr | str join "") + ($bad_kind.stdout | str join "")
+    if not ($bad_kind_out | str contains "Invalid SOURCE_MODE/SOURCE_REF_KIND") {
+      rm-temp-context $dest
+      error make {msg: $"Expected ref-kind validation error, got: ($bad_kind_out)"}
+    }
+
+    let no_dest = (^nu $helper --mode git --ref-kind ref --url "https://example.com/repo.git" --ref "main" | complete)
+    if $no_dest.exit_code == 0 {
+      rm-temp-context $dest
+      error make {msg: "Expected non-zero exit when SOURCE_DEST is missing at main entrypoint"}
+    }
+    let no_dest_out = ($no_dest.stderr | str join "") + ($no_dest.stdout | str join "")
+    if not ($no_dest_out | str contains "SOURCE_DEST must be provided") {
+      rm-temp-context $dest
+      error make {msg: $"Expected missing-dest validation error, got: ($no_dest_out)"}
+    }
+
+    rm-temp-context $dest
+    true
+  } $verbose_flag)
+  $results = ($results | append $test46)
+
+  # Test 48: clone-source cache-dir git mode populates cache then destination
+  let test48 = (run-test "Test 48: clone-source cache-dir ref mode populates cache and dest" {
+    let base = (^mktemp -d | str trim)
+    let origin = ($base | path join "origin")
+    let head = (seed-local-git-repo $origin)
+    let branch = (^git -C $origin branch --show-current | str trim)
+    let cache = ($base | path join "cache")
+    let dest = ($base | path join "checkout")
+    let url = $"file://($origin)"
+
+    run-clone-source --mode git --ref-kind ref --url $url --ref $branch --cache-dir $cache --dest $dest
+
+    if not (($cache | path join ".git") | path exists) {
+      rm-temp-context $base
+      error make {msg: "Expected cache-dir to be populated with .git"}
+    }
+    let dest_head = (^git -C $dest rev-parse HEAD | str trim)
+    if $dest_head != $head {
+      rm-temp-context $base
+      error make {msg: $"Expected dest HEAD ($dest_head) to match origin ($head)"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test48)
+
+  # Test 49: clone-source reuses a populated cache without refetching
+  let test49 = (run-test "Test 49: clone-source reuses populated cache without refetching" {
+    let base = (^mktemp -d | str trim)
+    let origin = ($base | path join "origin")
+    let head = (seed-local-git-repo $origin)
+    let branch = (^git -C $origin branch --show-current | str trim)
+    let cache = ($base | path join "cache")
+    let dest1 = ($base | path join "checkout1")
+    let dest2 = ($base | path join "checkout2")
+    let url = $"file://($origin)"
+
+    run-clone-source --mode git --ref-kind ref --url $url --ref $branch --cache-dir $cache --dest $dest1
+
+    # Second run uses a bogus URL. It must succeed by reusing the populated
+    # cache; a refetch would fail against the nonexistent remote.
+    run-clone-source --mode git --ref-kind ref --url "file:///nonexistent/repo.git" --ref $branch --cache-dir $cache --dest $dest2
+
+    let dest2_head = (^git -C $dest2 rev-parse HEAD | str trim)
+    if $dest2_head != $head {
+      rm-temp-context $base
+      error make {msg: $"Expected reused-cache dest HEAD ($dest2_head) to match origin ($head)"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test49)
+
+  # Test 50: clone-source auto-detects ref-kind from the ref when unset
+  let test50 = (run-test "Test 50: clone-source auto-detects ref-kind from ref" {
+    let base = (^mktemp -d | str trim)
+    let origin = ($base | path join "origin")
+    let head = (seed-local-git-repo $origin)
+    let branch = (^git -C $origin branch --show-current | str trim)
+    let url = $"file://($origin)"
+
+    # Empty ref-kind with a full 40-hex SHA -> sha path.
+    let dest_sha = ($base | path join "by-sha")
+    run-clone-source --mode git --url $url --ref $head --dest $dest_sha
+    let sha_head = (^git -C $dest_sha rev-parse HEAD | str trim)
+    if $sha_head != $head {
+      rm-temp-context $base
+      error make {msg: $"Expected auto-detected sha HEAD ($sha_head) to match ($head)"}
+    }
+
+    # Empty ref-kind with a branch name -> ref path.
+    let dest_ref = ($base | path join "by-ref")
+    run-clone-source --mode git --url $url --ref $branch --dest $dest_ref
+    let ref_head = (^git -C $dest_ref rev-parse HEAD | str trim)
+    if $ref_head != $head {
+      rm-temp-context $base
+      error make {msg: $"Expected auto-detected ref HEAD ($ref_head) to match ($head)"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test50)
+
+  # Test 50b: clone-source main entrypoint accepts omitted --ref-kind
+  let test50b = (run-test "Test 50b: clone-source main entrypoint auto-detects when --ref-kind is omitted" {
+    let base = (^mktemp -d | str trim)
+    let origin = ($base | path join "origin")
+    let head = (seed-local-git-repo $origin)
+    let dest = ($base | path join "checkout")
+    let url = $"file://($origin)"
+    let helper = "scripts/lib/build/clone-source.nu"
+
+    let out = (^nu $helper --mode git --url $url --ref $head --dest $dest | complete)
+    if $out.exit_code != 0 {
+      rm-temp-context $base
+      let detail = (($out.stderr | str join "") + ($out.stdout | str join ""))
+      error make {msg: $"Expected CLI entrypoint to accept omitted --ref-kind, got: ($detail)"}
+    }
+
+    let cloned_head = (^git -C $dest rev-parse HEAD | str trim)
+    if $cloned_head != $head {
+      rm-temp-context $base
+      error make {msg: $"Expected cloned HEAD ($cloned_head) to match origin ($head) when --ref-kind is omitted"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test50b)
+
+  # Test 51: clone-source local mode ignores cache-dir
+  let test51 = (run-test "Test 51: clone-source local mode ignores cache-dir" {
+    let base = (^mktemp -d | str trim)
+    let src = ($base | path join "src")
+    mkdir $src
+    "local fixture" | save -f ($src | path join "marker.txt")
+    let cache = ($base | path join "cache")
+    let dest = ($base | path join "dest")
+
+    run-clone-source --mode local --local-dir $src --cache-dir $cache --dest $dest
+
+    if not (($dest | path join "marker.txt") | path exists) {
+      rm-temp-context $base
+      error make {msg: "Expected marker.txt copied into destination in local mode"}
+    }
+    if ($cache | path exists) {
+      rm-temp-context $base
+      error make {msg: "Expected cache-dir untouched in local mode"}
+    }
+
+    rm-temp-context $base
+    true
+  } $verbose_flag)
+  $results = ($results | append $test51)
 
   print-test-summary $results
   

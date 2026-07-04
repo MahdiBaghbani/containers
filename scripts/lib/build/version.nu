@@ -31,7 +31,7 @@ use ../validate/ssh.nu [validate-ssh-config-merged]
 use ../core/repo.nu [get-repo-root]
 use ../tls/lib.nu [read-ca-name]
 use ./tags.nu [generate-tags]
-use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context extract-ssh-metadata prepare-ssh-context cleanup-ssh-context]
+use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context extract-ssh-metadata prepare-ssh-context cleanup-ssh-context detect-clone-source-requirements prepare-clone-source-context cleanup-clone-source-context]
 use ./sources.nu [prepare-local-sources-context extract-source-shas]
 use ./labels.nu [generate-labels]
 use ./args.nu [generate-build-args]
@@ -458,9 +458,11 @@ export def build-single-version [
 
   let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths $plane)
 
+  # Read Dockerfile once for just-in-time context staging decisions.
+  let dockerfile_text = (try { open $dockerfile } catch { "" })
+
   # Detect which CA files the Dockerfile actually needs, then stage them just-in-time.
   let ca_reqs = (if $tls_meta.enabled {
-    let dockerfile_text = (try { open $dockerfile } catch { "" })
     detect-ca-requirements $dockerfile_text $tls_meta.ca_name $tls_meta.mode
   } else {
     {needs_ca_crt: false, needs_ca_key: false}
@@ -468,6 +470,9 @@ export def build-single-version [
   let ca_context = (prepare-ca-context $context $tls_meta $ca_reqs)
 
   let ssh_context = (prepare-ssh-context $service $context $ssh_meta.enabled $ssh_meta.mode)
+
+  let clone_reqs = (detect-clone-source-requirements $dockerfile_text)
+  let clone_context = (prepare-clone-source-context $service $context $clone_reqs)
 
   print ""
   print $"=== Building ($service):($version_tag) ==="
@@ -485,6 +490,7 @@ export def build-single-version [
   cleanup-tls-context $context $tls_context
   cleanup-ca-context $context $ca_context
   cleanup-ssh-context $context $ssh_context
+  cleanup-clone-source-context $context $clone_context
 
   if $build_error != null {
     error make {msg: $build_error}
