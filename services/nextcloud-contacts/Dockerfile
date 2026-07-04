@@ -24,6 +24,7 @@ ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
 ARG CONTACTS_URL="https://github.com/nextcloud/contacts"
 ARG CONTACTS_REF="v8.1.0"
 ARG CONTACTS_SHA=""
+ARG CONTACTS_REF_KIND=""
 ARG CONTACTS_PATH=""
 ARG CONTACTS_MODE=""
 ARG CACHEBUST="default"
@@ -38,24 +39,24 @@ WORKDIR /
 ARG CONTACTS_URL
 ARG CONTACTS_REF
 ARG CONTACTS_SHA
+ARG CONTACTS_REF_KIND
 ARG CONTACTS_PATH
 ARG CONTACTS_MODE
 ARG CACHEBUST
 
-# Clone or copy contacts source (follows revad-base pattern)
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+# Clone or copy contacts source via shared helper (local bind mount or git cache).
 RUN --mount=type=cache,id=contacts-git-${CACHEBUST:-${CONTACTS_REF}},target=/src/contacts-git-cache,sharing=shared \
     --mount=type=bind,source=${CONTACTS_PATH:-.},target=/src/local-contacts,ro \
-    if [ "$CONTACTS_MODE" = "local" ]; then \
-    mkdir -p /contacts-source && \
-    cp -a /src/local-contacts/. /contacts-source; \
-    else \
-    mkdir -p /src/contacts-git-cache && \
-    if [ ! -d /src/contacts-git-cache/.git ]; then \
-    rm -rf /src/contacts-git-cache/* /src/contacts-git-cache/.[!.]* 2>/dev/null || true; \
-    git clone --depth 1 --recursive --shallow-submodules --branch "${CONTACTS_REF}" ${CONTACTS_URL} /src/contacts-git-cache; \
-    fi && \
-    cp -a /src/contacts-git-cache/. /contacts-source; \
-    fi
+    nu /tmp/clone-source.nu \
+    --mode "${CONTACTS_MODE:-git}" \
+    --url "${CONTACTS_URL}" \
+    --ref "${CONTACTS_REF}" \
+    --ref-kind "${CONTACTS_REF_KIND}" \
+    --local-dir /src/local-contacts \
+    --cache-dir /src/contacts-git-cache \
+    --dest /contacts-source
 
 RUN rm -rf /contacts-source/.git && \
     rm -rf /contacts-source/.github && \
