@@ -2127,6 +2127,67 @@ def main [--verbose] {
   } $verbose_flag)
   $results = ($results | append $test39s)
 
+  let test39t = (run-test "Test 39t: Dockerfile drift - cernbox-web passes --ref-kind on clone-source.nu calls" {
+    let dockerfiles = [
+      "services/cernbox-web/Dockerfile"
+    ]
+    let ref_kind_patterns = [
+      (clone-source-ref-kind-env-pattern "WEB_REF_KIND")
+      (clone-source-ref-kind-env-pattern "WEB_EXTENSIONS_REF_KIND")
+    ]
+    for df in $dockerfiles {
+      assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 2 --ref-kind-patterns $ref_kind_patterns
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39t)
+
+  let test39u = (run-test "Test 39u: Real manifest - cernbox-web master mixed REF_KIND build args" {
+    let svc = "cernbox-web"
+    let version = "master"
+    let vm = (load-versions-manifest $svc)
+    let vspec = (get-version-or-null $vm $version)
+    let cfg = (load-service-config $svc $vspec "" null)
+
+    let web_ref = (try { $cfg.sources.web.ref } catch { "" })
+    if $web_ref != "cernbox" {
+      error make {msg: $"Expected web ref 'cernbox' from tracked manifest, got: ($web_ref)"}
+    }
+    let web_extensions_ref = (try { $cfg.sources.web_extensions.ref } catch { "" })
+    if $web_extensions_ref != "dffaad6cecf755782c7ce4289f21b4f155c35e7c" {
+      error make {msg: $"Expected web_extensions pinned SHA from tracked manifest, got: ($web_extensions_ref)"}
+    }
+
+    let source_types = (detect-all-source-types $cfg.sources)
+    let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+    let meta = (detect-build)
+    let tls_meta = (create-test-tls-meta)
+    let ssh_meta = {
+      enabled: false,
+      mode: "disabled",
+      default_user: "root",
+      port: 22,
+      listen: "0.0.0.0"
+    }
+    let build_args = (
+      generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+    )
+
+    if (try { $build_args.WEB_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: $"Expected WEB_REF_KIND=ref for branch cernbox, got: ($build_args.WEB_REF_KIND?)"}
+    }
+    if (try { $build_args.WEB_EXTENSIONS_REF_KIND } catch { "" }) != "sha" {
+      error make {msg: $"Expected WEB_EXTENSIONS_REF_KIND=sha for pinned commit, got: ($build_args.WEB_EXTENSIONS_REF_KIND?)"}
+    }
+
+    if $verbose_flag {
+      print $"    WEB_REF_KIND=($build_args.WEB_REF_KIND), WEB_EXTENSIONS_REF_KIND=($build_args.WEB_EXTENSIONS_REF_KIND)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39u)
+
   let test39q = (run-test "Test 39q: Dockerfile drift - nextcloud local-mode cleanup removes config and data paths" {
     assert-dockerfile-nextcloud-local-mode-cleanup "services/nextcloud/Dockerfile"
     true

@@ -64,31 +64,31 @@ WORKDIR /build
 
 ARG WEB_URL=https://github.com/cernbox/web
 ARG WEB_REF=cernbox
+ARG WEB_REF_KIND=""
 ARG WEB_PATH=""
 ARG WEB_MODE=""
 ARG CACHEBUST="default"
 ARG WEB_EXTENSIONS_URL=https://github.com/cernbox/web-extensions
 ARG WEB_EXTENSIONS_REF=main
+ARG WEB_EXTENSIONS_REF_KIND=""
 ARG PNPM_RETRY_COUNT="10"
 ARG PNPM_VERSION="9.12.3"
 ARG WEB_EXT_ALLOW=""
 ARG WEB_EXT_SKIP="codimd,data-repositories,draw-io,ms-tracing"
 
-# Conditional logic: use local path if MODE is "local", otherwise use git clone with cache
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+
+# Clone or copy web source via shared helper (local bind mount or git cache).
 RUN --mount=type=cache,id=cernbox-web-web-git-${CACHEBUST:-${WEB_REF}},target=/src/web-git-cache,sharing=shared \
     --mount=type=bind,source=${WEB_PATH:-.},target=/tmp/local-web,ro \
-    if [ "$WEB_MODE" = "local" ]; then \
-    echo "Building from local source: ${WEB_PATH}" && \
-    mkdir -p /build/web && \
-    cp -a /tmp/local-web/. /build/web; \
-    else \
-    echo "Building from git: ${WEB_URL} @ ${WEB_REF}" && \
-    mkdir -p /src/web-git-cache && \
-    if [ ! -d /src/web-git-cache/.git ]; then \
-    git clone --depth 1 --branch "${WEB_REF}" ${WEB_URL} /src/web-git-cache; \
-    fi && \
-    cp -a /src/web-git-cache/. /build/web; \
-    fi
+    nu /tmp/clone-source.nu \
+    --mode "${WEB_MODE:-git}" \
+    --url "${WEB_URL}" \
+    --ref "${WEB_REF}" \
+    --ref-kind "${WEB_REF_KIND}" \
+    --local-dir /tmp/local-web \
+    --cache-dir /src/web-git-cache \
+    --dest /build/web
 
 WORKDIR /build/web
 
@@ -126,19 +126,15 @@ RUN make dist
 
 WORKDIR /build
 
+# Clone web-extensions source via shared helper (git cache).
 RUN --mount=type=cache,id=cernbox-web-web-extensions-git-${CACHEBUST:-${WEB_EXTENSIONS_REF}},target=/src/web-extensions-git-cache,sharing=shared \
-    mkdir -p /src/web-extensions-git-cache && \
-    if [ ! -d /src/web-extensions-git-cache/.git ]; then \
-    if echo "${WEB_EXTENSIONS_REF}" | grep -Eq '^[0-9a-fA-F]{40}$'; then \
-    git -C /src/web-extensions-git-cache init && \
-    git -C /src/web-extensions-git-cache remote add origin "${WEB_EXTENSIONS_URL}" && \
-    git -C /src/web-extensions-git-cache fetch --depth 1 origin "${WEB_EXTENSIONS_REF}" && \
-    git -C /src/web-extensions-git-cache checkout FETCH_HEAD; \
-    else \
-    git clone --depth 1 --branch "${WEB_EXTENSIONS_REF}" ${WEB_EXTENSIONS_URL} /src/web-extensions-git-cache; \
-    fi; \
-    fi && \
-    cp -a /src/web-extensions-git-cache/. /build/web-extensions
+    nu /tmp/clone-source.nu \
+    --mode git \
+    --url "${WEB_EXTENSIONS_URL}" \
+    --ref "${WEB_EXTENSIONS_REF}" \
+    --ref-kind "${WEB_EXTENSIONS_REF_KIND}" \
+    --cache-dir /src/web-extensions-git-cache \
+    --dest /build/web-extensions
 
 WORKDIR /build/web-extensions
 
