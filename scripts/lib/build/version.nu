@@ -32,7 +32,7 @@ use ../core/repo.nu [get-repo-root]
 use ../tls/lib.nu [read-ca-name]
 use ./tags.nu [generate-tags]
 use ./context.nu [extract-tls-metadata prepare-tls-context cleanup-tls-context detect-ca-requirements prepare-ca-context cleanup-ca-context extract-ssh-metadata prepare-ssh-context cleanup-ssh-context detect-clone-source-requirements prepare-clone-source-context cleanup-clone-source-context]
-use ./sources.nu [prepare-local-sources-context extract-source-shas]
+use ./sources.nu [prepare-local-sources-context extract-source-shas extract-source-ref-kinds]
 use ./labels.nu [generate-labels]
 use ./args.nu [generate-build-args]
 use ./order.nu [build-dependency-graph topological-sort-dfs]
@@ -249,6 +249,12 @@ export def build-single-version [
   let source_shas = $source_shas_result.shas
   $current_cache = ($current_cache | merge $source_shas_result.cache)
 
+  let source_ref_kinds = (if ($cfg_sources | is-empty) {
+    {}
+  } else {
+    extract-source-ref-kinds $cfg_sources $source_types
+  })
+
   let is_local_plane = ($plane == $PLANE_LOCAL)
   let effective_push = (if $is_local_plane { false } else { $push_val })
   let tags = (generate-tags $service $version_spec $is_local $info $current_platform $default_platform $is_local_plane)
@@ -456,7 +462,7 @@ export def build-single-version [
     {}
   })
 
-  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths $plane)
+  let build_args = (generate-build-args $version_tag $cfg $meta $deps_resolved $tls_meta $ssh_meta $cache_bust_override $no_cache $source_shas $source_types $local_source_paths $plane $source_ref_kinds)
 
   # Read Dockerfile once for just-in-time context staging decisions.
   let dockerfile_text = (try { open $dockerfile } catch { "" })

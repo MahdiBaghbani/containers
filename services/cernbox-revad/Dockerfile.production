@@ -83,6 +83,7 @@ RUN --mount=type=cache,id=cernbox-revad-reva-git-${CACHEBUST:-${REVAD_REF}},targ
     --mode "${REVAD_MODE:-git}" \
     --url "${REVAD_URL}" \
     --ref "${REVAD_REF}" \
+    --ref-kind "${REVAD_REF_KIND}" \
     --local-dir /tmp/local-reva \
     --cache-dir /src/reva-git-cache \
     --dest /reva-git
@@ -93,6 +94,7 @@ RUN --mount=type=cache,id=cernbox-revad-reva-plugins-git-${CACHEBUST:-${REVAD_PL
     --mode git \
     --url "${REVAD_PLUGINS_URL}" \
     --ref "${REVAD_PLUGINS_REF}" \
+    --ref-kind "${REVAD_PLUGINS_REF_KIND}" \
     --cache-dir /src/reva-plugins-git-cache \
     --dest /reva-plugins-git
 

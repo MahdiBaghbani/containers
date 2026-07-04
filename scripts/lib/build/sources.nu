@@ -103,6 +103,54 @@ export def extract-source-sha [
     }
 }
 
+# Classify ref string for fetch mode: local, full SHA, or branch/tag ref.
+export def classify-ref-kind-from-ref [
+    ref: string,
+    source_type: string = "git"
+] {
+    if $source_type == "local" {
+        return "local"
+    }
+
+    let trimmed = ($ref | str trim)
+    if ($trimmed | str replace --regex '^[0-9a-fA-F]{40}$' "MATCHED") == "MATCHED" {
+        "sha"
+    } else {
+        "ref"
+    }
+}
+
+# Classify how a single source ref should be fetched: local, full SHA, or branch/tag ref.
+export def classify-source-ref-kind [
+    source: record,
+    source_type: string
+] {
+    if $source_type == "local" {
+        return "local"
+    }
+
+    let ref = (try { $source.ref } catch { "" } | str trim)
+    classify-ref-kind-from-ref $ref "git"
+}
+
+# Build {SOURCE_KEY}_REF_KIND args for all sources (parallel to extract-source-shas).
+export def extract-source-ref-kinds [
+    sources: record,
+    source_types: record = {}
+] {
+    ($sources | columns | reduce --fold {} {|source_key, acc|
+        let source = ($sources | get $source_key)
+        let source_type = (if ($source_types | is-empty) {
+            if "path" in ($source | columns) { "local" } else { "git" }
+        } else {
+            (try { $source_types | get $source_key } catch { "git" })
+        })
+        let kind = (classify-source-ref-kind $source $source_type)
+        let kind_key = ($"($source_key | str upcase)_REF_KIND")
+        $acc | upsert $kind_key $kind
+    })
+}
+
 # Extract SHAs for all sources in a record
 export def extract-source-shas [
     sources: record,

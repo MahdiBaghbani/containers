@@ -23,7 +23,8 @@ use ../lib/build/args.nu [generate-build-args]
 use ../lib/build/order.nu [topological-sort-dfs build-dependency-graph]
 use ../lib/build/docker.nu [normalize-docker-label]
 use ../lib/build/dependencies.nu [resolve-dep-node resolve-dep-platforms]
-use ../lib/build/config.nu [load-service-config]
+use ../lib/build/config.nu [load-service-config process-sources-to-build-args detect-all-source-types]
+use ../lib/build/sources.nu [classify-source-ref-kind extract-source-ref-kinds]
 use ../lib/build/disk.nu [extract-root-mount extract-root-avail-gb is-low-disk filter-df-summary-lines parse-size-to-gb]
 use ../lib/build/context.nu [detect-clone-source-requirements prepare-clone-source-context cleanup-clone-source-context]
 use ../lib/build/clone-source.nu [run-clone-source]
@@ -103,6 +104,38 @@ def with-git-file-protocol-allowed [block: closure] {
     hide-env GIT_CONFIG_VALUE_0
   }
   $result
+}
+
+def assert-dockerfile-clone-source-ref-kind-contract [dockerfile_path: string] {
+  if not ($dockerfile_path | path exists) {
+    error make {msg: $"Dockerfile not found: ($dockerfile_path)"}
+  }
+  let lines = (open --raw $dockerfile_path | lines)
+  let invoke_indices = (
+    $lines
+    | enumerate
+    | where {|e| ($e.item | str trim) | str starts-with "nu /tmp/clone-source.nu" }
+    | get index
+  )
+  if ($invoke_indices | length) != 2 {
+    error make {msg: $"Expected 2 clone-source.nu invocations in ($dockerfile_path), found ($invoke_indices | length)"}
+  }
+  for idx in $invoke_indices {
+    mut block_lines = []
+    mut i = $idx
+    loop {
+      $block_lines = ($block_lines | append ($lines | get $i))
+      let line = ($lines | get $i | str trim)
+      if not ($line | str ends-with "\\") {
+        break
+      }
+      $i = $i + 1
+    }
+    let block = ($block_lines | str join "\n")
+    if not ($block | str contains "--ref-kind") {
+      error make {msg: $"clone-source.nu invocation at line ($idx + 1) missing --ref-kind in ($dockerfile_path)"}
+    }
+  }
 }
 
 def seed-local-git-repo [repo: string] {
@@ -1692,6 +1725,305 @@ def main [--verbose] {
     true
   } $verbose_flag)
   $results = ($results | append $test39c)
+
+  # Source ref-kind classification (host-side build-arg pipeline)
+
+  let test39d = (run-test "Test 39d: classify-source-ref-kind maps full SHA to sha" {
+    let source = {url: "https://example.com/repo.git", ref: "a1b2c3d4e5f6789012345678901234567890abcd"}
+    let kind = (classify-source-ref-kind $source "git")
+    if $kind != "sha" {
+      error make {msg: $"Expected ref-kind 'sha' for 40-hex ref, got: ($kind)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39d)
+
+  let test39e = (run-test "Test 39e: classify-source-ref-kind maps branch/tag to ref" {
+    let source = {url: "https://example.com/repo.git", ref: "main"}
+    let kind = (classify-source-ref-kind $source "git")
+    if $kind != "ref" {
+      error make {msg: $"Expected ref-kind 'ref' for branch name, got: ($kind)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39e)
+
+  let test39f = (run-test "Test 39f: classify-source-ref-kind maps local path source to local" {
+    let source = {path: "/tmp/local-src"}
+    let kind = (classify-source-ref-kind $source "local")
+    if $kind != "local" {
+      error make {msg: $"Expected ref-kind 'local' for path source, got: ($kind)"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39f)
+
+  let test39g = (run-test "Test 39g: extract-source-ref-kinds emits per-source REF_KIND keys" {
+    let sources = {
+      revad: {url: "https://example.com/revad.git", ref: "main"},
+      pinned: {url: "https://example.com/pinned.git", ref: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"}
+    }
+    let source_types = {revad: "git", pinned: "git"}
+    let kinds = (extract-source-ref-kinds $sources $source_types)
+    if (try { $kinds.REVAD_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: "Expected REVAD_REF_KIND=ref"}
+    }
+    if (try { $kinds.PINNED_REF_KIND } catch { "" }) != "sha" {
+      error make {msg: "Expected PINNED_REF_KIND=sha for full 40-hex ref"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39g)
+
+  let test39h = (run-test "Test 39h: process-sources-to-build-args emits REF_KIND for git and local" {
+    let git_sources = {
+      app: {url: "https://example.com/app.git", ref: "v1.0.0"}
+    }
+    let git_args = (process-sources-to-build-args $git_sources {app: "git"})
+    if (try { $git_args.APP_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: "Expected APP_REF_KIND=ref in git source build args"}
+    }
+
+    let local_sources = {
+      app: {path: "local/app"}
+    }
+    let local_args = (process-sources-to-build-args $local_sources {app: "local"})
+    if (try { $local_args.APP_REF_KIND } catch { "" }) != "local" {
+      error make {msg: "Expected APP_REF_KIND=local in local source build args"}
+    }
+    if (try { $local_args.APP_MODE } catch { "" }) != "local" {
+      error make {msg: "Expected APP_MODE=local unchanged for local sources"}
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39h)
+
+  let test39i = (run-test "Test 39i: generate-build-args includes TEST_SOURCE_REF_KIND" {
+    with-test-cleanup {
+      let test_env = (setup-test-environment "test-service" "v1.0.0")
+      let source_types = (detect-all-source-types $test_env.merged_cfg.sources)
+      let source_ref_kinds = (extract-source-ref-kinds $test_env.merged_cfg.sources $source_types)
+      let build_args = (
+        generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved
+        $test_env.tls_meta $test_env.ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+      )
+      let _ = (assert-build-args-contain $build_args [TEST_SOURCE_REF_KIND])
+      if (try { $build_args.TEST_SOURCE_REF_KIND } catch { "" }) != "ref" {
+        error make {msg: $"Expected TEST_SOURCE_REF_KIND=ref for tag ref v1.0.0, got: ($build_args.TEST_SOURCE_REF_KIND)"}
+      }
+      true
+    }
+  } $verbose_flag)
+  $results = ($results | append $test39i)
+
+  let test39j = (run-test "Test 39j: Real manifest - cernbox-revad v3.10.1 production mixed REF_KIND build args" {
+    let svc = "cernbox-revad"
+    let version = "v3.10.1"
+    let platform = "production"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let vspec = (get-version-or-null $vm $version)
+    let cfg = (load-service-config $svc $vspec $platform $pm)
+
+    let revad_ref = (try { $cfg.sources.revad.ref } catch { "" })
+    if $revad_ref != "v3.10.1" {
+      error make {msg: $"Expected revad ref 'v3.10.1' from tracked manifest, got: ($revad_ref)"}
+    }
+    let plugins_ref = (try { $cfg.sources.revad_plugins.ref } catch { "" })
+    if $plugins_ref != "39c4d38a5761629473fe553524f4c2bbb27c0b1b" {
+      error make {msg: $"Expected revad_plugins pinned SHA from tracked manifest, got: ($plugins_ref)"}
+    }
+
+    let source_types = (detect-all-source-types $cfg.sources)
+    let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+    let meta = (detect-build)
+    let tls_meta = (create-test-tls-meta)
+    let ssh_meta = {
+      enabled: false,
+      mode: "disabled",
+      default_user: "root",
+      port: 22,
+      listen: "0.0.0.0"
+    }
+    let build_args = (
+      generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+    )
+
+    if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: $"Expected REVAD_REF_KIND=ref for tag v3.10.1, got: ($build_args.REVAD_REF_KIND?)"}
+    }
+    if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
+      error make {msg: $"Expected REVAD_PLUGINS_REF_KIND=sha for pinned commit, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+    }
+
+    if $verbose_flag {
+      print $"    REVAD_REF_KIND=($build_args.REVAD_REF_KIND), REVAD_PLUGINS_REF_KIND=($build_args.REVAD_PLUGINS_REF_KIND)"
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39j)
+
+  let test39k = (run-test "Test 39k: env REVAD_REF override recomputes REVAD_REF_KIND to sha" {
+    let svc = "cernbox-revad"
+    let version = "v3.10.1"
+    let platform = "production"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let vspec = (get-version-or-null $vm $version)
+    let cfg = (load-service-config $svc $vspec $platform $pm)
+
+    let sha_ref = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    let source_types = (detect-all-source-types $cfg.sources)
+    let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+    let meta = (detect-build)
+    let tls_meta = (create-test-tls-meta)
+    let ssh_meta = {
+      enabled: false,
+      mode: "disabled",
+      default_user: "root",
+      port: 22,
+      listen: "0.0.0.0"
+    }
+
+    let old_revad_ref = (try { $env.REVAD_REF } catch { "" })
+    let old_revad_ref_kind = (try { $env.REVAD_REF_KIND } catch { "" })
+    $env.REVAD_REF = $sha_ref
+    try { hide-env REVAD_REF_KIND } catch { }
+
+    try {
+      let build_args = (
+        generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+      )
+
+      if (try { $build_args.REVAD_REF } catch { "" }) != $sha_ref {
+        error make {msg: $"Expected REVAD_REF from env override, got: ($build_args.REVAD_REF?)"}
+      }
+      if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "sha" {
+        error make {msg: $"Expected REVAD_REF_KIND=sha after env SHA override, got: ($build_args.REVAD_REF_KIND?)"}
+      }
+      if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
+        error make {msg: $"Expected REVAD_PLUGINS_REF_KIND unchanged at sha, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+      }
+
+      if $verbose_flag {
+        print $"    REVAD_REF=($build_args.REVAD_REF), REVAD_REF_KIND=($build_args.REVAD_REF_KIND)"
+      }
+
+      true
+    } catch {|err|
+      if ($old_revad_ref | str length) > 0 {
+        $env.REVAD_REF = $old_revad_ref
+      } else {
+        try { hide-env REVAD_REF } catch { }
+      }
+      if ($old_revad_ref_kind | str length) > 0 {
+        $env.REVAD_REF_KIND = $old_revad_ref_kind
+      } else {
+        try { hide-env REVAD_REF_KIND } catch { }
+      }
+      error make {msg: $err.msg}
+    }
+
+    if ($old_revad_ref | str length) > 0 {
+      $env.REVAD_REF = $old_revad_ref
+    } else {
+      try { hide-env REVAD_REF } catch { }
+    }
+    if ($old_revad_ref_kind | str length) > 0 {
+      $env.REVAD_REF_KIND = $old_revad_ref_kind
+    } else {
+      try { hide-env REVAD_REF_KIND } catch { }
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39k)
+
+  let test39l = (run-test "Test 39l: Dockerfile drift - cernbox-revad passes --ref-kind on clone-source.nu calls" {
+    let dockerfiles = [
+      "services/cernbox-revad/Dockerfile.production"
+      "services/cernbox-revad/Dockerfile.development"
+    ]
+    for df in $dockerfiles {
+      assert-dockerfile-clone-source-ref-kind-contract $df
+    }
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39l)
+
+  let test39m = (run-test "Test 39m: env REVAD_REF_KIND=ref with SHA REVAD_REF recomputes to sha" {
+    let svc = "cernbox-revad"
+    let version = "v3.10.1"
+    let platform = "production"
+    let vm = (load-versions-manifest $svc)
+    let pm = (load-platforms-manifest $svc)
+    let vspec = (get-version-or-null $vm $version)
+    let cfg = (load-service-config $svc $vspec $platform $pm)
+
+    let sha_ref = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    let source_types = (detect-all-source-types $cfg.sources)
+    let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+    let meta = (detect-build)
+    let tls_meta = (create-test-tls-meta)
+    let ssh_meta = {
+      enabled: false,
+      mode: "disabled",
+      default_user: "root",
+      port: 22,
+      listen: "0.0.0.0"
+    }
+
+    let old_revad_ref = (try { $env.REVAD_REF } catch { "" })
+    let old_revad_ref_kind = (try { $env.REVAD_REF_KIND } catch { "" })
+    $env.REVAD_REF = $sha_ref
+    $env.REVAD_REF_KIND = "ref"
+
+    try {
+      let build_args = (
+        generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+      )
+
+      if (try { $build_args.REVAD_REF } catch { "" }) != $sha_ref {
+        error make {msg: $"Expected REVAD_REF from env SHA override, got: ($build_args.REVAD_REF?)"}
+      }
+      if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "sha" {
+        error make {msg: $"Expected REVAD_REF_KIND=sha after stale ref env conflict, got: ($build_args.REVAD_REF_KIND?)"}
+      }
+
+      if $verbose_flag {
+        print $"    REVAD_REF=($build_args.REVAD_REF), REVAD_REF_KIND=($build_args.REVAD_REF_KIND)"
+      }
+
+      true
+    } catch {|err|
+      if ($old_revad_ref | str length) > 0 {
+        $env.REVAD_REF = $old_revad_ref
+      } else {
+        try { hide-env REVAD_REF } catch { }
+      }
+      if ($old_revad_ref_kind | str length) > 0 {
+        $env.REVAD_REF_KIND = $old_revad_ref_kind
+      } else {
+        try { hide-env REVAD_REF_KIND } catch { }
+      }
+      error make {msg: $err.msg}
+    }
+
+    if ($old_revad_ref | str length) > 0 {
+      $env.REVAD_REF = $old_revad_ref
+    } else {
+      try { hide-env REVAD_REF } catch { }
+    }
+    if ($old_revad_ref_kind | str length) > 0 {
+      $env.REVAD_REF_KIND = $old_revad_ref_kind
+    } else {
+      try { hide-env REVAD_REF_KIND } catch { }
+    }
+
+    true
+  } $verbose_flag)
+  $results = ($results | append $test39m)
 
   # Test 40: clone-source local mode copies directory contents
   let test40 = (run-test "Test 40: clone-source local mode copies directory contents" {
