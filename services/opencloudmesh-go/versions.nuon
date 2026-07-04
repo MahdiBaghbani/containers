@@ -1,5 +1,6 @@
 {
-  "default": "master",
+  "default": "v1.1.0",
+
   "defaults": {
     "build_args": {
       "GO_BUILD_GOPROXY": "https://proxy.golang.org|direct"
@@ -7,7 +8,6 @@
     "sources": {
       "ocm_go": {
         "url": "https://github.com/MahdiBaghbani/opencloudmesh-go",
-        "ref": "master"
       }
     },
     "dependencies": {
@@ -30,19 +30,26 @@
       }
     }
   },
+
   "versions": [
     {
       "name": "master",
       "latest": true,
-      "overrides": {}
-    },
-    {
-      "name": "v1.0.0",
-      "latest": false,
       "overrides": {
         "sources": {
           "ocm_go": {
-            "ref": "v1.0.0"
+            "ref": "master"
+          }
+        }
+      }
+    },
+    {
+      "name": "v1.1.0",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "ocm_go": {
+            "ref": "v1.1.0"
           }
         }
       }

@@ -28,6 +28,11 @@
       "latest": false,
       "overrides": {
         "sources": {
+          "contacts": {
+            "version": "master"
+          }
+        },
+        "dependencies": {
           "nextcloud": {
             "version": "master-debian"
           }
@@ -36,7 +41,14 @@
     },
     {
       "name": "v8.7.2-nc-master",
-      "latest": true
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "ref": "v8.7.2"
+          }
+        }
+      }
     },
     {
       "name": "ocm-contacts-app",
