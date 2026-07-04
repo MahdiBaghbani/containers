@@ -81,7 +81,7 @@ def gen-build-complete-job [all_job_ids: list] {
     runs-on: ubuntu-latest
     steps:
       - name: Clean up shard artifacts
-        uses: geekyeggo/delete-artifact@v5
+        uses: geekyeggo/delete-artifact@v6
         with:
           name: shard-*
           failOnError: false
@@ -134,7 +134,7 @@ def gen-build-push-purge-job [max_deletes: int] {
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Nushell
         env:
           NU_VERSION: 0.108.0
@@ -233,7 +233,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install Nushell
         env:
           NU_VERSION: 0.108.0
