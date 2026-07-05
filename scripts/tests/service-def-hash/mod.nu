@@ -19,10 +19,10 @@
 
 # Service definition hash stability tests
 
-use ./lib.nu [print-test-summary]
+use ../lib.nu [print-test-summary]
 
-use ./service-def-hash/hash-basics.nu [hash-basics-tests]
-use ./service-def-hash/hash-graph.nu [hash-graph-tests]
+use ./hash-basics.nu [hash-basics-tests]
+use ./hash-graph.nu [hash-graph-tests]
 
 def main [--verbose] {
   let verbose_flag = (try { $verbose } catch { false })

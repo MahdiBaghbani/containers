@@ -20,23 +20,23 @@
 # Architecture enforcement tests
 # Ensures CLI pattern: dockypody.nu routes through domain-local cli.nu files
 
-use ./lib.nu [print-test-summary]
-use ./architecture/layout-structure.nu [
+use ../lib.nu [print-test-summary]
+use ./layout-structure.nu [
   test-no-flat-nu-files-in-lib test-lib-only-directories test-required-domain-dirs
   test-only-dockypody-at-scripts-root test-cli-domains-have-cli-nu
   test-plane-module-exposes-helpers
 ]
-use ./architecture/plane-guard-basics.nu [
+use ./plane-guard-basics.nu [
   test-plane-local-requires-root test-empty-local-root-valid test-empty-local-services-valid
   test-tracked-plane-no-local-root test-parse-plane-rejects-unknown test-file-local-root-invalid
 ]
-use ./architecture/cli-plane-docs.nu [
+use ./cli-plane-docs.nu [
   test-build-help-documents-plane test-validate-help-documents-plane
 ]
-use ./architecture/cli-plane-routing.nu [
+use ./cli-plane-routing.nu [
   test-build-plane-local-guard test-validate-plane-local-service-guard test-validate-plane-local-help
 ]
-use ./architecture/topology-errors.nu [
+use ./topology-errors.nu [
   test-unsupported-root-file test-unsupported-root-directory test-unknown-service-mirror
   test-unsupported-mirror-file test-unsupported-mirror-subdirectory test-empty-tracked-mirror
   test-unsupported-root-symlink test-tracked-mirror-symlink test-unreadable-topology-dirs
@@ -44,16 +44,16 @@ use ./architecture/topology-errors.nu [
   test-extra-mirror-sibling test-hidden-root-entry test-hidden-unknown-mirror
   test-hidden-mirror-content test-manifest-filename-name-mismatch test-unsupported-mirror-non-file-item
 ]
-use ./architecture/topology-legal.nu [
+use ./topology-legal.nu [
   test-legal-tracked-mirror test-audit-reports-legal-mirrors test-guard-merged-audit-shape
   test-absent-local-mirrors test-empty-local-services
 ]
-use ./architecture/tracked-manifest-guard-order.nu [
+use ./tracked-manifest-guard-order.nu [
   test-manifest-missing-name test-broken-manifest-before-mirror-audit
   test-empty-root-ignores-broken-manifest test-empty-services-ignores-broken-manifest
   test-mirror-passes-unrelated-broken-manifest test-audit-ignores-broken-unrelated-manifest
 ]
-use ./architecture/effective-config.nu [
+use ./effective-config.nu [
   test-env-only-source-path-materializes test-invalid-env-source-path
   test-load-service-config-env-materialization test-build-args-ignore-post-guard-env
   test-inspect-routes-through-guard test-inspect-effective-config-success

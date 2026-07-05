@@ -17,29 +17,33 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# SSH access configuration and build context tests
+# TLS certificate and CA staging tests
 
-use ./lib.nu [print-test-summary]
-use ./ssh/validate-config.nu [validate-config-tests]
-use ./ssh/validate-merged.nu [validate-merged-tests]
-use ./ssh/extract-metadata.nu [extract-metadata-tests]
-use ./ssh/prepare-context.nu [prepare-context-tests]
-use ./ssh/version-overrides.nu [version-overrides-tests]
-use ./ssh/platform-overrides.nu [platform-overrides-tests]
-use ./ssh/sshd-content.nu [sshd-content-tests]
-use ./ssh/dockerfile-drift.nu [dockerfile-drift-tests]
+use ../lib.nu [print-test-summary]
+use ./path-basics.nu [path-basics-tests]
+use ./detect-ca-requirements.nu [detect-ca-requirements-tests]
+use ./prepare-ca-context.nu [prepare-ca-context-tests]
+use ./clean-certs.nu [clean-certs-tests]
+use ./merged-dep-rules.nu [merged-dep-rules-tests]
+use ./generate-ca.nu [generate-ca-tests]
+use ./validate-ca.nu [validate-ca-tests]
+use ./cert-matches-ca.nu [cert-matches-ca-tests]
+use ./copy-tls.nu [copy-tls-tests]
+use ./dockerfile-drift.nu [dockerfile-drift-tests]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })
 
     let results = (
-        (validate-config-tests $verbose_flag)
-        | append (validate-merged-tests $verbose_flag)
-        | append (extract-metadata-tests $verbose_flag)
-        | append (prepare-context-tests $verbose_flag)
-        | append (version-overrides-tests $verbose_flag)
-        | append (platform-overrides-tests $verbose_flag)
-        | append (sshd-content-tests $verbose_flag)
+        (path-basics-tests $verbose_flag)
+        | append (detect-ca-requirements-tests $verbose_flag)
+        | append (prepare-ca-context-tests $verbose_flag)
+        | append (clean-certs-tests $verbose_flag)
+        | append (merged-dep-rules-tests $verbose_flag)
+        | append (generate-ca-tests $verbose_flag)
+        | append (validate-ca-tests $verbose_flag)
+        | append (cert-matches-ca-tests $verbose_flag)
+        | append (copy-tls-tests $verbose_flag)
         | append (dockerfile-drift-tests $verbose_flag)
     )
 

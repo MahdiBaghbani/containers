@@ -17,31 +17,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Tests for CI cache shard helpers (scripts/lib/ci/cache-shards.nu)
+# Local-plane build suppression integration tests (stubbed docker, no daemon)
 
-use ./lib.nu [print-test-summary]
-use ./cache-shards/node-key.nu [node-key-tests]
-use ./cache-shards/shard-name.nu [shard-name-tests]
-use ./cache-shards/merge-shards.nu [merge-shards-tests]
-use ./cache-shards/cache-paths.nu [cache-paths-tests]
-use ./cache-shards/dep-cache-mode.nu [dep-cache-mode-tests]
-use ./cache-shards/manifest-roundtrip.nu [manifest-roundtrip-tests]
+use ../lib.nu [print-test-summary]
+use ./build-suppression.nu [test-local-plane-build-suppression]
+use ./inspect-alignment.nu [test-local-plane-inspect-alignment]
+use ./local-only-version.nu [test-local-only-version-via-build-cli]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })
     mut results = []
 
-    $results = ($results | append (node-key-tests $verbose_flag))
-    $results = ($results | append (shard-name-tests $verbose_flag))
-    $results = ($results | append (merge-shards-tests $verbose_flag))
-    $results = ($results | append (cache-paths-tests $verbose_flag))
-    $results = ($results | append (dep-cache-mode-tests $verbose_flag))
-    $results = ($results | append (manifest-roundtrip-tests $verbose_flag))
+    $results = ($results | append (test-local-plane-build-suppression $verbose_flag))
+    $results = ($results | append (test-local-plane-inspect-alignment $verbose_flag))
+    $results = ($results | append (test-local-only-version-via-build-cli $verbose_flag))
 
     print-test-summary $results
 
-    let failed = ($results | where {|r| not $r} | length)
-    if $failed > 0 {
+    if ($results | any {|r| not $r}) {
         exit 1
     }
 }

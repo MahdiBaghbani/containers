@@ -22,15 +22,15 @@
 # so this test source stays plain ASCII.  No network or disk scanning of the
 # repo: every test passes explicit file paths to lint-docs / scan-docs.
 
-use ./lib.nu [print-test-summary]
-use ./docs-lint/detection.nu [detection-tests]
-use ./docs-lint/missing-paths.nu [missing-paths-tests]
-use ./docs-lint/fix-replace.nu [fix-replace-tests]
-use ./docs-lint/fix-dedupe.nu [fix-dedupe-tests]
-use ./docs-lint/pattern-coverage.nu [pattern-coverage-tests]
-use ./docs-lint/category-coverage.nu [category-coverage-tests]
-use ./docs-lint/discovery.nu [discovery-tests]
-use ./docs-lint/scan-docs.nu [scan-docs-tests]
+use ../lib.nu [print-test-summary]
+use ./detection.nu [detection-tests]
+use ./missing-paths.nu [missing-paths-tests]
+use ./fix-replace.nu [fix-replace-tests]
+use ./fix-dedupe.nu [fix-dedupe-tests]
+use ./pattern-coverage.nu [pattern-coverage-tests]
+use ./category-coverage.nu [category-coverage-tests]
+use ./discovery.nu [discovery-tests]
+use ./scan-docs.nu [scan-docs-tests]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })

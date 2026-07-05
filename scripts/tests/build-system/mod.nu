@@ -19,19 +19,19 @@
 
 # Build system tests
 
-use ./lib.nu [print-test-summary]
+use ../lib.nu [print-test-summary]
 
-use ./build-system/cache-busting.nu [cache-busting-tests]
-use ./build-system/build-order.nu [build-order-tests]
-use ./build-system/automatic-deps.nu [automatic-deps-tests]
-use ./build-system/continue-on-failure.nu [continue-on-failure-tests]
-use ./build-system/docker-sentinel.nu [docker-sentinel-tests]
-use ./build-system/synthetic-deps.nu [synthetic-deps-tests]
-use ./build-system/disk-parsing.nu [disk-parsing-tests]
-use ./build-system/clone-source-staging.nu [clone-source-staging-tests]
-use ./build-system/dockerfile-contracts.nu [clone-source-ref-kind-tests]
-use ./build-system/clone-source-modes.nu [clone-source-modes-tests]
-use ./build-system/clone-source-cache.nu [clone-source-cache-tests]
+use ./cache-busting.nu [cache-busting-tests]
+use ./build-order.nu [build-order-tests]
+use ./automatic-deps.nu [automatic-deps-tests]
+use ./continue-on-failure.nu [continue-on-failure-tests]
+use ./docker-sentinel.nu [docker-sentinel-tests]
+use ./synthetic-deps.nu [synthetic-deps-tests]
+use ./disk-parsing.nu [disk-parsing-tests]
+use ./clone-source-staging.nu [clone-source-staging-tests]
+use ./dockerfile-contracts.nu [clone-source-ref-kind-tests]
+use ./clone-source-modes.nu [clone-source-modes-tests]
+use ./clone-source-cache.nu [clone-source-cache-tests]
 
 def main [--verbose] {
   let verbose_flag = (try { $verbose } catch { false })

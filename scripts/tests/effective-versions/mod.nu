@@ -19,30 +19,30 @@
 
 # Effective versions manifest tests (local-plane L1 foundation)
 
-use ./lib.nu [print-test-summary]
-use ./effective-versions/passthrough.nu [
+use ../lib.nu [print-test-summary]
+use ./passthrough.nu [
   test-tracked-passthrough-null test-tracked-passthrough-plane test-local-no-fragment
 ]
-use ./effective-versions/merge-behavior.nu [
+use ./merge-behavior.nu [
   test-replace-by-name test-append-new test-default-override
 ]
-use ./effective-versions/fragment-validation.nu [
+use ./fragment-validation.nu [
   test-additive-id test-partial-source test-mixed-path-git test-empty-path
   test-empty-source-object test-ref-only-source test-fragment-missing-name
   test-fragment-empty-name test-fragment-duplicate-names
 ]
-use ./effective-versions/universe-primitives.nu [
+use ./universe-primitives.nu [
   test-merge-unit test-source-id-universe test-local-only-detector
 ]
-use ./effective-versions/describe-universe.nu [
+use ./describe-universe.nu [
   test-describe-universe-local-only test-describe-universe-no-fragment
   test-describe-universe-overlap
 ]
-use ./effective-versions/miss-errors.nu [
+use ./miss-errors.nu [
   test-format-miss-local-only test-format-miss-generic
   test-format-miss-fragment-generic test-format-miss-inspect-generic
 ]
-use ./effective-versions/inspect-resolve.nu [
+use ./inspect-resolve.nu [
   test-resolve-inspect-generic-miss test-resolve-inspect-fragment-generic-miss
 ]
 

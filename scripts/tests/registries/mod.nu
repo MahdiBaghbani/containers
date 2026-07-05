@@ -19,9 +19,9 @@
 
 # Registries domain test suite
 
-use ../lib/registries/info.nu [get-registry-info]
-use ../lib/registries/core.nu [login-ghcr login-default-registry]
-use ./lib.nu [run-test print-test-summary]
+use ../../lib/registries/info.nu [get-registry-info]
+use ../../lib/registries/core.nu [login-ghcr login-default-registry]
+use ../lib.nu [run-test print-test-summary]
 
 def main [--verbose] {
   mut results = []

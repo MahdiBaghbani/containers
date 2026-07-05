@@ -19,20 +19,20 @@
 
 # CI domain test suite
 
-use ../lib/core/repo.nu [get-repo-root]
-use ./lib.nu [print-test-summary]
-use ./ci/deps-resolution.nu [
+use ../../lib/core/repo.nu [get-repo-root]
+use ../lib.nu [print-test-summary]
+use ./deps-resolution.nu [
     test-list-service-names test-direct-dep-resolution test-all-direct-deps-known
     test-transitive-deps test-kasm-base-deps test-cypress-deps
 ]
-use ./ci/workflows-github.nu [test-generated-workflows-match]
-use ./ci/workflows-forgejo.nu [test-forgejo-workflows]
-use ./ci/dep-nodes.nu [
+use ./workflows-github.nu [test-generated-workflows-match]
+use ./workflows-forgejo.nu [test-forgejo-workflows]
+use ./dep-nodes.nu [
     test-dep-nodes-common-tools-all-platforms test-dep-nodes-common-tools-debian
     test-dep-nodes-common-tools-unknown-target test-dep-nodes-shards-default-platform
     test-dep-nodes-shards-explicit-platform
 ]
-use ./ci/tracked-only-plane.nu [
+use ./tracked-only-plane.nu [
     test-tracked-only-build-matrix-json-rejected test-tracked-only-ci-workflow-rejected
     test-tracked-only-ci-ghcr-purge-rejected test-tracked-only-ci-deps-ignore-local-fragment
     test-tracked-only-build-matrix-json-with-fragment test-tracked-only-ci-workflow-with-fragment

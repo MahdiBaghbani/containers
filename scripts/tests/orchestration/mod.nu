@@ -24,18 +24,18 @@
 # Non-Docker and CI-safe: no docker build/pull/push, no image inspection,
 # no registry-dependent checks.
 
-use ../lib/core/repo.nu [get-repo-root]
-use ./lib.nu [run-test print-test-summary]
-use ./orchestration/matrix-json.nu [
+use ../../lib/core/repo.nu [get-repo-root]
+use ../lib.nu [run-test print-test-summary]
+use ./matrix-json.nu [
     test-all-services-matrix-json test-all-services-version-matrix-json
     test-matrix-json-multi-platform test-matrix-json-tracked-only-isolation
     test-platform-production-matrix-json
 ]
-use ./orchestration/show-build-order.nu [
+use ./show-build-order.nu [
     test-all-versions-show-build-order test-show-build-order-kasm-base
     test-show-build-order-synthetic
 ]
-use ./orchestration/cli-guards.nu [
+use ./cli-guards.nu [
     test-matrix-json-plane-local-rejected test-matrix-json-plane-local-with-fragment
 ]
 

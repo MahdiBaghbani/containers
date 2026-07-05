@@ -19,31 +19,31 @@
 
 # Version manifest tests
 
-use ./lib.nu [print-test-summary]
-use ./manifests/integration.nu [
+use ../lib.nu [print-test-summary]
+use ./integration.nu [
   test-matrix-json-generation test-all-services-pass-complete-validation
 ]
-use ./manifests/inventory.nu [
+use ./inventory.nu [
   test-all-services-have-manifests test-validate-service-configs test-validate-manifests
 ]
-use ./manifests/load-merge-filter.nu [
+use ./load-merge-filter.nu [
   test-load-manifest test-config-merge-with-overrides test-filter-versions-all
 ]
-use ./manifests/version-validation.nu [
+use ./version-validation.nu [
   test-detect-forbidden-latest-in-tags test-detect-duplicate-version-names
   test-detect-tag-collision-across-versions test-detect-multiple-latest-versions
 ]
-use ./manifests/platform-validation.nu [
+use ./platform-validation.nu [
   test-detect-platform-suffix-in-version-name test-platform-expansion-composite-uniqueness
   test-multi-platform-service-without-base-dockerfile test-single-platform-service-without-dockerfile
   test-platform-config-missing-build-arg test-platform-config-complete-external-images
 ]
-use ./manifests/matrix.nu [test-matrix-includes-platform-field]
-use ./manifests/merge-behavior.nu [test-deep-merge-external-images]
-use ./manifests/expanded-tags.nu [
+use ./matrix.nu [test-matrix-includes-platform-field]
+use ./merge-behavior.nu [test-deep-merge-external-images]
+use ./expanded-tags.nu [
   test-validate-manifest-file-expanded-tag-validation test-validate-manifest-file-auto-loads-platforms
 ]
-use ./manifests/schema-examples.nu [test-schema-examples-validate-against-live-validators]
+use ./schema-examples.nu [test-schema-examples-validate-against-live-validators]
 
 def main [--verbose] {
   let verbose_flag = (try { $verbose } catch { false })

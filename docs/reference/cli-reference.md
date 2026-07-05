@@ -175,7 +175,7 @@ nu scripts/dockypody.nu test [--suite <name>] [--verbose]
   public suite names. `docker-integration` stays opt-in, is excluded from
   `all`, and supports two truthful invocation paths:
   - Routed: `DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration`
-  - Direct: `nu scripts/tests/docker-integration.nu --docker`
+  - Direct: `nu scripts/tests/docker-integration/mod.nu --docker`
 
 ### validate
 

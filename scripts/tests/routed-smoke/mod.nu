@@ -24,32 +24,32 @@
 # uses -n (dry run), and the forced-CA path is hermetic (stubbed git +
 # openssl, temp repo) so it never writes a real CA.
 
-use ./lib.nu [print-test-summary]
-use ./routed-smoke/help-dispatch.nu [
+use ../lib.nu [print-test-summary]
+use ./help-dispatch.nu [
     test-smoke-root-help test-smoke-build-help test-smoke-tls-help
     test-smoke-ssh-help test-smoke-ci-help test-smoke-ci-workflow-no-target
     test-smoke-docs-help test-smoke-inspect-help
 ]
-use ./routed-smoke/make-routing.nu [test-smoke-make-certs-filter]
-use ./routed-smoke/tls-force-hermetic.nu [test-smoke-tls-ca-force-routing]
-use ./routed-smoke/test-suite-metadata.nu [
+use ./make-routing.nu [test-smoke-make-certs-filter]
+use ./tls-force-hermetic.nu [test-smoke-tls-ca-force-routing]
+use ./test-suite-metadata.nu [
     test-smoke-test-help test-smoke-docker-integration-skipped test-smoke-test-help-inventory
 ]
-use ./routed-smoke/local-plane-build.nu [
+use ./local-plane-build.nu [
     test-smoke-local-missing-root test-smoke-local-empty-topology
     test-smoke-tracked-miss-local-only-build
 ]
-use ./routed-smoke/local-plane-inspect.nu [
+use ./local-plane-inspect.nu [
     test-smoke-local-baseline-inspect test-smoke-local-env-materialization
     test-smoke-local-only-version-inspect test-smoke-tracked-miss-local-only-inspect
     test-smoke-local-version-replace-inspect test-smoke-local-version-scoped-fragment-precedence
     test-smoke-local-incomplete-mirror
 ]
-use ./routed-smoke/local-plane-validate.nu [
+use ./local-plane-validate.nu [
     test-smoke-local-bad-topology test-smoke-local-validate-additive-version-source
     test-smoke-local-guard-ordering
 ]
-use ./routed-smoke/internal-errors.nu [test-smoke-internal-suite-errors]
+use ./internal-errors.nu [test-smoke-internal-suite-errors]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })

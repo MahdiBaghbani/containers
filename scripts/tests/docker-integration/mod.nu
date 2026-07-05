@@ -28,12 +28,12 @@
 #   1. Set env var: DOCKYPODY_DOCKER_INTEGRATION=1
 #      Then: nu scripts/dockypody.nu test --suite docker-integration
 #   2. Pass --docker flag directly:
-#      nu scripts/tests/docker-integration.nu --docker
+#      nu scripts/tests/docker-integration/mod.nu --docker
 #
 # Without either opt-in the suite prints a skip notice and exits 0, so it is
 # safe to invoke in any context and will never fail due to a missing daemon.
 
-use ./lib.nu [run-test print-test-summary]
+use ../lib.nu [run-test print-test-summary]
 
 def main [--verbose, --docker] {
     let docker_flag = (try { $docker } catch { false })
@@ -45,7 +45,7 @@ def main [--verbose, --docker] {
         print "  This suite checks Docker CLI availability and daemon reachability."
         print "  It is excluded from 'test --suite all' by design."
         print "  Routed:  DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration"
-        print "  Direct:  nu scripts/tests/docker-integration.nu --docker"
+        print "  Direct:  nu scripts/tests/docker-integration/mod.nu --docker"
         exit 0
     }
 

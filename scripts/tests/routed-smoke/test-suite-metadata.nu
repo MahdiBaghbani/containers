@@ -43,7 +43,7 @@ export def test-smoke-test-help [verbose: bool] {
         if not ($out.stdout | str contains "DOCKYPODY_DOCKER_INTEGRATION=1") {
             error make {msg: "test help missing routed docker-integration guidance"}
         }
-        if not ($out.stdout | str contains "nu scripts/tests/docker-integration.nu --docker") {
+        if not ($out.stdout | str contains "nu scripts/tests/docker-integration/mod.nu --docker") {
             error make {msg: "test help missing direct docker-integration guidance"}
         }
         true
@@ -66,7 +66,7 @@ export def test-smoke-docker-integration-skipped [verbose: bool] {
         if not ($out.stdout | str contains "DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration") {
             error make {msg: "docker-integration skip output missing routed guidance line"}
         }
-        if not ($out.stdout | str contains "nu scripts/tests/docker-integration.nu --docker") {
+        if not ($out.stdout | str contains "nu scripts/tests/docker-integration/mod.nu --docker") {
             error make {msg: "docker-integration skip output missing direct guidance line"}
         }
         if not ($out.stdout | str contains "Skipped: 1") {

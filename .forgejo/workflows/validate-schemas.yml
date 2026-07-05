@@ -53,7 +53,7 @@ jobs:
       - name: Validate all service configs
         run: |
           echo "Validating all service configurations..."
-          nu scripts/tests/manifests.nu || exit 1
+          nu scripts/dockypody.nu test --suite manifests || exit 1
 
       - name: Validate schema file references
         run: |

@@ -21,18 +21,18 @@
 # Contract tests for validator and schema correctness: source validation,
 # SSH/TLS placement, local-path boundaries, and the latest-version rule.
 
-use ./lib.nu [print-test-summary]
-use ./validate/local-path.nu [local-path-tests]
-use ./validate/latest-version.nu [latest-version-tests]
-use ./validate/defaults-placement.nu [defaults-placement-tests]
-use ./validate/ssh-wiring.nu [ssh-wiring-base-tests ssh-wiring-override-tests]
-use ./validate/sources.nu [sources-tests]
-use ./validate/overrides-guards.nu [overrides-guards-tests]
-use ./validate/tls-merged-dep.nu [tls-merged-dep-tests]
-use ./validate/manifest-warnings.nu [manifest-warnings-tests]
-use ./validate/service-complete-smoke.nu [service-complete-smoke-tests]
-use ./validate/service-complete-merge.nu [service-complete-merge-tests]
-use ./validate/clone-compat.nu [clone-compat-tests]
+use ../lib.nu [print-test-summary]
+use ./local-path.nu [local-path-tests]
+use ./latest-version.nu [latest-version-tests]
+use ./defaults-placement.nu [defaults-placement-tests]
+use ./ssh-wiring.nu [ssh-wiring-base-tests ssh-wiring-override-tests]
+use ./sources.nu [sources-tests]
+use ./overrides-guards.nu [overrides-guards-tests]
+use ./tls-merged-dep.nu [tls-merged-dep-tests]
+use ./manifest-warnings.nu [manifest-warnings-tests]
+use ./service-complete-smoke.nu [service-complete-smoke-tests]
+use ./service-complete-merge.nu [service-complete-merge-tests]
+use ./clone-compat.nu [clone-compat-tests]
 
 def main [--verbose] {
   let verbose_flag = (try { $verbose } catch { false })

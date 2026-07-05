@@ -17,24 +17,25 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Service discovery and configuration tests
+# Tests for pull.nu - pre-pull orchestration
 
-use ./lib.nu [print-test-summary]
-use ./services/config-completeness.nu [config-completeness-tests]
-use ./services/discovery.nu [discovery-tests]
-use ./services/integrity.nu [integrity-tests]
+use ../lib.nu [print-test-summary]
+use ./parse-pull-modes.nu [parse-pull-modes-tests]
+use ./canonical-image-ref.nu [canonical-image-ref-tests]
+use ./build-order-dedup.nu [build-order-dedup-tests]
 
 def main [--verbose] {
-  let verbose_flag = (try { $verbose } catch { false })
-  mut results = []
+    let verbose_flag = (try { $verbose } catch { false })
+    mut results = []
 
-  $results = ($results | append (discovery-tests $verbose_flag))
-  $results = ($results | append (config-completeness-tests $verbose_flag))
-  $results = ($results | append (integrity-tests $verbose_flag))
+    $results = ($results | append (parse-pull-modes-tests $verbose_flag))
+    $results = ($results | append (canonical-image-ref-tests $verbose_flag))
+    $results = ($results | append (build-order-dedup-tests $verbose_flag))
 
-  print-test-summary $results
+    print-test-summary $results
 
-  if ($results | any {|r| not $r}) {
-    exit 1
-  }
+    let failed = ($results | where {|r| not $r} | length)
+    if $failed > 0 {
+        exit 1
+    }
 }

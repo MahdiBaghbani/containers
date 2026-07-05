@@ -17,20 +17,32 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Tests for pull.nu - pre-pull orchestration
+# Dependency tag/key contract regression tests
+#
+# Proves that the three modules (dependencies.nu, order.nu, hash.nu) all
+# consume the same node key format for the same dependency edge, and that
+# the tag/ref path and the node-key path derive from the same
+# resolve-dep-version-platform core rather than being reconstructed
+# independently.
+#
+# Node key format: service:version:platform (colon-separated)
+# Tag/ref format:  version-platform (dash-separated)
+# Both share the same {version, platform} pair from resolve-dep-version-platform.
+#
+# These tests use real service manifests for filesystem-backed checks and the
+# mock graph for dependency-graph propagation checks.
 
-use ./lib.nu [print-test-summary]
-use ./pull/parse-pull-modes.nu [parse-pull-modes-tests]
-use ./pull/canonical-image-ref.nu [canonical-image-ref-tests]
-use ./pull/build-order-dedup.nu [build-order-dedup-tests]
+use ../lib.nu [print-test-summary]
+
+use ./node-key.nu [node-key-tests]
+use ./downstream-contracts.nu [downstream-contracts-tests]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })
     mut results = []
 
-    $results = ($results | append (parse-pull-modes-tests $verbose_flag))
-    $results = ($results | append (canonical-image-ref-tests $verbose_flag))
-    $results = ($results | append (build-order-dedup-tests $verbose_flag))
+    $results = ($results | append (node-key-tests $verbose_flag))
+    $results = ($results | append (downstream-contracts-tests $verbose_flag))
 
     print-test-summary $results
 

@@ -61,7 +61,7 @@ export def test-help [] {
   print "Opt-in suites (excluded from 'all', require Docker daemon):"
   print "  docker-integration   Docker CLI and daemon reachability tests"
   print "    Routed:  DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration"
-  print "    Direct:  nu scripts/tests/docker-integration.nu --docker"
+  print "    Direct:  nu scripts/tests/docker-integration/mod.nu --docker"
 }
 
 # Test CLI entrypoint - called from dockypody.nu
@@ -89,9 +89,9 @@ export def test-cli [
     print $"=== ($suite_name | str upcase) ==="
 
     let result = (if $verbose {
-      nu $"scripts/tests/($suite_name).nu" "--verbose" | complete
+      nu $"scripts/tests/($suite_name)/mod.nu" "--verbose" | complete
     } else {
-      nu $"scripts/tests/($suite_name).nu" | complete
+      nu $"scripts/tests/($suite_name)/mod.nu" | complete
     })
 
     # Detect suites that skipped via the SKIPPED: marker (zero exit, opt-in not set).

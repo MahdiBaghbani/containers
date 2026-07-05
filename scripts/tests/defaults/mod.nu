@@ -19,8 +19,8 @@
 
 # Comprehensive tests for top-level defaults feature
 
-use ./lib.nu [print-test-summary]
-use ./defaults/version-defaults.nu [
+use ../lib.nu [print-test-summary]
+use ./version-defaults.nu [
   test-apply-version-defaults-no-defaults
   test-apply-version-defaults-global-defaults-only
   test-apply-version-defaults-override-takes-precedence
@@ -30,23 +30,23 @@ use ./defaults/version-defaults.nu [
   test-apply-version-defaults-version-without-overrides-field
   test-deep-merge-nested-records-merge-correctly
 ]
-use ./defaults/platform-defaults.nu [
+use ./platform-defaults.nu [
   test-apply-platform-defaults-no-defaults
   test-apply-platform-defaults-with-defaults
   test-apply-platform-defaults-override-takes-precedence
 ]
-use ./defaults/lookup-expand.nu [
+use ./lookup-expand.nu [
   test-get-version-spec-applies-defaults-automatically
   test-get-platform-spec-applies-defaults-automatically
   test-expand-version-to-platforms-works-with-defaults
 ]
-use ./defaults/validation.nu [
+use ./validation.nu [
   test-validation-valid-defaults-structure
   test-validation-invalid-defaults-forbidden-field
   test-validation-platform-defaults-forbid-sources
   test-backward-compatibility-manifest-without-defaults
 ]
-use ./defaults/source-replacement.nu [
+use ./source-replacement.nu [
   test-source-replacement-git-source-to-local-source
   test-source-preservation-omitted-sources-preserved-from-defaults
   test-empty-overrides-source-defaults-inherited
@@ -56,7 +56,7 @@ use ./defaults/source-replacement.nu [
   test-complete-git-source-override
   test-empty-source-override-preserves-all-fields-from-defaults
 ]
-use ./defaults/platform-source-overrides.nu [
+use ./platform-source-overrides.nu [
   test-platform-specific-source-replacement
   test-platform-specific-sources-in-defaults
   test-mixed-global-and-platform-specific-source-overrides

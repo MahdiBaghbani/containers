@@ -19,13 +19,13 @@
 
 # Tag generation tests
 
-use ./lib.nu [print-test-summary]
-use ./tag-generation/single-platform.nu [single-platform-tests]
-use ./tag-generation/multi-platform.nu [multi-platform-tests platforms-nuon-tests]
-use ./tag-generation/version-latest-tags.nu [empty-missing-tags-tests version-latest-tags-tests]
-use ./tag-generation/remote-registry.nu [remote-registry-tests]
-use ./tag-generation/tag-ordering.nu [tag-ordering-tests]
-use ./tag-generation/local-plane.nu [local-plane-tests]
+use ../lib.nu [print-test-summary]
+use ./single-platform.nu [single-platform-tests]
+use ./multi-platform.nu [multi-platform-tests platforms-nuon-tests]
+use ./version-latest-tags.nu [empty-missing-tags-tests version-latest-tags-tests]
+use ./remote-registry.nu [remote-registry-tests]
+use ./tag-ordering.nu [tag-ordering-tests]
+use ./local-plane.nu [local-plane-tests]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })

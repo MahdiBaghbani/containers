@@ -20,41 +20,41 @@
 # GHCR purge offline unit tests.
 # Tests desired-tag computation and version decision logic with no gh api calls.
 
-use ./lib.nu [print-test-summary]
-use ./ghcr-purge/decide.nu [
+use ../lib.nu [print-test-summary]
+use ./decide.nu [
     test-decide-untagged-is-candidate test-decide-desired-tag-kept test-decide-no-desired-tags
     test-decide-partial-intersection test-decide-empty-versions test-decide-all-stale
     test-decide-empty-desired-set test-decide-ts-from-updated-at test-decide-ts-from-created-at
     test-decide-ts-empty test-decide-ts-updated-at-wins
 ]
-use ./ghcr-purge/sort.nu [
+use ./sort.nu [
     test-sort-oldest-first test-sort-empty-ts-first test-sort-id-tiebreaker
     test-sort-decide-pipeline test-budget-oldest-selected
 ]
-use ./ghcr-purge/plan.nu [
+use ./plan.nu [
     test-plan-empty-desired-no-force test-plan-empty-desired-force test-plan-nonempty-desired-no-force
     test-plan-force-noop-with-ssot test-plan-budget-cap test-plan-budget-zero-unlimited
     test-plan-empty-versions test-plan-no-untagged-empty-result
 ]
-use ./ghcr-purge/force-gate.nu [
+use ./force-gate.nu [
     test-force-gate-no-service test-force-gate-dry-run test-force-gate-allowed
     test-force-gate-no-force-always-allowed
 ]
-use ./ghcr-purge/ssot.nu [
+use ./ssot.nu [
     test-ssot-known-service test-ssot-no-manifest test-ssot-no-registry-prefix
     test-ssot-sorted-unique test-ssot-tracked-only-isolation
 ]
-use ./ghcr-purge/core.nu [
+use ./core.nu [
     test-core-live-delete-success test-core-live-delete-fail-strict test-core-live-delete-fail-partial
     test-core-dry-run test-core-strict-stop-first-failure test-core-partial-continues-after-failure
     test-core-permission-denied test-core-list-fail
 ]
-use ./ghcr-purge/aggregate.nu [
+use ./aggregate.nu [
     test-aggregate-dry-run-run-wide-budget test-aggregate-failed-services
     test-aggregate-budget-stops-iteration test-aggregate-strict-stop-halts
     test-aggregate-no-strict-stop-continues
 ]
-use ./ghcr-purge/format.nu [test-format-summary test-format-summary-clean]
+use ./format.nu [test-format-summary test-format-summary-clean]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })

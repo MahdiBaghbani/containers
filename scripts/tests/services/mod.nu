@@ -17,24 +17,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Local-plane build suppression integration tests (stubbed docker, no daemon)
+# Service discovery and configuration tests
 
-use ./lib.nu [print-test-summary]
-use ./local-plane-build/build-suppression.nu [test-local-plane-build-suppression]
-use ./local-plane-build/inspect-alignment.nu [test-local-plane-inspect-alignment]
-use ./local-plane-build/local-only-version.nu [test-local-only-version-via-build-cli]
+use ../lib.nu [print-test-summary]
+use ./config-completeness.nu [config-completeness-tests]
+use ./discovery.nu [discovery-tests]
+use ./integrity.nu [integrity-tests]
 
 def main [--verbose] {
-    let verbose_flag = (try { $verbose } catch { false })
-    mut results = []
+  let verbose_flag = (try { $verbose } catch { false })
+  mut results = []
 
-    $results = ($results | append (test-local-plane-build-suppression $verbose_flag))
-    $results = ($results | append (test-local-plane-inspect-alignment $verbose_flag))
-    $results = ($results | append (test-local-only-version-via-build-cli $verbose_flag))
+  $results = ($results | append (discovery-tests $verbose_flag))
+  $results = ($results | append (config-completeness-tests $verbose_flag))
+  $results = ($results | append (integrity-tests $verbose_flag))
 
-    print-test-summary $results
+  print-test-summary $results
 
-    if ($results | any {|r| not $r}) {
-        exit 1
-    }
+  if ($results | any {|r| not $r}) {
+    exit 1
+  }
 }
