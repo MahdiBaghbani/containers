@@ -1,5 +1,3 @@
-#!/usr/bin/env nu
-
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # DockyPody: container build scripts and images
 # Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
@@ -17,27 +15,34 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Test helper functions for setup, assertions, and cleanup - stable public import surface
+use ../mocks.nu [clear-mock-platform-registry clear-mock-service-deps-registry]
 
-export use ./helpers/setup.nu [
-  setup-test-environment
-  setup-test-service-with-deps
-]
-export use ./helpers/factories.nu [
-  create-test-version-spec
-  create-test-dependency
-  create-test-deps-resolved
-  create-test-tls-meta
-  create-test-registry-info
-]
-export use ./helpers/assertions.nu [
-  assert-cache-bust-format
-  assert-cache-bust-value
-  assert-build-args-contain
-  assert-build-order
-  assert-graph-structure
-]
-export use ./helpers/cleanup.nu [
-  cleanup-test-environment
-  with-test-cleanup
-]
+export def cleanup-test-environment [] {
+  clear-mock-platform-registry
+  clear-mock-service-deps-registry
+
+  try {
+    rm -f .tmp/test-state-registry.json
+    mkdir .tmp
+    {} | to json | save -f .tmp/test-state-registry.json
+  } catch {
+    if (".tmp/test-state-registry.json" | path exists) {
+      {} | to json | save -f .tmp/test-state-registry.json
+    }
+  }
+
+  true
+}
+
+export def with-test-cleanup [test_block: closure] {
+  let result = (try {
+    do $test_block
+  } catch {|err|
+    cleanup-test-environment | ignore
+    error make {msg: $err.msg}
+  })
+
+  cleanup-test-environment | ignore
+
+  $result
+}
