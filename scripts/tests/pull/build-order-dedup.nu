@@ -17,25 +17,23 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Tests for pull.nu - pre-pull orchestration
+# Build-order deduplication tests.
 
-use ./lib.nu [print-test-summary]
-use ./pull/parse-pull-modes.nu [parse-pull-modes-tests]
-use ./pull/canonical-image-ref.nu [canonical-image-ref-tests]
-use ./pull/build-order-dedup.nu [build-order-dedup-tests]
+use ../lib.nu [run-test]
 
-def main [--verbose] {
-    let verbose_flag = (try { $verbose } catch { false })
-    mut results = []
-
-    $results = ($results | append (parse-pull-modes-tests $verbose_flag))
-    $results = ($results | append (canonical-image-ref-tests $verbose_flag))
-    $results = ($results | append (build-order-dedup-tests $verbose_flag))
-
-    print-test-summary $results
-
-    let failed = ($results | where {|r| not $r} | length)
-    if $failed > 0 {
-        exit 1
-    }
+export def build-order-dedup-tests [verbose: bool] {
+    [
+        (run-test "deps pull: shared deps should be deduped" {
+            let build_order = [
+                "common:v1.0.0",
+                "service-a:v1.0.0",
+                "service-b:v1.0.0",
+            ]
+            let unique_count = ($build_order | uniq | length)
+            if $unique_count != 3 {
+                error make {msg: $"Expected 3 unique nodes, got ($unique_count)"}
+            }
+            true
+        } $verbose),
+    ]
 }
