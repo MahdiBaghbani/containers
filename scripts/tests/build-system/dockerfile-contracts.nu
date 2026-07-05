@@ -19,6 +19,15 @@
 
 # Dockerfile parsing and clone-source contract assertions.
 
+use ../../lib/build/args.nu [generate-build-args]
+use ../../lib/build/config.nu [load-service-config process-sources-to-build-args detect-all-source-types]
+use ../../lib/build/sources.nu [classify-source-ref-kind extract-source-ref-kinds]
+use ../../lib/manifest/core.nu [get-version-or-null load-versions-manifest]
+use ../../lib/platforms/core.nu [load-platforms-manifest]
+use ../mocks.nu [detect-build]
+use ../helpers.nu [setup-test-environment with-test-cleanup create-test-tls-meta assert-build-args-contain]
+use ../lib.nu [run-test]
+
 export def clone-source-ref-kind-env-pattern [env_name: string] {
   "--ref-kind " + ('"' + '$' + '{' + $env_name + '}' + '"')
 }
@@ -714,4 +723,527 @@ export def assert-dockerfile-nextcloud-local-mode-cleanup [dockerfile_path: stri
       msg: $"nextcloud local-mode cleanup must follow NEXTCLOUD_MODE=local guard in ($dockerfile_path)"
     }
   }
+}
+
+export def clone-source-ref-kind-tests [verbose: bool] {
+    mut results = []
+    let test39d = (run-test "Test 39d: classify-source-ref-kind maps full SHA to sha" {
+  let source = {url: "https://example.com/repo.git", ref: "a1b2c3d4e5f6789012345678901234567890abcd"}
+  let kind = (classify-source-ref-kind $source "git")
+  if $kind != "sha" {
+    error make {msg: $"Expected ref-kind 'sha' for 40-hex ref, got: ($kind)"}
+  }
+  true
+} $verbose)
+$results = ($results | append $test39d)
+let test39e = (run-test "Test 39e: classify-source-ref-kind maps branch/tag to ref" {
+  let source = {url: "https://example.com/repo.git", ref: "main"}
+  let kind = (classify-source-ref-kind $source "git")
+  if $kind != "ref" {
+    error make {msg: $"Expected ref-kind 'ref' for branch name, got: ($kind)"}
+  }
+  true
+} $verbose)
+$results = ($results | append $test39e)
+let test39f = (run-test "Test 39f: classify-source-ref-kind maps local path source to local" {
+  let source = {path: "/tmp/local-src"}
+  let kind = (classify-source-ref-kind $source "local")
+  if $kind != "local" {
+    error make {msg: $"Expected ref-kind 'local' for path source, got: ($kind)"}
+  }
+  true
+} $verbose)
+$results = ($results | append $test39f)
+let test39g = (run-test "Test 39g: extract-source-ref-kinds emits per-source REF_KIND keys" {
+  let sources = {
+    revad: {url: "https://example.com/revad.git", ref: "main"},
+    pinned: {url: "https://example.com/pinned.git", ref: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"}
+  }
+  let source_types = {revad: "git", pinned: "git"}
+  let kinds = (extract-source-ref-kinds $sources $source_types)
+  if (try { $kinds.REVAD_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: "Expected REVAD_REF_KIND=ref"}
+  }
+  if (try { $kinds.PINNED_REF_KIND } catch { "" }) != "sha" {
+    error make {msg: "Expected PINNED_REF_KIND=sha for full 40-hex ref"}
+  }
+  true
+} $verbose)
+$results = ($results | append $test39g)
+let test39h = (run-test "Test 39h: process-sources-to-build-args emits REF_KIND for git and local" {
+  let git_sources = {
+    app: {url: "https://example.com/app.git", ref: "v1.0.0"}
+  }
+  let git_args = (process-sources-to-build-args $git_sources {app: "git"})
+  if (try { $git_args.APP_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: "Expected APP_REF_KIND=ref in git source build args"}
+  }
+  let local_sources = {
+    app: {path: "local/app"}
+  }
+  let local_args = (process-sources-to-build-args $local_sources {app: "local"})
+  if (try { $local_args.APP_REF_KIND } catch { "" }) != "local" {
+    error make {msg: "Expected APP_REF_KIND=local in local source build args"}
+  }
+  if (try { $local_args.APP_MODE } catch { "" }) != "local" {
+    error make {msg: "Expected APP_MODE=local unchanged for local sources"}
+  }
+  true
+} $verbose)
+$results = ($results | append $test39h)
+let test39i = (run-test "Test 39i: generate-build-args includes TEST_SOURCE_REF_KIND" {
+  with-test-cleanup {
+    let test_env = (setup-test-environment "test-service" "v1.0.0")
+    let source_types = (detect-all-source-types $test_env.merged_cfg.sources)
+    let source_ref_kinds = (extract-source-ref-kinds $test_env.merged_cfg.sources $source_types)
+    let build_args = (
+      generate-build-args "test" $test_env.merged_cfg $test_env.meta $test_env.deps_resolved
+      $test_env.tls_meta $test_env.ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+    )
+    let _ = (assert-build-args-contain $build_args [TEST_SOURCE_REF_KIND])
+    if (try { $build_args.TEST_SOURCE_REF_KIND } catch { "" }) != "ref" {
+      error make {msg: $"Expected TEST_SOURCE_REF_KIND=ref for tag ref v1.0.0, got: ($build_args.TEST_SOURCE_REF_KIND)"}
+    }
+    true
+  }
+} $verbose)
+$results = ($results | append $test39i)
+let test39j = (run-test "Test 39j: Real manifest - cernbox-revad v3.10.1 production mixed REF_KIND build args" {
+  let svc = "cernbox-revad"
+  let version = "v3.10.1"
+  let platform = "production"
+  let vm = (load-versions-manifest $svc)
+  let pm = (load-platforms-manifest $svc)
+  let vspec = (get-version-or-null $vm $version)
+  let cfg = (load-service-config $svc $vspec $platform $pm)
+  let revad_ref = (try { $cfg.sources.revad.ref } catch { "" })
+  if $revad_ref != "v3.10.1" {
+    error make {msg: $"Expected revad ref 'v3.10.1' from tracked manifest, got: ($revad_ref)"}
+  }
+  let plugins_ref = (try { $cfg.sources.revad_plugins.ref } catch { "" })
+  if $plugins_ref != "39c4d38a5761629473fe553524f4c2bbb27c0b1b" {
+    error make {msg: $"Expected revad_plugins pinned SHA from tracked manifest, got: ($plugins_ref)"}
+  }
+  let source_types = (detect-all-source-types $cfg.sources)
+  let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+  let meta = (detect-build)
+  let tls_meta = (create-test-tls-meta)
+  let ssh_meta = {
+    enabled: false,
+    mode: "disabled",
+    default_user: "root",
+    port: 22,
+    listen: "0.0.0.0"
+  }
+  let build_args = (
+    generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+  )
+  if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: $"Expected REVAD_REF_KIND=ref for tag v3.10.1, got: ($build_args.REVAD_REF_KIND?)"}
+  }
+  if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
+    error make {msg: $"Expected REVAD_PLUGINS_REF_KIND=sha for pinned commit, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+  }
+  if $verbose {
+    print $"    REVAD_REF_KIND=($build_args.REVAD_REF_KIND), REVAD_PLUGINS_REF_KIND=($build_args.REVAD_PLUGINS_REF_KIND)"
+  }
+  true
+} $verbose)
+$results = ($results | append $test39j)
+let test39k = (run-test "Test 39k: env REVAD_REF override recomputes REVAD_REF_KIND to sha" {
+  let svc = "cernbox-revad"
+  let version = "v3.10.1"
+  let platform = "production"
+  let vm = (load-versions-manifest $svc)
+  let pm = (load-platforms-manifest $svc)
+  let vspec = (get-version-or-null $vm $version)
+  let cfg = (load-service-config $svc $vspec $platform $pm)
+  let sha_ref = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  let source_types = (detect-all-source-types $cfg.sources)
+  let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+  let meta = (detect-build)
+  let tls_meta = (create-test-tls-meta)
+  let ssh_meta = {
+    enabled: false,
+    mode: "disabled",
+    default_user: "root",
+    port: 22,
+    listen: "0.0.0.0"
+  }
+  let old_revad_ref = (try { $env.REVAD_REF } catch { "" })
+  let old_revad_ref_kind = (try { $env.REVAD_REF_KIND } catch { "" })
+  $env.REVAD_REF = $sha_ref
+  try { hide-env REVAD_REF_KIND } catch { }
+  try {
+    let build_args = (
+      generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+    )
+    if (try { $build_args.REVAD_REF } catch { "" }) != $sha_ref {
+      error make {msg: $"Expected REVAD_REF from env override, got: ($build_args.REVAD_REF?)"}
+    }
+    if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "sha" {
+      error make {msg: $"Expected REVAD_REF_KIND=sha after env SHA override, got: ($build_args.REVAD_REF_KIND?)"}
+    }
+    if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
+      error make {msg: $"Expected REVAD_PLUGINS_REF_KIND unchanged at sha, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+    }
+    if $verbose {
+      print $"    REVAD_REF=($build_args.REVAD_REF), REVAD_REF_KIND=($build_args.REVAD_REF_KIND)"
+    }
+    true
+  } catch {|err|
+    if ($old_revad_ref | str length) > 0 {
+      $env.REVAD_REF = $old_revad_ref
+    } else {
+      try { hide-env REVAD_REF } catch { }
+    }
+    if ($old_revad_ref_kind | str length) > 0 {
+      $env.REVAD_REF_KIND = $old_revad_ref_kind
+    } else {
+      try { hide-env REVAD_REF_KIND } catch { }
+    }
+    error make {msg: $err.msg}
+  }
+  if ($old_revad_ref | str length) > 0 {
+    $env.REVAD_REF = $old_revad_ref
+  } else {
+    try { hide-env REVAD_REF } catch { }
+  }
+  if ($old_revad_ref_kind | str length) > 0 {
+    $env.REVAD_REF_KIND = $old_revad_ref_kind
+  } else {
+    try { hide-env REVAD_REF_KIND } catch { }
+  }
+  true
+} $verbose)
+$results = ($results | append $test39k)
+let test39l = (run-test "Test 39l: Dockerfile drift - cernbox-revad passes --ref-kind on clone-source.nu calls" {
+  let dockerfiles = [
+    "services/cernbox-revad/Dockerfile.production"
+    "services/cernbox-revad/Dockerfile.development"
+  ]
+  let ref_kind_patterns = [
+    (clone-source-ref-kind-env-pattern "REVAD_REF_KIND")
+    (clone-source-ref-kind-env-pattern "REVAD_PLUGINS_REF_KIND")
+  ]
+  for df in $dockerfiles {
+    assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 2 --ref-kind-patterns $ref_kind_patterns
+  }
+  true
+} $verbose)
+$results = ($results | append $test39l)
+let test39n = (run-test "Test 39n: Dockerfile drift - revad-base passes --ref-kind on clone-source.nu calls" {
+  let dockerfiles = [
+    "services/revad-base/Dockerfile.production"
+    "services/revad-base/Dockerfile.development"
+  ]
+  let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "REVAD_REF_KIND")]
+  for df in $dockerfiles {
+    assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+  }
+  true
+} $verbose)
+$results = ($results | append $test39n)
+let test39o = (run-test "Test 39o: Dockerfile drift - gaia passes --ref-kind on clone-source.nu calls" {
+  let dockerfiles = [
+    "services/gaia/Dockerfile"
+  ]
+  let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "GAIA_REF_KIND")]
+  for df in $dockerfiles {
+    assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+  }
+  true
+} $verbose)
+$results = ($results | append $test39o)
+let test39p = (run-test "Test 39p: Dockerfile drift - nextcloud passes --ref-kind on clone-source.nu calls" {
+  let dockerfiles = [
+    "services/nextcloud/Dockerfile"
+  ]
+  let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "NEXTCLOUD_REF_KIND")]
+  for df in $dockerfiles {
+    assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+  }
+  true
+} $verbose)
+$results = ($results | append $test39p)
+let test39r = (run-test "Test 39r: Dockerfile drift - nextcloud-contacts passes --ref-kind on clone-source.nu calls" {
+  let dockerfiles = [
+    "services/nextcloud-contacts/Dockerfile"
+  ]
+  let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "CONTACTS_REF_KIND")]
+  for df in $dockerfiles {
+    assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+  }
+  true
+} $verbose)
+$results = ($results | append $test39r)
+let test39s = (run-test "Test 39s: Dockerfile drift - opencloudmesh-go passes --ref-kind on clone-source.nu calls" {
+  let dockerfiles = [
+    "services/opencloudmesh-go/Dockerfile.development"
+  ]
+  let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "OCM_GO_REF_KIND")]
+  for df in $dockerfiles {
+    assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+  }
+  true
+} $verbose)
+$results = ($results | append $test39s)
+let test39t = (run-test "Test 39t: Dockerfile drift - cernbox-web passes --ref-kind on clone-source.nu calls" {
+  let dockerfiles = [
+    "services/cernbox-web/Dockerfile"
+  ]
+  let ref_kind_patterns = [
+    (clone-source-ref-kind-env-pattern "WEB_REF_KIND")
+    (clone-source-ref-kind-env-pattern "WEB_EXTENSIONS_REF_KIND")
+  ]
+  for df in $dockerfiles {
+    assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 2 --ref-kind-patterns $ref_kind_patterns
+  }
+  true
+} $verbose)
+$results = ($results | append $test39t)
+let test39v = (run-test "Test 39v: Dockerfile drift - opencloud clone-source contract and SHA checkout guard" {
+  assert-opencloud-dockerfile-clone-source-contract "services/opencloud/Dockerfile.alpine"
+  true
+} $verbose)
+$results = ($results | append $test39v)
+let test39w = (run-test "Test 39w: opencloud override scripts use clone-source.nu contract" {
+  assert-opencloud-override-uses-clone-source "services/opencloud/scripts/build/web-override.nu" "/mnt/web" "OPENCLOUD_WEB_REF_KIND"
+  assert-opencloud-override-uses-clone-source "services/opencloud/scripts/build/reva-override.nu" "/mnt/reva" "OPENCLOUD_REVA_REF_KIND"
+  true
+} $verbose)
+$results = ($results | append $test39w)
+let test39y = (run-test "Test 39y: Dockerfile drift - opencloud web/reva override script COPY and RUN wiring" {
+  assert-opencloud-dockerfile-override-wiring "services/opencloud/Dockerfile.alpine"
+  true
+} $verbose)
+$results = ($results | append $test39y)
+let test39x = (run-test "Test 39x: Real manifest - opencloud v6.1.0 and main alpine OPENCLOUD_REF_KIND build args" {
+  let svc = "opencloud"
+  let platform = "alpine"
+  let vm = (load-versions-manifest $svc)
+  let pm = (load-platforms-manifest $svc)
+  let meta = (detect-build)
+  let tls_meta = (create-test-tls-meta)
+  let ssh_meta = {
+    enabled: false,
+    mode: "disabled",
+    default_user: "root",
+    port: 22,
+    listen: "0.0.0.0"
+  }
+  let version_tag = "v6.1.0"
+  let vspec_tag = (get-version-or-null $vm $version_tag)
+  let cfg_tag = (load-service-config $svc $vspec_tag $platform $pm)
+  let opencloud_ref_tag = (try { $cfg_tag.sources.opencloud.ref } catch { "" })
+  if $opencloud_ref_tag != "v6.1.0" {
+    error make {msg: $"Expected opencloud ref 'v6.1.0' from tracked manifest, got: ($opencloud_ref_tag)"}
+  }
+  let source_types_tag = (detect-all-source-types $cfg_tag.sources)
+  let source_ref_kinds_tag = (extract-source-ref-kinds $cfg_tag.sources $source_types_tag)
+  let build_args_tag = (
+    generate-build-args $version_tag $cfg_tag $meta {} $tls_meta $ssh_meta "" false {} $source_types_tag {} "tracked" $source_ref_kinds_tag
+  )
+  if (try { $build_args_tag.OPENCLOUD_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: $"Expected OPENCLOUD_REF_KIND=ref for tag v6.1.0, got: ($build_args_tag.OPENCLOUD_REF_KIND?)"}
+  }
+  let version_main = "main"
+  let vspec_main = (get-version-or-null $vm $version_main)
+  let cfg_main = (load-service-config $svc $vspec_main $platform $pm)
+  let opencloud_ref_main = (try { $cfg_main.sources.opencloud.ref } catch { "" })
+  if $opencloud_ref_main != "main" {
+    error make {msg: $"Expected opencloud ref 'main' from tracked manifest, got: ($opencloud_ref_main)"}
+  }
+  let source_types_main = (detect-all-source-types $cfg_main.sources)
+  let source_ref_kinds_main = (extract-source-ref-kinds $cfg_main.sources $source_types_main)
+  let build_args_main = (
+    generate-build-args $version_main $cfg_main $meta {} $tls_meta $ssh_meta "" false {} $source_types_main {} "tracked" $source_ref_kinds_main
+  )
+  if (try { $build_args_main.OPENCLOUD_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: $"Expected OPENCLOUD_REF_KIND=ref for branch main, got: ($build_args_main.OPENCLOUD_REF_KIND?)"}
+  }
+  if $verbose {
+    print $"    v6.1.0 OPENCLOUD_REF_KIND=($build_args_tag.OPENCLOUD_REF_KIND)"
+    print $"    main OPENCLOUD_REF_KIND=($build_args_main.OPENCLOUD_REF_KIND)"
+  }
+  true
+} $verbose)
+$results = ($results | append $test39x)
+let test39z = (run-test "Test 39z: Dockerfile drift - ocis clone-source contract and SHA checkout guard" {
+  assert-ocis-dockerfile-clone-source-contract "services/ocis/Dockerfile.alpine"
+  true
+} $verbose)
+$results = ($results | append $test39z)
+let test39za = (run-test "Test 39za: ocis override scripts use clone-source.nu contract" {
+  assert-opencloud-override-uses-clone-source "services/ocis/scripts/build/web-override.nu" "/mnt/web" "OCIS_WEB_REF_KIND"
+  assert-opencloud-override-uses-clone-source "services/ocis/scripts/build/reva-override.nu" "/mnt/reva" "OCIS_REVA_REF_KIND"
+  true
+} $verbose)
+$results = ($results | append $test39za)
+let test39zb = (run-test "Test 39zb: Dockerfile drift - ocis web/reva override script COPY and RUN wiring" {
+  assert-ocis-dockerfile-override-wiring "services/ocis/Dockerfile.alpine"
+  true
+} $verbose)
+$results = ($results | append $test39zb)
+let test39zc = (run-test "Test 39zc: Real manifest - ocis v8.0.1 and master alpine OCIS_REF_KIND build args" {
+  let svc = "ocis"
+  let platform = "alpine"
+  let vm = (load-versions-manifest $svc)
+  let pm = (load-platforms-manifest $svc)
+  let meta = (detect-build)
+  let tls_meta = (create-test-tls-meta)
+  let ssh_meta = {
+    enabled: false,
+    mode: "disabled",
+    default_user: "root",
+    port: 22,
+    listen: "0.0.0.0"
+  }
+  let version_tag = "v8.0.1"
+  let vspec_tag = (get-version-or-null $vm $version_tag)
+  let cfg_tag = (load-service-config $svc $vspec_tag $platform $pm)
+  let ocis_ref_tag = (try { $cfg_tag.sources.ocis.ref } catch { "" })
+  if $ocis_ref_tag != "v8.0.1" {
+    error make {msg: $"Expected ocis ref 'v8.0.1' from tracked manifest, got: ($ocis_ref_tag)"}
+  }
+  let source_types_tag = (detect-all-source-types $cfg_tag.sources)
+  let source_ref_kinds_tag = (extract-source-ref-kinds $cfg_tag.sources $source_types_tag)
+  let build_args_tag = (
+    generate-build-args $version_tag $cfg_tag $meta {} $tls_meta $ssh_meta "" false {} $source_types_tag {} "tracked" $source_ref_kinds_tag
+  )
+  if (try { $build_args_tag.OCIS_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: $"Expected OCIS_REF_KIND=ref for tag v8.0.1, got: ($build_args_tag.OCIS_REF_KIND?)"}
+  }
+  let version_master = "master"
+  let vspec_master = (get-version-or-null $vm $version_master)
+  let cfg_master = (load-service-config $svc $vspec_master $platform $pm)
+  let ocis_ref_master = (try { $cfg_master.sources.ocis.ref } catch { "" })
+  if $ocis_ref_master != "master" {
+    error make {msg: $"Expected ocis ref 'master' from tracked manifest, got: ($ocis_ref_master)"}
+  }
+  let source_types_master = (detect-all-source-types $cfg_master.sources)
+  let source_ref_kinds_master = (extract-source-ref-kinds $cfg_master.sources $source_types_master)
+  let build_args_master = (
+    generate-build-args $version_master $cfg_master $meta {} $tls_meta $ssh_meta "" false {} $source_types_master {} "tracked" $source_ref_kinds_master
+  )
+  if (try { $build_args_master.OCIS_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: $"Expected OCIS_REF_KIND=ref for branch master, got: ($build_args_master.OCIS_REF_KIND?)"}
+  }
+  if $verbose {
+    print $"    v8.0.1 OCIS_REF_KIND=($build_args_tag.OCIS_REF_KIND)"
+    print $"    master OCIS_REF_KIND=($build_args_master.OCIS_REF_KIND)"
+  }
+  true
+} $verbose)
+$results = ($results | append $test39zc)
+let test39u = (run-test "Test 39u: Real manifest - cernbox-web master mixed REF_KIND build args" {
+  let svc = "cernbox-web"
+  let version = "master"
+  let vm = (load-versions-manifest $svc)
+  let vspec = (get-version-or-null $vm $version)
+  let cfg = (load-service-config $svc $vspec "" null)
+  let web_ref = (try { $cfg.sources.web.ref } catch { "" })
+  if $web_ref != "cernbox" {
+    error make {msg: $"Expected web ref 'cernbox' from tracked manifest, got: ($web_ref)"}
+  }
+  let web_extensions_ref = (try { $cfg.sources.web_extensions.ref } catch { "" })
+  if $web_extensions_ref != "dffaad6cecf755782c7ce4289f21b4f155c35e7c" {
+    error make {msg: $"Expected web_extensions pinned SHA from tracked manifest, got: ($web_extensions_ref)"}
+  }
+  let source_types = (detect-all-source-types $cfg.sources)
+  let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+  let meta = (detect-build)
+  let tls_meta = (create-test-tls-meta)
+  let ssh_meta = {
+    enabled: false,
+    mode: "disabled",
+    default_user: "root",
+    port: 22,
+    listen: "0.0.0.0"
+  }
+  let build_args = (
+    generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+  )
+  if (try { $build_args.WEB_REF_KIND } catch { "" }) != "ref" {
+    error make {msg: $"Expected WEB_REF_KIND=ref for branch cernbox, got: ($build_args.WEB_REF_KIND?)"}
+  }
+  if (try { $build_args.WEB_EXTENSIONS_REF_KIND } catch { "" }) != "sha" {
+    error make {msg: $"Expected WEB_EXTENSIONS_REF_KIND=sha for pinned commit, got: ($build_args.WEB_EXTENSIONS_REF_KIND?)"}
+  }
+  if $verbose {
+    print $"    WEB_REF_KIND=($build_args.WEB_REF_KIND), WEB_EXTENSIONS_REF_KIND=($build_args.WEB_EXTENSIONS_REF_KIND)"
+  }
+  true
+} $verbose)
+$results = ($results | append $test39u)
+let test39q = (run-test "Test 39q: Dockerfile drift - nextcloud local-mode cleanup removes config and data paths" {
+  assert-dockerfile-nextcloud-local-mode-cleanup "services/nextcloud/Dockerfile"
+  true
+} $verbose)
+$results = ($results | append $test39q)
+let test39m = (run-test "Test 39m: env REVAD_REF_KIND=ref with SHA REVAD_REF recomputes to sha" {
+  let svc = "cernbox-revad"
+  let version = "v3.10.1"
+  let platform = "production"
+  let vm = (load-versions-manifest $svc)
+  let pm = (load-platforms-manifest $svc)
+  let vspec = (get-version-or-null $vm $version)
+  let cfg = (load-service-config $svc $vspec $platform $pm)
+  let sha_ref = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  let source_types = (detect-all-source-types $cfg.sources)
+  let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
+  let meta = (detect-build)
+  let tls_meta = (create-test-tls-meta)
+  let ssh_meta = {
+    enabled: false,
+    mode: "disabled",
+    default_user: "root",
+    port: 22,
+    listen: "0.0.0.0"
+  }
+  let old_revad_ref = (try { $env.REVAD_REF } catch { "" })
+  let old_revad_ref_kind = (try { $env.REVAD_REF_KIND } catch { "" })
+  $env.REVAD_REF = $sha_ref
+  $env.REVAD_REF_KIND = "ref"
+  try {
+    let build_args = (
+      generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
+    )
+    if (try { $build_args.REVAD_REF } catch { "" }) != $sha_ref {
+      error make {msg: $"Expected REVAD_REF from env SHA override, got: ($build_args.REVAD_REF?)"}
+    }
+    if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "sha" {
+      error make {msg: $"Expected REVAD_REF_KIND=sha after stale ref env conflict, got: ($build_args.REVAD_REF_KIND?)"}
+    }
+    if $verbose {
+      print $"    REVAD_REF=($build_args.REVAD_REF), REVAD_REF_KIND=($build_args.REVAD_REF_KIND)"
+    }
+    true
+  } catch {|err|
+    if ($old_revad_ref | str length) > 0 {
+      $env.REVAD_REF = $old_revad_ref
+    } else {
+      try { hide-env REVAD_REF } catch { }
+    }
+    if ($old_revad_ref_kind | str length) > 0 {
+      $env.REVAD_REF_KIND = $old_revad_ref_kind
+    } else {
+      try { hide-env REVAD_REF_KIND } catch { }
+    }
+    error make {msg: $err.msg}
+  }
+  if ($old_revad_ref | str length) > 0 {
+    $env.REVAD_REF = $old_revad_ref
+  } else {
+    try { hide-env REVAD_REF } catch { }
+  }
+  if ($old_revad_ref_kind | str length) > 0 {
+    $env.REVAD_REF_KIND = $old_revad_ref_kind
+  } else {
+    try { hide-env REVAD_REF_KIND } catch { }
+  }
+  true
+} $verbose)
+$results = ($results | append $test39m)
+    $results
 }
