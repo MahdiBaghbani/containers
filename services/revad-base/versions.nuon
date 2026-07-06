@@ -8,7 +8,7 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "master"
+        "ref": "fix/ocm-incoming-share-user-id-normalization"
       }
     },
     "external_images": {
@@ -46,7 +46,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "master"
+            "ref": "fix/ocm-incoming-share-user-id-normalization"
           }
         },
         "build_args": {
