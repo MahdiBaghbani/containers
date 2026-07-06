@@ -8,7 +8,7 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "master"
+        "ref": "fix/ocm-incoming-share-user-id-normalization"
       },
       "revad_plugins": {
         "url": "https://github.com/cernbox/reva-plugins",
@@ -38,7 +38,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "master"
+            "ref": "fix/ocm-incoming-share-user-id-normalization"
           }
         },
         "platforms": {
