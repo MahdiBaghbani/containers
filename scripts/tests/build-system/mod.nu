@@ -29,7 +29,7 @@ use ./docker-sentinel.nu [docker-sentinel-tests]
 use ./synthetic-deps.nu [synthetic-deps-tests]
 use ./disk-parsing.nu [disk-parsing-tests]
 use ./clone-source-staging.nu [clone-source-staging-tests]
-use ./dockerfile-contracts.nu [clone-source-ref-kind-tests]
+use ./dockerfile-contracts/mod.nu [clone-source-ref-kind-tests]
 use ./clone-source-modes.nu [clone-source-modes-tests]
 use ./clone-source-cache.nu [clone-source-cache-tests]
 
