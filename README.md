@@ -17,131 +17,139 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
-# Open Cloud Mesh Containers
+# DockyPody
 
-This repository hosts scripts and resources to build and publish container images for OCM services using DockyPody, a Nushell-based build system.
+> Declarative, dependency-aware container builds for the Open Cloud Mesh (OCM)
+> image fleet, built on Nushell.
 
-## Quick Start
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/MahdiBaghbani/containers)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE.md)
+[![Build system: DockyPody](https://img.shields.io/badge/build-DockyPody-1f6feb.svg)](docs/concepts/build-system.md)
 
-1. **Generate TLS certificates:**
+DockyPody is a Nushell build system that builds and publishes the container
+images behind Open Cloud Mesh (OCM) service stacks. You describe each service,
+version, and platform variant in a small set of `.nuon` manifests, and a single
+CLI turns them into tagged images and ready-to-run CI workflows. The point is
+to make building a whole fleet of OCM images feel routine instead of fragile.
 
-   ```bash
-   make tls all
-   ```
+This repository is not the OCM protocol specification. It is the build and
+image layer that ships OCM-related stacks such as Nextcloud, CERNBox, oCIS,
+OpenCloud, OpenCloudMesh Go, and the supporting services and test tooling
+around them.
 
-2. **Build a service:**
+## Quick start
 
-   ```bash
-   nu scripts/dockypody.nu build --service <service-name>
-   ```
+Prerequisites: Nushell 0.80 or later, GNU Make, OpenSSL, and Docker Engine.
 
-For complete setup instructions, see [Getting Started Guide](docs/guides/getting-started.md).
+```bash
+# Generate shared TLS material (first time only; required for most services)
+make tls all
 
-## Key Features
-
-- **Multi-platform builds** - Build platform variants (e.g., debian, alpine) with shared configuration
-- **Version management** - Build multiple versions from manifests with automatic tagging
-- **Dependency resolution** - Automatic dependency building with correct build order
-- **Cache optimization** - Deterministic cache busting for efficient rebuilds
-- **TLS management** - Selective certificate copying for secure, minimal images
-- **Local development** - Use local folder sources for iterative development without committing changes
-
-See [Build System](docs/concepts/build-system.md) for complete feature documentation.
-
-## Local Development
-
-For local development, you can use local filesystem directories as sources instead of Git repositories:
-
-```nuon
-{
-  "sources": {
-    "reva": {
-      "path": "../reva"  // Local development directory
-    }
-  }
-}
+# Build a service
+nu scripts/dockypody.nu build --service revad-base
 ```
 
-**Benefits:**
+For SSH keys, version and platform selection, local development, and full
+setup, see the [Getting Started guide](docs/guides/getting-started.md).
 
-- Test changes without committing to Git
-- Iterate quickly on local modifications
-- Build with uncommitted code
+## Why DockyPody
 
-**Restrictions:**
+Anyone who has kept a wall of Dockerfiles alive knows the tax. There is a
+`build.sh` with a hand-tuned order, a stack of near-identical CI matrices, and
+the quiet dread of an upstream bump that sends you chasing base-image tags and
+cache invalidation for a week. DockyPody exists to make that part boring.
 
-- **Development only** - Local sources are automatically rejected in CI/production builds
-- Paths must be within the repository root (path traversal prevention)
+It is aimed at people who build a lot of images at once:
 
-For complete details, see [Service Configuration - Local Folder Sources](docs/concepts/service-configuration.md#local-folder-sources-development-only).
+- You describe each service, version, and variant in small `.nuon` manifests,
+  so there is no hardcoded build script to babysit.
+- The build order comes from a real dependency graph. It understands versions
+  and variants, catches cycles, and hands every image the exact tag of the
+  parent it was built on, so results are reproducible rather than lucky.
+- One definition covers every upstream version and every variant (Debian,
+  Alpine, and friends), and the tags are generated for you.
+- Cache busting is tied to your upstream source refs, so a cache is only thrown
+  away when the sources behind it actually changed.
+- The GitHub Actions graph is generated from the same service graph you already
+  maintain, so the pipelines cannot quietly drift away from reality.
+- While you iterate you can point a service at a local checkout, and CI refuses
+  local sources so a work-in-progress path never ships by accident.
+- TLS certificates and dev or E2E SSH are handled as part of the build, and
+  there is disk monitoring and cache pruning for runners that are tight on
+  space.
+
+None of this replaces Docker Buildx, Bake, or Earthly. DockyPody drives Buildx
+underneath. Where it earns its keep is a fleet of images that depend on each
+other across many versions and variants, when you want the build order,
+tagging, cache keys, and CI to come from one place instead of living in
+someone's head.
+
+See [Build System](docs/concepts/build-system.md) for the architecture and
+build model.
+
+## Services and ecosystem
+
+DockyPody builds the image families used across OCM interoperability work:
+
+- Foundations: `common-tools`, `revad-base`, `nextcloud-base`
+- Reva and CERNBox: `cernbox-revad`, `cernbox-web`
+- Nextcloud: `nextcloud`, `nextcloud-contacts`
+- OCM peers: `opencloud`, `ocis`, `opencloudmesh-go`
+- Identity: `idp`
+- Browser and E2E: `kasm-base`, `cypress`, `firefox`, `mitmproxy`
+
+Images published from this repository are the defaults used by the
+[OCM Test Suite](https://github.com/cs3org/ocm-test-suite) interoperability
+harness.
 
 ## Documentation
 
-### For New Users
+- [Getting Started](docs/guides/getting-started.md)
+- [Service Setup](docs/guides/service-setup.md)
+- [Build System](docs/concepts/build-system.md)
+- [CLI Reference](docs/reference/cli-reference.md)
+- [Documentation Index](docs/index.md)
 
-- [Getting Started](docs/guides/getting-started.md) - Quick start tutorial
-- [Service Configuration](docs/concepts/service-configuration.md) - Understanding service configs
+## DeepWiki
 
-### For Developers
-
-- [Nushell Development Guide](docs/guides/nushell-development.md) - Essential before editing scripts
-- [Build System](docs/concepts/build-system.md) - Build system architecture
-
-### For Service Authors
-
-- [Service Setup Guide](docs/guides/service-setup.md) - Creating new services
-- [Multi-Version Builds](docs/guides/multi-version-builds.md) - Version management
-- [Multi-Platform Builds](docs/guides/multi-platform-builds.md) - Platform variants
-
-### Reference Documentation
-
-- [CLI Reference](docs/reference/cli-reference.md) - Complete CLI documentation
-- [Config Schema](docs/reference/config-schema.md) - Service configuration schema
-- [Version Manifest Schema](docs/reference/version-manifest-schema.md) - Version manifest schema
-- [Platform Manifest Schema](docs/reference/platform-manifest-schema.md) - Platform manifest schema
-
-See [Documentation Index](docs/index.md) for complete documentation listing.
-
-## Service Configuration
-
-Services are discovered from a small manifest family:
-
-- `services/{name}.nuon` - base service metadata and config when no platform
-  manifest is used
-- `services/{name}/versions.nuon` - required version manifest
-- `services/{name}/platforms.nuon` - optional platform manifest with one or
-  more platform entries
-
-See [Service Configuration](docs/concepts/service-configuration.md) for the
-placement rules and merge behavior.
+For a browsable overview of this repository generated by DeepWiki, see
+[DeepWiki](https://deepwiki.com/MahdiBaghbani/containers). The guides and
+reference material under [`docs/`](docs/index.md) are still the source of
+truth.
 
 ## Workflows
 
-CI/CD workflows are available for GitHub Actions and Forgejo Actions:
+CI runs on both GitHub and Forgejo, and the details live in
+[CI/CD Workflows](docs/guides/ci-cd.md). GitHub carries the generated full-fleet
+build and build-and-push workflows. Forgejo carries lighter validation and a few
+extra container builds that are kept by hand. The generated GitHub side always
+tracks the live service graph.
 
-- GitHub: generated workflows under `.github/workflows/`
-  - `Build All` (`build.yml`) - manual build verification via
-    `workflow_dispatch`
-  - `Build and Push All` (`build-push.yml`) - manual build-and-push run plus
-    post-push GHCR purge
-  - `Build Orchestrator` (`build-orchestrator.yml`) - reusable
-    `workflow_call` graph for the full service set
-  - `Build Service` (`build-service.yml`) - reusable `workflow_call` for one
-    service's version and platform matrix
-  - `Image Purge` (`image-purge.yml`) - manual SSOT-based GHCR purge workflow
-- Forgejo: committed workflows under `.forgejo/workflows/`
-  - `Validate Schemas and CI Helpers`
-    (`validate-schemas.yml`) - automatic lightweight validation on
-    `main`/`master` pushes and matching pull requests
-  - `Build Containers` (`build-containers.yml`) - manual dispatch, version-tag
-    pushes, or branch pushes whose commit message contains `dev-build` or
-    `stage-build`
+## Acknowledgements
 
-See [CI/CD Workflows](docs/guides/ci-cd.md) for workflow documentation.
+DockyPody and these container images exist because some people chose to fund
+open source infrastructure. A big thank you to NLnet and the Sovereign Tech
+Agency for backing this work, which Mahdi Baghbani develops as part of Open
+Cloud Mesh.
 
-## Conventions
+<p>
+  <a href="https://nlnet.nl/project/OpenCloudMesh/">
+    <img alt="NLnet Foundation" src="assets/logos/funders/nlnet.svg" height="64">
+  </a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="https://www.sovereign.tech/tech/open-cloud-mesh">
+    <img alt="Sovereign Tech Agency" src="assets/logos/funders/sovereign-tech-agency.svg" height="64">
+  </a>
+</p>
 
-- Release builds: native runner architecture (linux/amd64 on GitHub-hosted runners)
-- Dev/Stage builds: linux/amd64 only, triggered by commit messages containing
-  `dev-build` or `stage-build`
-- Registries: GHCR (`ghcr.io`) and Forgejo (domain from git origin)
+You can read the full story in [FUNDING.md](FUNDING.md).
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+workflow, conventions, and validation commands.
+
+## License
+
+Licensed under the GNU Affero General Public License v3.0 or later
+(AGPL-3.0-or-later). See [LICENSE.md](LICENSE.md).
