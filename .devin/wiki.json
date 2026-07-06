@@ -1,0 +1,16 @@
+{
+  "repo_notes": [
+    {
+      "author": "DockyPody maintainers",
+      "content": "This repository builds and publishes Open Cloud Mesh (OCM) container images using DockyPody, a Nushell-based build system. The public entry point is `nu scripts/dockypody.nu`. Treat these as the primary sources: services/**/*.nuon manifests (service, versions, and platforms layers), schemas/*.nuon for their contracts, and docs/ for concepts, guides, and reference. DockyPody is the build system; Open Cloud Mesh is the domain the images serve. The repository is not the OCM protocol specification; that lives in cs3org/OCM-API."
+    },
+    {
+      "author": "DockyPody maintainers",
+      "content": "Terminology: a DockyPody platform (platforms.nuon platforms[].name and --platform) is a variant name used as a tag suffix such as -debian or -alpine, not a CPU architecture. CPU architecture is Docker Buildx --platform such as linux/amd64, and CI is typically single-arch. Keep the service, versions, and platforms manifest layers separated: infrastructure fields belong to the base service or platforms manifest, while tags, refs, and version pins belong to versions.nuon. Local filesystem sources and the off-git .dockypody.local plane are development-only and are rejected in CI and production builds."
+    },
+    {
+      "author": "DockyPody maintainers",
+      "content": "Give focused coverage to: the dockypody CLI and its routed domains (build, validate, test, inspect, tls, ssh, ci, docs); build-argument injection priority and reproducible builds; dependency graph resolution and build order; multi-version and multi-platform builds; TLS management with selective certificate copying via common-tools; dev and E2E SSH access; and CI workflow generation for GitHub and Forgejo. Image families include common-tools, revad-base, cernbox-revad, cernbox-web, nextcloud-base, nextcloud, nextcloud-contacts, opencloud, ocis, opencloudmesh-go, idp, and the browser and E2E family (kasm-base, cypress, firefox, mitmproxy)."
+    }
+  ]
+}
