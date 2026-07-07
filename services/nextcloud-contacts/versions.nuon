@@ -66,6 +66,23 @@
           }
         }
       }
+    },
+    {
+      "name": "ocm-webapp-share",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "contacts": {
+            "url": "https://github.com/sara-nl/nextcloud-contacts",
+            "ref": "invite-for-cloudid-exchange"
+          }
+        },
+        "dependencies": {
+          "nextcloud": {
+            "version": "ocm-webapp-share-debian"
+          }
+        }
+      }
     }
   ]
 }

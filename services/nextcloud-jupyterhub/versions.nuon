@@ -17,7 +17,7 @@
         "version": "v1.0.0-debian"
       },
       "nextcloud-contacts": {
-        "version": "ocm-contacts-app-debian"
+        "version": "ocm-webapp-share-debian"
       }
     }
   },
