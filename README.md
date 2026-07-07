@@ -93,7 +93,7 @@ DockyPody builds the image families used across OCM interoperability work:
 
 - Foundations: `common-tools`, `revad-base`, `nextcloud-base`
 - Reva and CERNBox: `cernbox-revad`, `cernbox-web`
-- Nextcloud: `nextcloud`, `nextcloud-contacts`
+- Nextcloud: `nextcloud`, `nextcloud-contacts`, `nextcloud-jupyterhub`
 - OCM peers: `opencloud`, `ocis`, `opencloudmesh-go`
 - Identity: `idp`
 - Browser and E2E: `kasm-base`, `cypress`, `firefox`, `mitmproxy`

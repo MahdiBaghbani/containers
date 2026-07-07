@@ -1,0 +1,38 @@
+{
+  "default": "webapp-share",
+
+  "defaults": {
+    "sources": {
+      "integration_jupyterhub": {
+        "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub"
+      }
+    },
+    "external_images": {
+      "build": {
+        "tag": "24-trixie-slim"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      },
+      "nextcloud-contacts": {
+        "version": "ocm-contacts-app-debian"
+      }
+    }
+  },
+
+  "versions": [
+    {
+      "name": "webapp-share",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "integration_jupyterhub": {
+            "ref": "main"
+          }
+        }
+      }
+    }
+  ]
+}

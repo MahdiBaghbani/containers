@@ -1,0 +1,29 @@
+{
+  "default": "debian",
+
+  "defaults": {
+    "dependencies": {
+      "common-tools": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_IMAGE"
+      },
+      "nextcloud-contacts": {
+        "service": "nextcloud-contacts",
+        "build_arg": "NEXTCLOUD_CONTACTS_IMAGE"
+      }
+    },
+    "external_images": {
+      "build": {
+        "name": "node",
+        "build_arg": "BASE_BUILD_IMAGE"
+      }
+    }
+  },
+
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/nextcloud-jupyterhub/Dockerfile"
+    }
+  ]
+}
