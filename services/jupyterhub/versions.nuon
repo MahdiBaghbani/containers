@@ -1,0 +1,30 @@
+{
+  "default": "webapp-share",
+
+  "defaults": {
+    "sources": {
+      "integration_jupyterhub": {
+        "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      }
+    }
+  },
+
+  "versions": [
+    {
+      "name": "webapp-share",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "integration_jupyterhub": {
+            "ref": "main"
+          }
+        }
+      }
+    }
+  ]
+}
