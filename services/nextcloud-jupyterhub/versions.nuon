@@ -9,7 +9,7 @@
     },
     "external_images": {
       "build": {
-        "tag": "24-trixie-slim"
+        "tag": "20-trixie-slim"
       }
     },
     "dependencies": {
