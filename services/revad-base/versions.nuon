@@ -55,6 +55,20 @@
       }
     },
     {
+      "name": "ocm-webapp-share",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "revad": {
+            "ref": "sta-milestone-8/ocm-webapp-open-in-app"
+          }
+        },
+        "build_args": {
+          "REVA_CONFIG_BAND": "master"
+        }
+      }
+    },
+    {
       "name": "v3.10.1",
       "latest": true,
       "overrides": {
