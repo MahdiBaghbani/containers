@@ -29,6 +29,7 @@ export def dockerfile-drift-tests [verbose: bool] {
             let repo_root = (get-repo-root)
             let dockerfile_contracts = [
                 {path: "services/idp/Dockerfile", runtime_owner: "--runtime-owner \"'1000:1000'\""}
+                {path: "services/jupyterhub/Dockerfile", runtime_owner: "--runtime-owner \"'1000:1000'\""}
                 {path: "services/ocis/Dockerfile.alpine", runtime_owner: "--runtime-owner \"'1000:1000'\""}
                 {path: "services/opencloud/Dockerfile.alpine", runtime_owner: "--runtime-owner \"'1000:1000'\""}
                 {path: "services/cernbox-web/Dockerfile", runtime_owner: "--runtime-owner \"'nginx:nginx'\""}

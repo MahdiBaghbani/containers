@@ -2,6 +2,7 @@
   "name": "jupyterhub",
   "context": "services/jupyterhub",
   "labels": {
+    "org.opencloudmesh.service": "jupyterhub",
     "org.opencontainers.image.title": "JupyterHub OCM Webapp Runtime",
     "org.opencontainers.image.description": "JupyterHub (z2jh k8s-hub) with the vendored nextcloud-ocm-jupyterhub authenticator and OCM webapp-share services",
     "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
@@ -9,5 +10,15 @@
     "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",
     "org.opencontainers.image.vendor": "Open Cloud Mesh",
     "org.opencontainers.image.licenses": "AGPL-3.0-or-later"
+  },
+  "tls": {
+    "enabled": true,
+    "mode": "ca-and-cert",
+    "cert_name": "jupyterhub",
+    "instances": 1,
+    "domain_suffix": "docker",
+    "sans": [
+      "DNS:jupyterhub1.docker"
+    ]
   }
 }

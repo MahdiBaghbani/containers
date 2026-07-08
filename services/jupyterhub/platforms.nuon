@@ -7,6 +7,12 @@
         "service": "common-tools",
         "build_arg": "COMMON_TOOLS_IMAGE"
       }
+    },
+    "external_images": {
+      "runtime": {
+        "name": "quay.io/jupyterhub/k8s-hub",
+        "build_arg": "BASE_HUB_IMAGE"
+      }
     }
   },
 
