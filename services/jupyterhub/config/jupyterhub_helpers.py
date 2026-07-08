@@ -96,3 +96,55 @@ def require_tls_file(path: str, label: str) -> None:
         raise RuntimeError(f"TLS is required: {label} is unset")
     if not os.path.isfile(path):
         raise RuntimeError(f"TLS is required: {label} not found at {path}")
+
+
+def parse_env_file(path: str) -> dict:
+    """Parse a simple KEY=VALUE env file (ignores blanks and # comments)."""
+    values: dict[str, str] = {}
+    with open(path, "r", encoding="utf-8") as handle:
+        for raw in handle:
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    return values
+
+
+def resolve_oauth_client(
+    client_id: str,
+    client_secret: str,
+    oauth_env_file: str,
+) -> tuple[str, str]:
+    """Resolve the Nextcloud OAuth client id/secret from env or a handoff file.
+
+    Direct env (`NEXTCLOUD_CLIENT_ID`/`NEXTCLOUD_CLIENT_SECRET`) wins. When both
+    are unset, read them from the shared handoff file written by the sender
+    Nextcloud (`INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID`/`_SECRET`). Fail fast
+    with an actionable message when neither source resolves both values.
+    """
+    cid = (client_id or "").strip()
+    csecret = (client_secret or "").strip()
+    if cid and csecret:
+        return cid, csecret
+
+    path = (oauth_env_file or "").strip()
+    if not path:
+        raise RuntimeError(
+            "OAuth client unresolved: NEXTCLOUD_CLIENT_ID/NEXTCLOUD_CLIENT_SECRET "
+            "are unset and NEXTCLOUD_OAUTH_ENV_FILE is unset"
+        )
+    if not os.path.isfile(path):
+        raise RuntimeError(f"OAuth handoff file not found at {path}")
+
+    values = parse_env_file(path)
+    cid = cid or values.get("INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID", "").strip()
+    csecret = (
+        csecret or values.get("INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_SECRET", "").strip()
+    )
+    if not cid or not csecret:
+        raise RuntimeError(
+            f"OAuth handoff file {path} is missing "
+            "INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID/_SECRET"
+        )
+    return cid, csecret

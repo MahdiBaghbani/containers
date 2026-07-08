@@ -151,6 +151,7 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" = "ca-only" ]; then \
 COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh
 COPY --chmod=755 ./scripts/entrypoint-init.nu /usr/bin/entrypoint-init.nu
 COPY --chmod=755 ./scripts/lib/tls.nu /usr/bin/lib/tls.nu
+COPY --chmod=755 ./scripts/lib/oauth.nu /usr/bin/lib/oauth.nu
 
 ENV DOCKYPODY_TLS_CERT_NAME="${TLS_CERT_NAME}"
 

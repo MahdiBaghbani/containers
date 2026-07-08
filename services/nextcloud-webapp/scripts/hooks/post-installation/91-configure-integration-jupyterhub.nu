@@ -22,8 +22,15 @@
 
 use /usr/bin/lib/utils.nu [run_as, get_env_or_default]
 
-const OAUTH_ENV_FILE = "/var/www/html/data/integration_jupyterhub_oauth.env"
+const DEFAULT_OAUTH_ENV_FILE = "/var/www/html/data/integration_jupyterhub_oauth.env"
 const OAUTH_CLIENT_NAME = "jupyterhub"
+
+# Where the provisioned OAuth client is written. Defaults to the NC data dir;
+# orchestration (e.g. OCMTS) points this at a shared volume so the paired
+# JupyterHub can read NEXTCLOUD_CLIENT_ID/SECRET at boot.
+def oauth_env_file [] {
+  get_env_or_default "INTEGRATION_JUPYTERHUB_OAUTH_ENV_FILE" $DEFAULT_OAUTH_ENV_FILE | str trim
+}
 
 def sh_quote [s: string] {
   $"'($s | str replace "'" "''")'"
@@ -71,25 +78,47 @@ def hub_base_url [jupyter_host: string] {
   }
 }
 
+# Trimmed value for KEY in a simple KEY=VALUE file, or "" when absent/blank.
+# First '=' splits key from value (values may contain '='); mirrors the hub's
+# Nushell/Python readiness checks so both sides agree a blank value is "unset".
+def oauth_file_value [content: string, key: string] {
+  let match = (
+    $content
+    | lines
+    | each {|raw| $raw | str trim }
+    | where {|line| $line | str starts-with $"($key)=" }
+    | first
+  )
+  if $match == null {
+    ""
+  } else {
+    $match | split row "=" | skip 1 | str join "=" | str trim
+  }
+}
+
 def oauth_credentials_exist [] {
-  if not ($OAUTH_ENV_FILE | path exists) {
+  let file = (oauth_env_file)
+  if not ($file | path exists) {
     return false
   }
-  let content = (open --raw $OAUTH_ENV_FILE)
-  ($content | str contains "INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID=")
-    and ($content | str contains "INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_SECRET=")
+  let content = (open --raw $file)
+  let id = (oauth_file_value $content "INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID")
+  let secret = (oauth_file_value $content "INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_SECRET")
+  (not ($id | is-empty)) and (not ($secret | is-empty))
 }
 
 def write_oauth_credentials [client_id: string, client_secret: string] {
+  let file = (oauth_env_file)
   let content = [
     $"INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID=($client_id)"
     $"INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_SECRET=($client_secret)"
   ] | str join (char nl)
 
-  $content | save -f $OAUTH_ENV_FILE
-  ^chown "www-data:root" $OAUTH_ENV_FILE | ignore
-  ^chmod "0644" $OAUTH_ENV_FILE | ignore
-  print $"Wrote OAuth credentials to ($OAUTH_ENV_FILE)"
+  mkdir ($file | path dirname)
+  $content | save -f $file
+  ^chown "www-data:root" $file | ignore
+  ^chmod "0644" $file | ignore
+  print $"Wrote OAuth credentials to ($file)"
 }
 
 def provision_oauth_client [user: string, callback_url: string] {

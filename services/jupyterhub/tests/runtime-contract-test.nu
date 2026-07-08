@@ -26,6 +26,11 @@ use ../scripts/lib/tls.nu [
     resolve-jupyterhub-tls-paths
     validate-jupyterhub-tls-contract
 ]
+use ../scripts/lib/oauth.nu [
+    oauth-env-creds-present
+    oauth-handoff-ready
+    wait-for-oauth-handoff
+]
 
 def service_root [] {
     $env.CURRENT_FILE | path dirname | path join ".."
@@ -155,6 +160,27 @@ def run_entrypoint_init [env_vars: record] {
     (with-env $env_vars {
         (^nu $script | complete)
     })
+}
+
+def make_oauth_fixture [with_keys: bool = true] {
+    let tmp = (^mktemp -d)
+    let file = $"($tmp)/oauth.env"
+    if $with_keys {
+        "INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID=cid-123\nINTEGRATION_JUPYTERHUB_OAUTH_CLIENT_SECRET=secret-456\n" | save -f $file
+    } else {
+        "OTHER=1\n" | save -f $file
+    }
+    {tmp: $tmp, file: $file}
+}
+
+# Keys present but the client id value is blank. The Python resolver rejects
+# this (blank -> unresolved); the Nushell readiness gate must agree, otherwise
+# the hub "passes" preflight and then crash-loops in jupyterhub_config.py.
+def make_oauth_fixture_blank_value [] {
+    let tmp = (^mktemp -d)
+    let file = $"($tmp)/oauth.env"
+    "INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID=\nINTEGRATION_JUPYTERHUB_OAUTH_CLIENT_SECRET=secret-456\n" | save -f $file
+    {tmp: $tmp, file: $file}
 }
 
 # --- jupyterhub_helpers: JUPYTER_HOST normalization ---
@@ -572,6 +598,237 @@ def test_entrypoint_init_missing_cert_fails [] {
     }
 }
 
+# --- jupyterhub_helpers: resolve_oauth_client (env or handoff file) ---
+
+def test_resolve_oauth_client_from_file [] {
+    let fixture = (make_oauth_fixture true)
+    let result = try {
+        let out = (py_helper_stdout "resolve_oauth_client" ["" "" $fixture.file])
+        let got = (parse_py_tuple_pair $out)
+        assert_eq "oauth id from file" $got.cert "cid-123"
+        assert_eq "oauth secret from file" $got.key "secret-456"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $fixture.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+def test_resolve_oauth_client_env_wins [] {
+    let out = (py_helper_stdout "resolve_oauth_client" ["envid" "envsecret" ""])
+    let got = (parse_py_tuple_pair $out)
+    assert_eq "oauth id from env" $got.cert "envid"
+    assert_eq "oauth secret from env" $got.key "envsecret"
+}
+
+def test_resolve_oauth_client_unset_all_fails [] {
+    (py_helper_raises
+        "oauth unset all"
+        "resolve_oauth_client"
+        "NEXTCLOUD_OAUTH_ENV_FILE is unset"
+        ["" "" ""])
+}
+
+def test_resolve_oauth_client_missing_file_fails [] {
+    (py_helper_raises
+        "oauth file missing"
+        "resolve_oauth_client"
+        "OAuth handoff file not found"
+        ["" "" "/no/such/oauth.env"])
+}
+
+def test_resolve_oauth_client_incomplete_file_fails [] {
+    let fixture = (make_oauth_fixture false)
+    (py_helper_raises
+        "oauth file incomplete"
+        "resolve_oauth_client"
+        "missing"
+        ["" "" $fixture.file])
+    ^rm -rf $fixture.tmp
+}
+
+def test_resolve_oauth_client_blank_value_fails [] {
+    let fixture = (make_oauth_fixture_blank_value)
+    (py_helper_raises
+        "oauth file blank value"
+        "resolve_oauth_client"
+        "missing"
+        ["" "" $fixture.file])
+    ^rm -rf $fixture.tmp
+}
+
+# --- scripts/lib/oauth.nu: handoff readiness, wait, env creds ---
+
+def test_oauth_handoff_ready_true_false [] {
+    let fixture = (make_oauth_fixture true)
+    let empty = (make_oauth_fixture false)
+    let result = try {
+        assert_eq "ready true" (oauth-handoff-ready $fixture.file) true
+        assert_eq "ready false (missing keys)" (oauth-handoff-ready $empty.file) false
+        assert_eq "ready false (missing file)" (oauth-handoff-ready "/no/such/oauth.env") false
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $fixture.tmp
+    ^rm -rf $empty.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+def test_oauth_handoff_ready_blank_value_false [] {
+    let fixture = (make_oauth_fixture_blank_value)
+    let result = try {
+        assert_eq "ready false (blank id value)" (oauth-handoff-ready $fixture.file) false
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $fixture.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+def test_oauth_wait_returns_immediately_when_ready [] {
+    let fixture = (make_oauth_fixture true)
+    let result = try {
+        assert_eq "wait ready" (wait-for-oauth-handoff $fixture.file 4 1) true
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $fixture.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+def test_oauth_wait_times_out [] {
+    assert_eq "wait timeout" (wait-for-oauth-handoff "/no/such/oauth.env" 0 1) false
+}
+
+def test_oauth_env_creds_present [] {
+    let present = (with-env {NEXTCLOUD_CLIENT_ID: "x", NEXTCLOUD_CLIENT_SECRET: "y"} {
+        oauth-env-creds-present
+    })
+    assert_eq "creds present" $present true
+    let absent = (with-env {NEXTCLOUD_CLIENT_ID: "", NEXTCLOUD_CLIENT_SECRET: ""} {
+        oauth-env-creds-present
+    })
+    assert_eq "creds absent" $absent false
+}
+
+# --- entrypoint-init.nu: oauth preflight paths ---
+
+def test_entrypoint_init_waits_for_oauth [] {
+    let tls = (make_tls_fixture "jupyterhub")
+    let oauth = (make_oauth_fixture true)
+    let result = try {
+        let out = (run_entrypoint_init {
+            DOCKYPODY_TLS_CERT_NAME: ""
+            JUPYTERHUB_SSL_CERT: $tls.cert
+            JUPYTERHUB_SSL_KEY: $tls.key
+            NEXTCLOUD_OAUTH_ENV_FILE: $oauth.file
+        })
+        if $out.exit_code != 0 {
+            error make {msg: $"entrypoint-init failed: ($out.stderr)"}
+        }
+        assert_contains "oauth ready stdout" $out.stdout "OAuth handoff ready"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $tls.tmp
+    ^rm -rf $oauth.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+def test_entrypoint_init_skips_oauth_with_env_creds [] {
+    let tls = (make_tls_fixture "jupyterhub")
+    let result = try {
+        let out = (run_entrypoint_init {
+            DOCKYPODY_TLS_CERT_NAME: ""
+            JUPYTERHUB_SSL_CERT: $tls.cert
+            JUPYTERHUB_SSL_KEY: $tls.key
+            NEXTCLOUD_CLIENT_ID: "cid"
+            NEXTCLOUD_CLIENT_SECRET: "secret"
+        })
+        if $out.exit_code != 0 {
+            error make {msg: $"entrypoint-init failed: ($out.stderr)"}
+        }
+        assert_contains "oauth skip stdout" $out.stdout "skipping handoff wait"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $tls.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+def test_entrypoint_init_no_oauth_configured [] {
+    let tls = (make_tls_fixture "jupyterhub")
+    let result = try {
+        let out = (run_entrypoint_init {
+            DOCKYPODY_TLS_CERT_NAME: ""
+            JUPYTERHUB_SSL_CERT: $tls.cert
+            JUPYTERHUB_SSL_KEY: $tls.key
+            NEXTCLOUD_CLIENT_ID: ""
+            NEXTCLOUD_CLIENT_SECRET: ""
+        })
+        if $out.exit_code != 0 {
+            error make {msg: $"entrypoint-init failed: ($out.stderr)"}
+        }
+        assert_contains "tls ok" $out.stdout "TLS preflight OK"
+        assert_contains "no handoff configured" $out.stdout "No OAuth handoff configured"
+        if ($out.stdout | str contains "Waiting up to") {
+            error make {msg: "expected no oauth wait when NEXTCLOUD_OAUTH_ENV_FILE unset"}
+        }
+        if ($out.stdout | str contains "OAuth handoff ready") {
+            error make {msg: "unexpected oauth-ready print when no handoff configured"}
+        }
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $tls.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+def test_entrypoint_init_oauth_timeout_fails [] {
+    let tls = (make_tls_fixture "jupyterhub")
+    let result = try {
+        let out = (run_entrypoint_init {
+            DOCKYPODY_TLS_CERT_NAME: ""
+            JUPYTERHUB_SSL_CERT: $tls.cert
+            JUPYTERHUB_SSL_KEY: $tls.key
+            NEXTCLOUD_OAUTH_ENV_FILE: "/no/such/oauth.env"
+            JUPYTERHUB_OAUTH_WAIT_TIMEOUT_SEC: "0"
+        })
+        if $out.exit_code == 0 {
+            error make {msg: "expected entrypoint-init to fail on oauth handoff timeout"}
+        }
+        assert_contains "oauth timeout stderr" $out.stderr "OAuth handoff file not ready"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $tls.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
 def main [] {
     test_host_bare_and_https_public_urls
     test_host_http_rejected
@@ -591,6 +848,21 @@ def main [] {
     test_tls_validate_override_missing_fails_fast
     test_entrypoint_init_success
     test_entrypoint_init_missing_cert_fails
+    test_resolve_oauth_client_from_file
+    test_resolve_oauth_client_env_wins
+    test_resolve_oauth_client_unset_all_fails
+    test_resolve_oauth_client_missing_file_fails
+    test_resolve_oauth_client_incomplete_file_fails
+    test_resolve_oauth_client_blank_value_fails
+    test_oauth_handoff_ready_true_false
+    test_oauth_handoff_ready_blank_value_false
+    test_oauth_wait_returns_immediately_when_ready
+    test_oauth_wait_times_out
+    test_oauth_env_creds_present
+    test_entrypoint_init_waits_for_oauth
+    test_entrypoint_init_skips_oauth_with_env_creds
+    test_entrypoint_init_no_oauth_configured
+    test_entrypoint_init_oauth_timeout_fails
 
     print "PASS: all jupyterhub runtime contract tests"
 }

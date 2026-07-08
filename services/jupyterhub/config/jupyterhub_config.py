@@ -6,10 +6,13 @@
 # hosts without editing the image.
 #
 # Required environment (read at hub startup), see the hub/ package README:
-#     NEXTCLOUD_HOST, NEXTCLOUD_CLIENT_ID, NEXTCLOUD_CLIENT_SECRET,
-#     JUPYTERHUB_API_KEY, JUPYTERHUB_OCM_API_KEY,
+#     NEXTCLOUD_HOST, JUPYTERHUB_API_KEY, JUPYTERHUB_OCM_API_KEY,
 #     JUPYTER_HOST, JUPYTERHUB_CRYPT_KEY,
 #     OCM_TRUSTED_BACK_CHANNEL_DOMAINS, OCM_TRUSTED_ISSUER_DOMAINS
+# NEXTCLOUD_CLIENT_ID / NEXTCLOUD_CLIENT_SECRET are read directly from the env
+# when set; otherwise they are resolved from the OAuth handoff file named by
+# NEXTCLOUD_OAUTH_ENV_FILE (written by the sender Nextcloud). entrypoint-init.nu
+# waits for that file before this config runs.
 # TLS defaults come from DOCKYPODY_TLS_CERT_NAME -> /tls/<name>.{crt,key};
 # JUPYTERHUB_SSL_CERT / JUPYTERHUB_SSL_KEY are optional explicit overrides.
 
@@ -27,13 +30,12 @@ from jupyterhub_helpers import (  # noqa: E402
     oauth_callback_url_from_jupyter_host,
     public_url_from_jupyter_host,
     require_env,
+    resolve_oauth_client,
     resolve_tls_paths,
 )
 
 for _name in [
     "NEXTCLOUD_HOST",
-    "NEXTCLOUD_CLIENT_ID",
-    "NEXTCLOUD_CLIENT_SECRET",
     "JUPYTERHUB_API_KEY",
     "JUPYTERHUB_OCM_API_KEY",
     "JUPYTERHUB_CRYPT_KEY",
@@ -41,6 +43,17 @@ for _name in [
     "OCM_TRUSTED_ISSUER_DOMAINS",
 ]:
     require_env(_name)
+
+# SUNET apply_defaults reads NEXTCLOUD_CLIENT_ID/SECRET from os.environ. Resolve
+# them from the env or the sender's OAuth handoff file and re-export so the
+# authenticator wiring below sees concrete values.
+_client_id, _client_secret = resolve_oauth_client(
+    os.environ.get("NEXTCLOUD_CLIENT_ID", ""),
+    os.environ.get("NEXTCLOUD_CLIENT_SECRET", ""),
+    os.environ.get("NEXTCLOUD_OAUTH_ENV_FILE", ""),
+)
+os.environ["NEXTCLOUD_CLIENT_ID"] = _client_id
+os.environ["NEXTCLOUD_CLIENT_SECRET"] = _client_secret
 
 # SUNET apply_defaults reads JUPYTER_HOST from os.environ when building the
 # OAuth callback URL. Normalize to bare hostname (HTTPS/443 only) first so

@@ -43,7 +43,7 @@ these at startup:
 | Variable | Purpose |
 | --- | --- |
 | `NEXTCLOUD_HOST` | Public hostname of the paired Nextcloud (OAuth URLs) |
-| `NEXTCLOUD_CLIENT_ID`, `NEXTCLOUD_CLIENT_SECRET` | OAuth client from the NC admin UI |
+| `NEXTCLOUD_CLIENT_ID`, `NEXTCLOUD_CLIENT_SECRET` | OAuth client; set directly, or omit and let the OAuth handoff file provide them (see below) |
 | `JUPYTERHUB_API_KEY`, `JUPYTERHUB_OCM_API_KEY` | Required hub service API tokens from the upstream package |
 | `JUPYTER_HOST` | Public hub base URL for `oauth_callback_url` and `public_url` (see below) |
 | `JUPYTERHUB_CRYPT_KEY` | 32-byte hex; required for `enable_auth_state` |
@@ -56,6 +56,32 @@ Runtime TLS wiring:
 | --- | --- |
 | `DOCKYPODY_TLS_CERT_NAME` | Baked cert basename (default `jupyterhub`); Python and Nushell derive `/tls/<name>.{crt,key}` from it |
 | `JUPYTERHUB_SSL_CERT`, `JUPYTERHUB_SSL_KEY` | Optional explicit overrides; when unset the service falls back to `/tls/<cert_name>.{crt,key}` |
+
+### OAuth client handoff
+
+The hub's `NextcloudOAuthenticator` needs a Nextcloud OAuth client
+(`NEXTCLOUD_CLIENT_ID` / `NEXTCLOUD_CLIENT_SECRET`). For deployments where the
+paired Nextcloud provisions the client dynamically (the OCM webapp-share
+topology), pass the two values indirectly through a shared file instead of
+static env:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXTCLOUD_OAUTH_ENV_FILE` | Path to a KEY=VALUE file carrying `INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_ID` and `INTEGRATION_JUPYTERHUB_OAUTH_CLIENT_SECRET` |
+
+The sender Nextcloud (`nextcloud-webapp`, hook
+`91-configure-integration-jupyterhub.nu`) runs `oauth2:add-client` and writes
+those keys to `INTEGRATION_JUPYTERHUB_OAUTH_ENV_FILE`. Mount the same path into
+both containers (a shared volume) and set `NEXTCLOUD_OAUTH_ENV_FILE` here.
+
+Resolution order: direct `NEXTCLOUD_CLIENT_ID`/`NEXTCLOUD_CLIENT_SECRET` win;
+otherwise the values are read from `NEXTCLOUD_OAUTH_ENV_FILE`. Because the
+sender provisions the client asynchronously, `entrypoint-init.nu` waits (up to
+300s by default) for the handoff file before `jupyterhub_config.py` runs, so the
+hub does not crash-loop while Nextcloud finishes installing. The readiness gate
+requires both keys to carry non-empty values, so a half-written file does not
+pass. Set `JUPYTERHUB_OAUTH_WAIT_TIMEOUT_SEC` to override the wait budget
+(seconds; invalid or negative values fall back to 300).
 
 TLS is required for this service. `entrypoint-init.nu` validates the runtime
 contract before `jupyterhub` starts, and `jupyterhub_config.py` independently
