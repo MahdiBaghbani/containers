@@ -262,27 +262,55 @@ nu scripts/dockypody.nu build --service cernbox-revad --version master --platfor
 
 This example demonstrates the advanced pattern of having multiple dependencies from the same service with different versions/platform variants:
 
-**Config: `services/cernbox-web.nuon`**
+**Base config: `services/cernbox-web.nuon`**
 
 ```nuon
 {
   "name": "cernbox-web",
   "context": "services/cernbox-web",
-  "dockerfile": "services/cernbox-web/Dockerfile",
-  "dependencies": {
-    "common-tools-builder": {
-      "service": "common-tools",
-      "build_arg": "COMMON_TOOLS_BUILDER_IMAGE"
-    },
-    "common-tools-runtime": {
-      "service": "common-tools",
-      "build_arg": "COMMON_TOOLS_RUNTIME_IMAGE"
-    }
+  "labels": {
+    "org.opencloudmesh.service": "cernbox-web"
   }
 }
 ```
 
-**Manifest overrides:**
+**Platform config: `services/cernbox-web/platforms.nuon`**
+
+```nuon
+{
+  "default": "debian",
+  "defaults": {
+    "external_images": {
+      "build": {
+        "name": "node",
+        "build_arg": "BASE_BUILD_IMAGE"
+      },
+      "runtime": {
+        "name": "nginx",
+        "build_arg": "BASE_RUNTIME_IMAGE"
+      }
+    },
+    "dependencies": {
+      "common-tools-builder": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_BUILDER_IMAGE"
+      },
+      "common-tools-runtime": {
+        "service": "common-tools",
+        "build_arg": "COMMON_TOOLS_RUNTIME_IMAGE"
+      }
+    }
+  },
+  "platforms": [
+    {
+      "name": "debian",
+      "dockerfile": "services/cernbox-web/Dockerfile"
+    }
+  ]
+}
+```
+
+**Version overrides:**
 
 ```nuon
 {
@@ -308,9 +336,12 @@ This example demonstrates the advanced pattern of having multiple dependencies f
 
 **Use Case:**
 
-- Builder stage needs Debian variant of `common-tools` (for build tools)
-- Runtime stage needs Alpine variant of `common-tools` (for smaller image size)
-- Both dependencies reference the same service (`common-tools`) but with different platform variants
+- `cernbox-web` is a platformed service even though it currently exposes only one
+  tracked platform
+- Infrastructure fields (`dockerfile`, dependency build args, external image
+  names) live in `platforms.nuon`
+- Version-scoped data (source refs, dependency versions, external image tags)
+  stays in `versions.nuon`
 - Each dependency maps to a unique build argument for use in different Dockerfile stages
 
 **Dependency resolution:**
