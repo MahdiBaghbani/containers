@@ -98,8 +98,11 @@ docker compose up -d --wait
 ```
 
 `--wait` blocks until services with baked image healthchecks (both IdPs, Reva
-dev images, both cernbox-web instances) report healthy. Readiness is defined in
-the Dockerfiles, not duplicated in this compose file.
+dev images, both cernbox-web instances) report healthy. Each
+`two-cernbox-*-web` service now waits on the full per-party Reva runtime
+closure, and Firefox waits on both web services and both IdPs before opening
+the lab. The proxy remains startup-ordered only, so readiness stays defined in
+the images rather than duplicated in this compose file.
 
 ### Firefox UI
 

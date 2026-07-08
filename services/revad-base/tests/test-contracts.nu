@@ -143,11 +143,16 @@ def test-cernbox-example-compose-contract [example: string, idp_svc: string, gat
         (assert-truthy ($web_block != null) $"($web_svc) block exists")
         (assert-truthy ($web_block | str contains $"($idp_svc):")
             "web depends_on idp with service_healthy")
-        (assert-truthy ($web_block | str contains $"($gateway):")
-            "web depends_on gateway with service_healthy")
         (assert-truthy ($web_block | str contains "condition: service_healthy")
             "web uses service_healthy for baked-health dependencies")
     ])
+
+    for svc in $revad_services {
+        $checks = ($checks | append [
+            (assert-truthy ($web_block | str contains $"($svc):")
+                $"web depends_on full Reva runtime service ($svc)")
+        ])
+    }
 
     for check in $checks {
         if $check.ok {
