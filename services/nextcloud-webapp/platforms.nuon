@@ -23,7 +23,7 @@
   "platforms": [
     {
       "name": "debian",
-      "dockerfile": "services/nextcloud-jupyterhub/Dockerfile"
+      "dockerfile": "services/nextcloud-webapp/Dockerfile"
     }
   ]
 }

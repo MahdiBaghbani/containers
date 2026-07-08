@@ -1,9 +1,9 @@
 {
-  "name": "nextcloud-jupyterhub",
-  "context": "services/nextcloud-jupyterhub",
+  "name": "nextcloud-webapp",
+  "context": "services/nextcloud-webapp",
   "labels": {
-    "org.opencontainers.image.title": "Nextcloud JupyterHub Integration App",
-    "org.opencontainers.image.description": "Nextcloud with Contacts and JupyterHub integration app pre-installed",
+    "org.opencontainers.image.title": "Nextcloud OCM Webapp Endpoints",
+    "org.opencontainers.image.description": "Nextcloud with Contacts, the JupyterHub sender app, and the OCM Remote WebApp receiver app pre-installed",
     "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
     "org.opencontainers.image.source": "https://github.com/SUNET/nextcloud-integration_jupyterhub",
     "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",

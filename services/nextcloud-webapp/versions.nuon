@@ -5,6 +5,9 @@
     "sources": {
       "integration_jupyterhub": {
         "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub"
+      },
+      "ocmremotewebapp": {
+        "url": "https://github.com/SUNET/ocmremotewebapp"
       }
     },
     "external_images": {
@@ -29,6 +32,9 @@
       "overrides": {
         "sources": {
           "integration_jupyterhub": {
+            "ref": "main"
+          },
+          "ocmremotewebapp": {
             "ref": "main"
           }
         }
