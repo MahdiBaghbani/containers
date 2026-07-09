@@ -18,7 +18,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Runtime contract tests for JupyterHub JUPYTER_HOST normalization, Python TLS
-# helpers, jupyterhub_config.py local-helper imports, Nushell TLS preflight, and
+# helpers, jupyterhub_config.py local-helper imports, Nushell TLS preflight,
+# the configurable-http-proxy preflight gate, CA trust preflight, and
 # entrypoint-init.nu. Run from repo root or service dir:
 #   nu services/jupyterhub/tests/runtime-contract-test.nu
 
@@ -46,6 +47,18 @@ def jupyterhub_config_path [] {
 
 def entrypoint_init_path [] {
     service_root | path join "scripts" "entrypoint-init.nu"
+}
+
+def ocm_sync_path [] {
+    service_root | path join "scripts" "ocm-sync"
+}
+
+def jupyter_server_config_path [] {
+    helpers_config_dir | path join "jupyter_server_config.py"
+}
+
+def dockerfile_path [] {
+    service_root | path join "Dockerfile"
 }
 
 def assert_eq [label: string, got: any, want: any] {
@@ -155,11 +168,26 @@ def make_tls_fixture [
     {tmp: $tmp, cert: $cert, key: $key}
 }
 
+# The entrypoint asserts `configurable-http-proxy` is on PATH. Host CI does not
+# ship the proxy binary, so inject an executable stub for the TLS/OAuth-focused
+# tests; dedicated proxy tests below cover present/absent explicitly.
+def make_chp_stub [] {
+    let tmp = (^mktemp -d)
+    let bin = $"($tmp)/configurable-http-proxy"
+    "#!/bin/sh\necho 'configurable-http-proxy stub'\n" | save -f $bin
+    ^chmod +x $bin
+    {tmp: $tmp, bin: $bin}
+}
+
 def run_entrypoint_init [env_vars: record] {
     let script = (entrypoint_init_path)
-    (with-env $env_vars {
+    let stub = (make_chp_stub)
+    let patched_path = $"($stub.tmp):($env.PATH | str join (char esep))"
+    let result = (with-env ($env_vars | upsert PATH $patched_path) {
         (^nu $script | complete)
     })
+    ^rm -rf $stub.tmp
+    $result
 }
 
 def make_oauth_fixture [with_keys: bool = true] {
@@ -267,6 +295,10 @@ def py_exec_jupyterhub_config [cert_path: string, key_path: string] {
         "key_path = sys.argv[3]"
         ""
         "def apply_defaults(c):"
+        "    c.JupyterHub.services = ["
+        "        {\"name\": \"refresh-token\"},"
+        "        {\"name\": \"ocm\", \"environment\": {\"OCM_TRUSTED_BACK_CHANNEL_DOMAINS\": \"nextcloud.docker\"}},"
+        "    ]"
         "    return None"
         ""
         "stub_config = types.ModuleType(\"nextcloud_ocm_jupyterhub.config\")"
@@ -275,6 +307,16 @@ def py_exec_jupyterhub_config [cert_path: string, key_path: string] {
         "stub_pkg.config = stub_config"
         "sys.modules[\"nextcloud_ocm_jupyterhub\"] = stub_pkg"
         "sys.modules[\"nextcloud_ocm_jupyterhub.config\"] = stub_config"
+        ""
+        "spawner_mod = types.ModuleType(\"jupyterhub.spawner\")"
+        "class _StubSimpleSpawner:"
+        "    def __init__(self):"
+        "        self.env_keep = [\"PATH\", \"PYTHONPATH\", \"LANG\", \"LC_ALL\"]"
+        "spawner_mod.SimpleLocalProcessSpawner = _StubSimpleSpawner"
+        "jupyterhub_pkg = types.ModuleType(\"jupyterhub\")"
+        "jupyterhub_pkg.spawner = spawner_mod"
+        "sys.modules[\"jupyterhub\"] = jupyterhub_pkg"
+        "sys.modules[\"jupyterhub.spawner\"] = spawner_mod"
         ""
         "os.environ.update({"
         "    \"NEXTCLOUD_HOST\": \"nextcloud.docker\","
@@ -289,6 +331,9 @@ def py_exec_jupyterhub_config [cert_path: string, key_path: string] {
         "    \"JUPYTERHUB_SSL_CERT\": cert_path,"
         "    \"JUPYTERHUB_SSL_KEY\": key_path,"
         "    \"DOCKYPODY_TLS_CERT_NAME\": \"\","
+        "    \"SSL_CERT_FILE\": \"/etc/ssl/certs/ca-certificates.crt\","
+        "    \"SSL_CERT_DIR\": \"/etc/ssl/certs\","
+        "    \"REQUESTS_CA_BUNDLE\": \"/etc/ssl/certs/ca-certificates.crt\","
         "})"
         ""
         "class _NS:"
@@ -297,6 +342,7 @@ def py_exec_jupyterhub_config [cert_path: string, key_path: string] {
         "c = _NS()"
         "c.JupyterHub = _NS()"
         "c.Spawner = _NS()"
+        "c.Spawner.env_keep = None"
         "c.Authenticator = _NS()"
         "c.NextcloudOAuthenticator = _NS()"
         "c.CryptKeeper = _NS()"
@@ -326,6 +372,8 @@ def py_exec_jupyterhub_config [cert_path: string, key_path: string] {
         "    \"ssl_key\": c.JupyterHub.ssl_key,"
         "    \"public_url\": c.JupyterHub.public_url,"
         "    \"oauth_callback_url\": c.NextcloudOAuthenticator.oauth_callback_url,"
+        "    \"services_env\": {s[\"name\"]: s.get(\"environment\", {}) for s in c.JupyterHub.services},"
+        "    \"spawner_env_keep\": c.Spawner.env_keep,"
         "}))"
     ] | str join (char newline))
     (py_run $code $argv)
@@ -346,6 +394,14 @@ def test_jupyterhub_config_imports_local_helpers [] {
         assert_eq "config ssl_key" $cfg.ssl_key $fixture.key
         assert_eq "config public_url" $cfg.public_url "https://jupyterhub1.docker"
         assert_eq "config oauth_callback_url" $cfg.oauth_callback_url "https://jupyterhub1.docker/hub/oauth_callback"
+        assert_eq "ocm SSL_CERT_FILE forwarded" $cfg.services_env.ocm.SSL_CERT_FILE "/etc/ssl/certs/ca-certificates.crt"
+        assert_eq "ocm SSL_CERT_DIR forwarded" $cfg.services_env.ocm.SSL_CERT_DIR "/etc/ssl/certs"
+        assert_eq "ocm existing env preserved" $cfg.services_env.ocm.OCM_TRUSTED_BACK_CHANNEL_DOMAINS "nextcloud.docker"
+        assert_eq "refresh-token SSL_CERT_FILE forwarded" ($cfg.services_env."refresh-token".SSL_CERT_FILE) "/etc/ssl/certs/ca-certificates.crt"
+        assert_eq "env_keep preserves PATH" ("PATH" in $cfg.spawner_env_keep) true
+        assert_eq "env_keep forwards SSL_CERT_FILE" ("SSL_CERT_FILE" in $cfg.spawner_env_keep) true
+        assert_eq "env_keep forwards SSL_CERT_DIR" ("SSL_CERT_DIR" in $cfg.spawner_env_keep) true
+        assert_eq "env_keep forwards REQUESTS_CA_BUNDLE" ("REQUESTS_CA_BUNDLE" in $cfg.spawner_env_keep) true
         null
     } catch {|e| $e}
 
@@ -552,6 +608,47 @@ def test_tls_validate_override_missing_fails_fast [] {
 
 # --- entrypoint-init.nu: subprocess preflight ---
 
+def test_entrypoint_init_proxy_ok [] {
+    let tls = (make_tls_fixture "jupyterhub")
+    let result = try {
+        let out = (run_entrypoint_init {
+            DOCKYPODY_TLS_CERT_NAME: ""
+            JUPYTERHUB_SSL_CERT: $tls.cert
+            JUPYTERHUB_SSL_KEY: $tls.key
+            NEXTCLOUD_CLIENT_ID: "cid"
+            NEXTCLOUD_CLIENT_SECRET: "secret"
+        })
+        if $out.exit_code != 0 {
+            error make {msg: $"entrypoint-init failed: ($out.stderr)"}
+        }
+        assert_contains "proxy ok stdout" $out.stdout "Proxy preflight OK"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $tls.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+# With no configurable-http-proxy on PATH the entrypoint must fail fast at the
+# proxy gate (before TLS/OAuth), the exact failure the k8s-hub base produced.
+# Invoke via the current nu executable so the child launches even with an empty
+# PATH.
+def test_entrypoint_init_proxy_missing_fails [] {
+    let empty = (^mktemp -d)
+    let script = (entrypoint_init_path)
+    let out = (with-env {PATH: $empty} {
+        (^$nu.current-exe $script | complete)
+    })
+    ^rm -rf $empty
+    if $out.exit_code == 0 {
+        error make {msg: "expected entrypoint-init to fail when configurable-http-proxy is absent"}
+    }
+    assert_contains "proxy missing stderr" $out.stderr "configurable-http-proxy not found"
+}
+
 def test_entrypoint_init_success [] {
     let fixture = (make_tls_fixture "jupyterhub")
     let result = try {
@@ -592,6 +689,65 @@ def test_entrypoint_init_missing_cert_fails [] {
     } catch {|e| $e}
 
     ^rm -rf $fixture.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+# With a normal host CA store, the entrypoint CA preflight must pass and print a
+# non-empty count. Env creds are set so the oauth wait is skipped.
+def test_entrypoint_init_ca_ok [] {
+    let tls = (make_tls_fixture "jupyterhub")
+    let result = try {
+        let out = (run_entrypoint_init {
+            DOCKYPODY_TLS_CERT_NAME: ""
+            JUPYTERHUB_SSL_CERT: $tls.cert
+            JUPYTERHUB_SSL_KEY: $tls.key
+            NEXTCLOUD_CLIENT_ID: "cid"
+            NEXTCLOUD_CLIENT_SECRET: "secret"
+        })
+        if $out.exit_code != 0 {
+            error make {msg: $"entrypoint-init failed: ($out.stderr)"}
+        }
+        assert_contains "ca ok stdout" $out.stdout "CA preflight OK"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $tls.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+# Force an empty trust store (empty SSL_CERT_FILE + empty SSL_CERT_DIR) so
+# Python loads 0 CAs; the CA preflight must fail fast with a clear message. This
+# is the exact failure mode a base-image CA-layout regression reintroduces.
+def test_entrypoint_init_ca_empty_store_fails [] {
+    let tls = (make_tls_fixture "jupyterhub")
+    let empty_dir = (^mktemp -d)
+    let empty_file = $"($empty_dir)/empty-bundle.crt"
+    "" | save -f $empty_file
+    let result = try {
+        let out = (run_entrypoint_init {
+            DOCKYPODY_TLS_CERT_NAME: ""
+            JUPYTERHUB_SSL_CERT: $tls.cert
+            JUPYTERHUB_SSL_KEY: $tls.key
+            NEXTCLOUD_CLIENT_ID: "cid"
+            NEXTCLOUD_CLIENT_SECRET: "secret"
+            SSL_CERT_FILE: $empty_file
+            SSL_CERT_DIR: $empty_dir
+        })
+        if $out.exit_code == 0 {
+            error make {msg: "expected entrypoint-init to fail on empty CA trust store"}
+        }
+        assert_contains "ca empty stderr" $out.stderr "TLS trust store check failed"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $tls.tmp
+    ^rm -rf $empty_dir
 
     if $result != null {
         error make {msg: $result.msg}
@@ -723,6 +879,39 @@ def test_oauth_env_creds_present [] {
     assert_eq "creds absent" $absent false
 }
 
+# --- ocm-sync static source contract ---
+
+def test_ocm_sync_script_contract [] {
+    let content = (open --raw (ocm_sync_path))
+    assert_contains "ocm-sync OCM_WEBDAV_URI" $content "OCM_WEBDAV_URI"
+    assert_contains "ocm-sync OCM_BEARER" $content "OCM_BEARER"
+    assert_contains "ocm-sync Bearer" $content "Bearer"
+    assert_contains "ocm-sync PROPFIND" $content "PROPFIND"
+    assert_contains "ocm-sync ca fallback" $content "/etc/ssl/certs/ca-certificates.crt"
+}
+
+def test_jupyter_server_config_ocm_sync_contract [] {
+    let content = (open --raw (jupyter_server_config_path))
+    assert_contains "jupyter_server_config OCM_WEBDAV_URI" $content "OCM_WEBDAV_URI"
+    assert_contains "jupyter_server_config ocm-sync invoke" $content 'os.system("/usr/local/bin/ocm-sync")'
+}
+
+def test_dockerfile_ocm_sync_contract [] {
+    let content = (open --raw (dockerfile_path))
+    assert_contains "dockerfile ocm-sync copy" $content "COPY --chmod=755 scripts/ocm-sync /usr/local/bin/ocm-sync"
+    assert_contains "dockerfile jupyter_server_config copy" $content "COPY config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py"
+    assert_contains "dockerfile REQUESTS_CA_BUNDLE" $content "REQUESTS_CA_BUNDLE"
+    assert_contains "dockerfile ocm-sync py_compile" $content "py_compile /usr/local/bin/ocm-sync"
+}
+
+def test_jupyterhub_config_ocm_env_keep_contract [] {
+    let content = (open --raw (jupyterhub_config_path))
+    assert_contains "jupyterhub_config env_keep" $content "env_keep"
+    assert_contains "jupyterhub_config SimpleLocalProcessSpawner" $content "SimpleLocalProcessSpawner"
+    assert_contains "jupyterhub_config REQUESTS_CA_BUNDLE" $content "REQUESTS_CA_BUNDLE"
+    assert_contains "jupyterhub_config SSL_CERT_FILE" $content "SSL_CERT_FILE"
+}
+
 # --- entrypoint-init.nu: oauth preflight paths ---
 
 def test_entrypoint_init_waits_for_oauth [] {
@@ -830,6 +1019,13 @@ def test_entrypoint_init_oauth_timeout_fails [] {
 }
 
 def main [] {
+    # Mirror JupyterHub image ENV so entrypoint CA preflight matches container
+    # runtime (host Python often loads 0 CAs without SSL_CERT_FILE set).
+    if ("/etc/ssl/certs/ca-certificates.crt" | path exists) {
+        $env.SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt"
+        $env.SSL_CERT_DIR = "/etc/ssl/certs"
+    }
+
     test_host_bare_and_https_public_urls
     test_host_http_rejected
     test_host_non_443_port_rejected
@@ -846,8 +1042,16 @@ def main [] {
     test_tls_validate_missing_key_fails_fast
     test_tls_validate_honors_cert_override
     test_tls_validate_override_missing_fails_fast
+    test_entrypoint_init_proxy_ok
+    test_entrypoint_init_proxy_missing_fails
     test_entrypoint_init_success
     test_entrypoint_init_missing_cert_fails
+    test_entrypoint_init_ca_ok
+    test_entrypoint_init_ca_empty_store_fails
+    test_ocm_sync_script_contract
+    test_jupyter_server_config_ocm_sync_contract
+    test_dockerfile_ocm_sync_contract
+    test_jupyterhub_config_ocm_env_keep_contract
     test_resolve_oauth_client_from_file
     test_resolve_oauth_client_env_wins
     test_resolve_oauth_client_unset_all_fails
