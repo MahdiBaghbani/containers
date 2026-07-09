@@ -11,7 +11,7 @@ POST /services/ocm/open  ->  hub authenticator handoff  ->  302 .../lab
 ## Overview
 
 The image layers the `nextcloud-ocm-jupyterhub` package onto the upstream
-`quay.io/jupyterhub/k8s-hub` base:
+all-in-one `quay.io/jupyterhub/jupyterhub` base:
 
 - **Authenticator** - `NextcloudOAuthenticator` (OCM `pre_spawn_start` /
   `refresh_user` hooks)
@@ -31,9 +31,22 @@ points at a `MahdiBaghbani` fork).
 
 ## Base image
 
-- `quay.io/jupyterhub/k8s-hub:4.2.0` (pinned in `versions.nuon` as
+- `quay.io/jupyterhub/jupyterhub:5.3.0` (pinned in `versions.nuon` as
   `external_images.runtime.tag`; wired via `platforms.nuon` build arg
   `BASE_HUB_IMAGE`)
+
+This is the **all-in-one** JupyterHub image: it bundles JupyterHub, Node, and
+`configurable-http-proxy` in a single container, which matches our deployment
+shape (one container per role, in-hub TLS on `:443`, local `SimpleSpawner`).
+JupyterHub's default proxy runs the `configurable-http-proxy` binary locally, so
+it must be present in the image. The Zero-to-K8s `k8s-hub` image is intentionally
+not used: it expects an external proxy pod and omits that binary, so the hub
+cannot start standalone. The Dockerfile guards this with a build-time
+`configurable-http-proxy --version` check and the entrypoint guards it at runtime
+(`entrypoint-init.nu` proxy preflight). Because this base runs as root with no
+UID 1000 user, the Dockerfile provisions `jovyan` (UID 1000) and hands it the hub
+state dir so the hub still runs unprivileged under the `NET_BIND_SERVICE`
+contract below.
 
 ## Required environment
 
