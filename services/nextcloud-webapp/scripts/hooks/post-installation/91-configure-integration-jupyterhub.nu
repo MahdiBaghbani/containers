@@ -33,7 +33,8 @@ def oauth_env_file [] {
 }
 
 def sh_quote [s: string] {
-  $"'($s | str replace "'" "''")'"
+  let escaped = ($s | str replace --all "'" "'\\''")
+  $"'($escaped)'"
 }
 
 def occ_user [] {
@@ -72,9 +73,9 @@ def parse_ttl [] {
 
 def hub_base_url [jupyter_host: string] {
   if ($jupyter_host | str starts-with "http://") or ($jupyter_host | str starts-with "https://") {
-    $jupyter_host | str trim | str trim --right '/'
+    $jupyter_host | str trim | str trim --right --char '/'
   } else {
-    $"https://($jupyter_host)" | str trim | str trim --right '/'
+    $"https://($jupyter_host)" | str trim | str trim --right --char '/'
   }
 }
 
