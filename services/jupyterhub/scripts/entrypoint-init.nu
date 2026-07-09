@@ -40,9 +40,42 @@ def oauth-wait-timeout-sec [] {
     $parsed
 }
 
+# JupyterHub's default ConfigurableHTTPProxy spawns `configurable-http-proxy`
+# locally. Assert the binary is present so a wrong base image (for example the
+# proxy-less k8s-hub) fails immediately with a clear message instead of crashing
+# mid-startup after TLS and OAuth preflight already passed.
+def preflight-proxy [] {
+    let found = (which configurable-http-proxy)
+    if ($found | is-empty) {
+        error make {
+            msg: "ERROR: configurable-http-proxy not found on PATH. The JupyterHub image must bundle the local proxy (use the all-in-one quay.io/jupyterhub/jupyterhub base, not k8s-hub)."
+        }
+    }
+    print $"Proxy preflight OK: configurable-http-proxy at ($found | first | get path)"
+}
+
 def preflight-tls [tls_dir: string = $RUNTIME_TLS_DIR] {
     let resolved = (validate-jupyterhub-tls-contract $tls_dir)
     print $"TLS preflight OK: cert=($resolved.cert) key=($resolved.key)"
+}
+
+# JupyterHub's OCM service verifies inbound share/token signatures by fetching
+# the peer's JWKS over https via Python (PyJWKClient), which trusts peers using
+# OpenSSL's default store. Some base images ship a broken default cert layout
+# (no /usr/lib/ssl/cert.pem cafile symlink), so the workspace CA baked into
+# /etc/ssl/certs/ca-certificates.crt is never loaded and every peer TLS verify
+# fails with a silent 500 on /services/ocm/shares. Assert Python's default
+# context loads a non-empty CA store so that regression fails fast here.
+def preflight-ca [] {
+    let code = "import ssl, sys; sys.stdout.write(str(ssl.create_default_context().cert_store_stats()['x509_ca']))"
+    let result = (^python3 -c $code | complete)
+    let count = ($result.stdout | str trim)
+    if $result.exit_code != 0 or $count == "0" or ($count | is-empty) {
+        error make {
+            msg: $"ERROR: Python TLS trust store check failed \(loaded '($count)' CA certs; expected > 0\). The image CA layout is broken: OpenSSL/Python cannot read /etc/ssl/certs/ca-certificates.crt. Ensure SSL_CERT_FILE points at the CA bundle so the OCM service can verify peer JWKS over TLS. python stderr: ($result.stderr | str trim)"
+        }
+    }
+    print $"CA preflight OK: Python default trust store loaded ($count) CAs"
 }
 
 def preflight-oauth [] {
@@ -67,6 +100,8 @@ def preflight-oauth [] {
 }
 
 def --wrapped main [...args] {
+    preflight-proxy
     preflight-tls $RUNTIME_TLS_DIR
+    preflight-ca
     preflight-oauth
 }

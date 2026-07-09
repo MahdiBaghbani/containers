@@ -4,7 +4,7 @@
   "labels": {
     "org.opencloudmesh.service": "jupyterhub",
     "org.opencontainers.image.title": "JupyterHub OCM Webapp Runtime",
-    "org.opencontainers.image.description": "JupyterHub (z2jh k8s-hub) with the vendored nextcloud-ocm-jupyterhub authenticator and OCM webapp-share services",
+    "org.opencontainers.image.description": "All-in-one JupyterHub with the vendored nextcloud-ocm-jupyterhub authenticator and OCM webapp-share services",
     "org.opencontainers.image.url": "https://git.azadehafzar.io/open-cloud-mesh/containers",
     "org.opencontainers.image.source": "https://github.com/SUNET/nextcloud-integration_jupyterhub",
     "org.opencontainers.image.authors": "Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>",

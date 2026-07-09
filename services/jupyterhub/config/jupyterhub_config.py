@@ -65,12 +65,60 @@ from nextcloud_ocm_jupyterhub.config import apply_defaults  # noqa: E402
 
 apply_defaults(c)  # noqa: F821 - c is injected by JupyterHub
 
-# MVP spawner: SimpleSpawner terminates the launch at /lab without a notebook
-# image. Layer 3 (real notebook render + WebDAV sync) is deferred; swap to
+# JupyterHub builds managed-service subprocess environments from a whitelist
+# (Spawner.env_keep) plus injected JUPYTERHUB_* vars; the container's custom env
+# is NOT inherited (this is why apply_services_defaults already forwards the OCM
+# allowlists per-service). Both managed services make outbound HTTPS calls that
+# must trust the workspace CA: `ocm` fetches the sender's JWKS (PyJWKClient) to
+# verify OCM signatures, and `refresh-token` refreshes OAuth tokens against
+# Nextcloud. Forward the image's TLS trust env into each service's environment
+# so peer verification uses the workspace CA instead of failing with
+# CERTIFICATE_VERIFY_FAILED. The image ENV is the single source of truth for the
+# bundle path; NODE_EXTRA_CA_CERTS is intentionally excluded (the Python
+# services do not use Node; the configurable-http-proxy inherits it directly
+# from the container env).
+_ca_trust_env = {
+    _key: os.environ[_key]
+    for _key in ("SSL_CERT_FILE", "SSL_CERT_DIR")
+    if os.environ.get(_key)
+}
+if _ca_trust_env:
+    for _service in getattr(c.JupyterHub, "services", []) or []:  # noqa: F821
+        _service.setdefault("environment", {}).update(_ca_trust_env)
+
+# MVP spawner: SimpleLocalProcessSpawner execs jupyterhub-singleuser as the hub
+# user and lands the OCM user in JupyterLab (/lab); the image bundles jupyterlab
+# so the single-user server can start. Layer 3 (per-user isolation via
+# DockerSpawner + a dedicated singleuser image, WebDAV sync) is deferred; swap to
 # DockerSpawner + a singleuser image when that lands.
 c.JupyterHub.spawner_class = "simple"  # noqa: F821
 c.Spawner.default_url = "/lab"  # noqa: F821
 c.Spawner.args = ["--allow-root"]  # noqa: F821
+
+# SimpleLocalProcessSpawner builds the single-user env from Spawner.env_keep
+# (plus injected JUPYTERHUB_* and Spawner.environment); the container ENV is not
+# inherited. ocm-sync runs at Lab startup and fetches the shared folder from the
+# sender over HTTPS, so it must trust the workspace CA. Forward the image's CA
+# trust vars into the single-user environment; without this, requests falls back
+# to certifi and fails with CERTIFICATE_VERIFY_FAILED.
+from jupyterhub.spawner import SimpleLocalProcessSpawner as _SimpleSpawner  # noqa: E402
+
+# env_keep has a dynamic, spawner-class-specific default: the base Spawner
+# default omits PATH, but SimpleLocalProcessSpawner (spawner_class="simple")
+# adds PATH/PYTHONPATH/etc, which the exec of jupyterhub-singleuser needs.
+# Derive the base from the concrete spawner class so we never drop PATH, then
+# append the CA trust vars. Preserve any list a prior config already set.
+_existing_env_keep = c.Spawner.env_keep  # noqa: F821
+_base_env_keep = (
+    list(_existing_env_keep)
+    if isinstance(_existing_env_keep, (list, tuple))
+    else list(_SimpleSpawner().env_keep)
+)
+c.Spawner.env_keep = _base_env_keep + [  # noqa: F821
+    _key
+    for _key in ("SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE")
+    if os.environ.get(_key) and _key not in _base_env_keep
+]
 
 c.Authenticator.auto_login = True  # noqa: F821
 c.JupyterHub.allow_named_servers = True  # noqa: F821

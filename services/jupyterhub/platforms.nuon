@@ -10,7 +10,7 @@
     },
     "external_images": {
       "runtime": {
-        "name": "quay.io/jupyterhub/k8s-hub",
+        "name": "quay.io/jupyterhub/jupyterhub",
         "build_arg": "BASE_HUB_IMAGE"
       }
     }

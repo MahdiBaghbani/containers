@@ -24,8 +24,15 @@
 # integration_jupyterhub Nextcloud app; it is cloned and pinned via
 # versions.nuon (repoint to a fork to own the source). Base tag is wired via
 # platforms.nuon + versions.nuon (external_images.runtime).
+#
+# Base is the all-in-one `quay.io/jupyterhub/jupyterhub` image, which bundles
+# JupyterHub + Node + configurable-http-proxy in one container. That matches our
+# deployment shape (single container per role, in-hub TLS on :443, local
+# SimpleSpawner). The Zero-to-K8s `k8s-hub` image is deliberately NOT used: it
+# expects an external proxy pod and omits the proxy binary, so JupyterHub's
+# default local ConfigurableHTTPProxy cannot start there.
 
-ARG BASE_HUB_IMAGE="quay.io/jupyterhub/k8s-hub:4.2.0"
+ARG BASE_HUB_IMAGE="quay.io/jupyterhub/jupyterhub:5.3.0"
 ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
 
 ARG TLS_ENABLED="false"
@@ -102,14 +109,50 @@ ARG COMMON_TOOLS_IMAGE
 
 USER root
 
-# Install the authenticator + OCM services package. simplespawner backs the
-# baked config's spawner_class = "simple" (Layer 3 notebook image deferred).
+# Fail the build early if the base ever stops bundling the local proxy. This is
+# the exact defect that broke the k8s-hub base: JupyterHub's default proxy tries
+# to exec `configurable-http-proxy` locally, so it must exist in the image.
+RUN configurable-http-proxy --version
+
+# The all-in-one jupyterhub base runs as root and ships no UID 1000 user (unlike
+# k8s-hub, which pre-provisioned jovyan=1000). Create the unprivileged runtime
+# user and hand it the hub state dir (WORKDIR /srv/jupyterhub holds the sqlite DB
+# and cookie secret) so the hub runs as UID 1000 under the NET_BIND_SERVICE :443
+# contract asserted below.
+RUN useradd --uid 1000 --user-group --create-home --home-dir /home/jovyan --shell /bin/bash jovyan \
+    && chown -R 1000:1000 /srv/jupyterhub
+ENV HOME=/home/jovyan
+
+# Install the authenticator + OCM services package plus a single-user server.
+# spawner_class = "simple" (SimpleLocalProcessSpawner) execs `jupyterhub-singleuser`,
+# which needs jupyter_server + a frontend; jupyterlab provides both and backs the
+# baked config's Spawner.default_url = "/lab". The all-in-one jupyterhub base ships
+# only the hub, so without this the OCM launch handoff spawns a named server that
+# dies with ModuleNotFoundError: jupyter_server and /services/ocm/open returns 502.
 COPY --from=source-prepare /hub-source /tmp/hub
-RUN pip install --no-cache-dir /tmp/hub jupyterhub-simplespawner && rm -rf /tmp/hub
+RUN pip install --no-cache-dir /tmp/hub jupyterhub-simplespawner "jupyterlab>=4.2,<5" \
+    && rm -rf /tmp/hub
+
+# Fail the build early if the single-user server stack is ever missing again:
+# SimpleSpawner execs `jupyterhub-singleuser`, which imports jupyter_server and the
+# jupyterlab frontend to serve Spawner.default_url = "/lab".
+RUN python3 -c "import jupyter_server, jupyterlab, jupyterhub.singleuser"
+
+# ocm-sync pulls the OCM webapp share into the spawned Lab's home over WebDAV
+# (see scripts/ocm-sync). It is the standalone-Docker counterpart of SUNET
+# jupyter-custom's ocm-sync, which their k8s singleuser image ships but is not
+# published as source. py_compile guards syntax; requests is the WebDAV client.
+COPY --chmod=755 scripts/ocm-sync /usr/local/bin/ocm-sync
+RUN python3 -c "import requests" && python3 -m py_compile /usr/local/bin/ocm-sync
 
 # Baked reference config. Operators/compose can override by mounting their own.
 COPY config/jupyterhub_helpers.py /srv/jupyterhub/jupyterhub_helpers.py
 COPY config/jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
+
+# System-wide single-user config: runs ocm-sync at Lab startup for OCM shares.
+# Read only by spawned jupyter_server processes, never by the hub itself.
+COPY config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py
+RUN python3 -m py_compile /usr/local/etc/jupyter/jupyter_server_config.py
 
 RUN mkdir -p /etc/ssl/certs /tmp /tls
 COPY --from=common-tools /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
@@ -121,6 +164,26 @@ RUN if [ "$TLS_ENABLED" = "true" ] && [ "$TLS_MODE" != "cert-only" ]; then \
       echo "Cert-only mode: Skipping internal CA bundle (using public CA from base image)"; \
     fi && \
     rm -f /tmp/ca-bundle.crt
+
+# The all-in-one jupyterhub base ships without the standard OpenSSL cafile
+# symlink (/usr/lib/ssl/cert.pem is absent), so OpenSSL's default trust
+# resolution never reads the ca-certificates.crt bundle above and instead lazily
+# resolves only the base image's pre-hashed capath symlinks. The DockyPody
+# workspace CA lives in the bundle file but has no hashed symlink (the bundle is
+# copied, not installed via update-ca-certificates), so it is invisible to
+# Python/OpenSSL by default. That silently broke peer TLS for the hub's Python
+# OCM service: verifying an inbound /services/ocm/shares signature fetches the
+# sender's JWKS over https and failed with CERTIFICATE_VERIFY_FAILED. Point the
+# OpenSSL-based stacks (Python urllib/PyJWKClient, curl) and Node
+# (configurable-http-proxy) at the populated bundle explicitly so the workspace
+# CA is trusted regardless of the base image's default cert layout.
+# REQUESTS_CA_BUNDLE is added because python-requests (used by ocm-sync) ships
+# its own certifi bundle and ignores SSL_CERT_FILE; without it, ocm-sync's TLS
+# to the sender's WebDAV fails to verify the workspace CA.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_DIR=/etc/ssl/certs \
+    NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 COPY --chmod=755 --from=common-tools /usr/local/bin/nu /usr/local/bin/nu
 COPY --chmod=755 --from=common-tools /usr/bin/tini-static /usr/bin/tini

@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""Pull an OCM webapp share into the single-user server's home over WebDAV.
+
+Runs at single-user startup (wired from jupyter_server_config.py) when the
+hub authenticator injected an OCM share into the environment. Mirrors the
+role of SUNET jupyter-custom's `ocm-sync`: for a read share it does a
+one-way download so the JupyterLab file browser shows the shared folder.
+
+Contract (set by nextcloud_ocm_jupyterhub authenticator.pre_spawn_start):
+  OCM_WEBDAV_URI   absolute WebDAV collection whose root is the shared folder
+                   (Nextcloud: https://<sender>/public.php/webdav/)
+  OCM_BEARER       token-exchanged access_token, sent as Authorization: Bearer
+  OCM_PERMISSIONS  comma list; "write" would enable two-way sync (not yet)
+
+Write shares still download read-only here; upstream's two-way push is a
+follow-up. A missing OCM_WEBDAV_URI is a no-op so non-OCM spawns are safe.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from urllib.parse import unquote, urljoin, urlparse
+
+import requests
+
+DAV_NS = "DAV:"
+REQUEST_TIMEOUT = 30
+LOG_PREFIX = "[ocm-sync]"
+
+
+def log(message: str) -> None:
+    print(f"{LOG_PREFIX} {message}", file=sys.stderr, flush=True)
+
+
+def ca_bundle() -> str | bool:
+    # requests defaults to certifi and ignores SSL_CERT_FILE, so the workspace
+    # CA must be passed explicitly or peer TLS to the sender fails to verify.
+    for var in ("REQUESTS_CA_BUNDLE", "SSL_CERT_FILE"):
+        path = os.environ.get(var)
+        if path and Path(path).is_file():
+            return path
+    # Fallback: the spawner may not forward the trust env into the single-user
+    # process. The image installs the workspace CA at this canonical path.
+    default_bundle = "/etc/ssl/certs/ca-certificates.crt"
+    if Path(default_bundle).is_file():
+        return default_bundle
+    return True
+
+
+def propfind(session: requests.Session, url: str, verify: str | bool) -> list[dict]:
+    body = (
+        '<?xml version="1.0" encoding="utf-8"?>'
+        '<d:propfind xmlns:d="DAV:"><d:prop>'
+        "<d:resourcetype/><d:getcontentlength/>"
+        "</d:prop></d:propfind>"
+    )
+    resp = session.request(
+        "PROPFIND",
+        url,
+        headers={"Depth": "1", "Content-Type": "application/xml"},
+        data=body,
+        timeout=REQUEST_TIMEOUT,
+        verify=verify,
+    )
+    resp.raise_for_status()
+
+    entries: list[dict] = []
+    root = ET.fromstring(resp.content)
+    for response in root.findall(f"{{{DAV_NS}}}response"):
+        href_el = response.find(f"{{{DAV_NS}}}href")
+        if href_el is None or not href_el.text:
+            continue
+        is_collection = (
+            response.find(
+                f".//{{{DAV_NS}}}resourcetype/{{{DAV_NS}}}collection"
+            )
+            is not None
+        )
+        entries.append({"href": href_el.text, "is_collection": is_collection})
+    return entries
+
+
+def sync_collection(
+    session: requests.Session,
+    base_url: str,
+    base_path: str,
+    url: str,
+    dest_root: Path,
+    verify: str | bool,
+) -> int:
+    downloaded = 0
+    for entry in propfind(session, url, verify):
+        href = entry["href"]
+        href_path = urlparse(href).path
+        # Skip the collection itself (PROPFIND Depth:1 lists it first).
+        rel = unquote(href_path[len(base_path):]).strip("/")
+        if rel == "":
+            continue
+        target = dest_root / rel
+        child_url = urljoin(base_url, href)
+        if entry["is_collection"]:
+            target.mkdir(parents=True, exist_ok=True)
+            downloaded += sync_collection(
+                session, base_url, base_path, child_url, dest_root, verify
+            )
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        resp = session.get(child_url, timeout=REQUEST_TIMEOUT, verify=verify)
+        resp.raise_for_status()
+        target.write_bytes(resp.content)
+        downloaded += 1
+        log(f"downloaded {rel} ({len(resp.content)} bytes)")
+    return downloaded
+
+
+def main() -> int:
+    webdav_uri = os.environ.get("OCM_WEBDAV_URI", "").strip()
+    bearer = os.environ.get("OCM_BEARER", "").strip()
+    if not webdav_uri:
+        return 0
+    if not bearer:
+        log("OCM_WEBDAV_URI set but OCM_BEARER missing; nothing to sync")
+        return 0
+
+    dest_root = Path(os.environ.get("HOME") or Path.home())
+    dest_root.mkdir(parents=True, exist_ok=True)
+
+    parsed = urlparse(webdav_uri)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+    base_path = parsed.path if parsed.path.endswith("/") else parsed.path + "/"
+
+    verify = ca_bundle()
+    session = requests.Session()
+    session.headers["Authorization"] = f"Bearer {bearer}"
+
+    resource = os.environ.get("OCM_RESOURCE_NAME") or webdav_uri
+    log(f"syncing {resource} into {dest_root}")
+    try:
+        count = sync_collection(
+            session, base_url, base_path, webdav_uri, dest_root, verify
+        )
+    except requests.RequestException as exc:
+        log(f"sync failed: {exc}")
+        # Do not abort the spawn: an empty Lab is better than a failed launch.
+        return 0
+    log(f"sync complete: {count} file(s)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
