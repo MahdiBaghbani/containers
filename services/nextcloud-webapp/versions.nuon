@@ -4,7 +4,7 @@
   "defaults": {
     "sources": {
       "integration_jupyterhub": {
-        "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub"
+        "url": "https://github.com/MahdiBaghbani/nextcloud-integration_jupyterhub"
       },
       "ocmremotewebapp": {
         "url": "https://github.com/SUNET/ocmremotewebapp"
@@ -32,7 +32,7 @@
       "overrides": {
         "sources": {
           "integration_jupyterhub": {
-            "ref": "main"
+            "ref": "sta-milestone-8/webapp-share-folder-webdav-discovery"
           },
           "ocmremotewebapp": {
             "ref": "main"
