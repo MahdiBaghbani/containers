@@ -197,6 +197,29 @@ export def service-drift-early-tests [verbose: bool] {
       }
       true
     } $verbose)
+    (run-test "Test 39v: Dockerfile drift - nextcloud-webapp passes --ref-kind on clone-source.nu calls" {
+      let dockerfiles = [
+        "services/nextcloud-webapp/Dockerfile"
+      ]
+      let ref_kind_patterns = [
+        (clone-source-ref-kind-env-pattern "INTEGRATION_JUPYTERHUB_REF_KIND")
+        (clone-source-ref-kind-env-pattern "OCMREMOTEWEBAPP_REF_KIND")
+      ]
+      for df in $dockerfiles {
+        assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 2 --ref-kind-patterns $ref_kind_patterns
+      }
+      true
+    } $verbose)
+    (run-test "Test 39w: Dockerfile drift - jupyterhub passes --ref-kind on clone-source.nu calls" {
+      let dockerfiles = [
+        "services/jupyterhub/Dockerfile"
+      ]
+      let ref_kind_patterns = [(clone-source-ref-kind-env-pattern "INTEGRATION_JUPYTERHUB_REF_KIND")]
+      for df in $dockerfiles {
+        assert-dockerfile-clone-source-ref-kind-contract $df --expected-invocations 1 --ref-kind-patterns $ref_kind_patterns
+      }
+      true
+    } $verbose)
     (run-test "Test 39s: Dockerfile drift - opencloudmesh-go passes --ref-kind on clone-source.nu calls" {
       let dockerfiles = [
         "services/opencloudmesh-go/Dockerfile.development"

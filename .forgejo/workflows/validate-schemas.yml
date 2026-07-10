@@ -10,6 +10,8 @@ on:
       - 'README.md'
       - 'docs/**'
       - 'schemas/**'
+      - 'services/**/Dockerfile*'
+      - 'services/**/scripts/**'
       - 'services/**/*.nuon'
       - 'scripts/**'
   pull_request:
@@ -20,6 +22,8 @@ on:
       - 'README.md'
       - 'docs/**'
       - 'schemas/**'
+      - 'services/**/Dockerfile*'
+      - 'services/**/scripts/**'
       - 'services/**/*.nuon'
       - 'scripts/**'
 

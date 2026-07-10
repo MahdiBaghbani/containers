@@ -74,6 +74,30 @@
           "WEB_EXT_ALLOW": "cernbox-integration,ifc-js,jupyter,lightweight-accounts,ndmspc-reader,old-web-redirector,open-in-swan,otg,rootjs,search-in-folder,tours,theme-cernbox,tours-cernbox"
         }
       }
+    },
+    {
+      "name": "ocm-webapp-share",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "web": {
+            "url": "https://github.com/MahdiBaghbani/web.git",
+            "ref": "sta-milestone-8/ocm-webapp-open-post"
+          },
+          "web_extensions": {
+            "ref": "dffaad6cecf755782c7ce4289f21b4f155c35e7c"
+          }
+        },
+        "external_images": {
+          "build": {
+            "tag": "20-trixie-slim"
+          }
+        },
+        "build_args": {
+          "PNPM_VERSION": "9.12.3",
+          "WEB_EXT_ALLOW": "cernbox-integration,ifc-js,jupyter,lightweight-accounts,ndmspc-reader,old-web-redirector,open-in-swan,otg,rootjs,search-in-folder,tours,theme-cernbox,tours-cernbox"
+        }
+      }
     }
   ]
 }

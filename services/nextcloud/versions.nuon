@@ -73,6 +73,18 @@
           }
         }
       }
+    },
+    {
+      "name": "ocm-webapp-share",
+      "latest": false,
+      "overrides": {
+        "sources": {
+          "nextcloud": {
+            "url": "https://github.com/MahdiBaghbani/server.git",
+            "ref": "sta-milestone-8/webapp-contacts-server-rebase"
+          }
+        }
+      }
     }
   ]
 }

@@ -19,10 +19,40 @@
 
 # Service discovery and configuration tests
 
-use ../lib.nu [print-test-summary]
+use ../lib.nu [print-test-summary, run-test]
 use ./config-completeness.nu [config-completeness-tests]
 use ./discovery.nu [discovery-tests]
+use ./hook-parse.nu [hook-parse-tests]
 use ./integrity.nu [integrity-tests]
+
+const NEXTCLOUD_RUNTIME_CONTRACT = "services/nextcloud-webapp/tests/runtime-contract-test.nu"
+const JUPYTERHUB_RUNTIME_CONTRACT = "services/jupyterhub/tests/runtime-contract-test.nu"
+
+def run-contract-script [script: string] {
+  let result = (^nu $script | complete)
+  if $result.exit_code != 0 {
+    let detail = (
+      if ($result.stderr | str trim | is-not-empty) {
+        $result.stderr | str trim
+      } else {
+        $result.stdout | str trim
+      }
+    )
+    error make {msg: $detail}
+  }
+  true
+}
+
+def runtime-contract-tests [verbose: bool] {
+  [
+    (run-test "nextcloud-webapp runtime contract" {
+      run-contract-script $NEXTCLOUD_RUNTIME_CONTRACT
+    } $verbose)
+    (run-test "jupyterhub runtime contract" {
+      run-contract-script $JUPYTERHUB_RUNTIME_CONTRACT
+    } $verbose)
+  ]
+}
 
 def main [--verbose] {
   let verbose_flag = (try { $verbose } catch { false })
@@ -31,6 +61,8 @@ def main [--verbose] {
   $results = ($results | append (discovery-tests $verbose_flag))
   $results = ($results | append (config-completeness-tests $verbose_flag))
   $results = ($results | append (integrity-tests $verbose_flag))
+  $results = ($results | append (hook-parse-tests $verbose_flag))
+  $results = ($results | append (runtime-contract-tests $verbose_flag))
 
   print-test-summary $results
 

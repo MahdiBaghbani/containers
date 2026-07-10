@@ -1,0 +1,35 @@
+{
+  "default": "webapp-share",
+
+  "defaults": {
+    "sources": {
+      "integration_jupyterhub": {
+        "url": "https://github.com/MahdiBaghbani/nextcloud-integration_jupyterhub"
+      }
+    },
+    "external_images": {
+      "runtime": {
+        "tag": "5.3.0"
+      }
+    },
+    "dependencies": {
+      "common-tools": {
+        "version": "v1.0.0-debian"
+      }
+    }
+  },
+
+  "versions": [
+    {
+      "name": "webapp-share",
+      "latest": true,
+      "overrides": {
+        "sources": {
+          "integration_jupyterhub": {
+            "ref": "sta-milestone-8/webapp-share-folder-webdav-discovery"
+          }
+        }
+      }
+    }
+  ]
+}

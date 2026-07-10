@@ -45,6 +45,8 @@ on:
 #   nextcloud - depends on: nextcloud-base, common-tools
 #   nextcloud-base - depends on: common-tools
 #   nextcloud-contacts - depends on: common-tools, nextcloud
+#   nextcloud-webapp - depends on: common-tools, nextcloud-contacts
+#   jupyterhub - depends on: common-tools
 #   ocis - depends on: common-tools
 #   opencloud - depends on: common-tools
 #   opencloudmesh-go - depends on: common-tools
@@ -199,6 +201,31 @@ jobs:
       disk_monitor_mode: basic
       prune_build_cache: true
 
+  build_nextcloud_webapp:
+    name: nextcloud-webapp
+    needs:
+      - build_common_tools
+      - build_nextcloud_contacts
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: nextcloud-webapp
+      push: ${{ inputs.push }}
+      dependencies: "nextcloud-base,nextcloud,nextcloud-contacts,common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
+
+  build_jupyterhub:
+    name: jupyterhub
+    needs:
+      - build_common_tools
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: jupyterhub
+      push: ${{ inputs.push }}
+      dependencies: "common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
+
   build_ocis:
     name: ocis
     needs:
@@ -262,6 +289,8 @@ jobs:
       - build_nextcloud
       - build_nextcloud_base
       - build_nextcloud_contacts
+      - build_nextcloud_webapp
+      - build_jupyterhub
       - build_ocis
       - build_opencloud
       - build_opencloudmesh_go

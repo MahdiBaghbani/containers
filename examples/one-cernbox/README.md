@@ -63,8 +63,11 @@ docker compose up -d --wait
 ```
 
 `--wait` blocks until services with baked image healthchecks (IdP, Reva dev
-images, cernbox-web) report healthy. Readiness is defined in the Dockerfiles,
-not duplicated in this compose file.
+images, cernbox-web) report healthy. The `one-cernbox-1-web` service now waits
+on the full Reva runtime closure for the stack, so the browser-facing CERNBox
+entrypoint does not come up before the auth, share, group, and dataprovider
+services are healthy. Readiness stays defined in the images, not duplicated in
+this compose file.
 
 ### Firefox UI
 

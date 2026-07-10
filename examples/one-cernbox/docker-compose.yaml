@@ -492,6 +492,22 @@ services:
         condition: service_healthy
       one-cernbox-1-revad-gateway:
         condition: service_healthy
+      one-cernbox-1-revad-authprovider-oidc:
+        condition: service_healthy
+      one-cernbox-1-revad-authprovider-machine:
+        condition: service_healthy
+      one-cernbox-1-revad-authprovider-ocmshares:
+        condition: service_healthy
+      one-cernbox-1-revad-authprovider-ocmsharecode:
+        condition: service_healthy
+      one-cernbox-1-revad-authprovider-ocmexchangedtoken:
+        condition: service_healthy
+      one-cernbox-1-revad-authprovider-publicshares:
+        condition: service_healthy
+      one-cernbox-1-revad-shareproviders:
+        condition: service_healthy
+      one-cernbox-1-revad-groupuserproviders:
+        condition: service_healthy
       one-cernbox-1-revad-dataprovider-localhome:
         condition: service_healthy
       one-cernbox-1-revad-dataprovider-ocm:

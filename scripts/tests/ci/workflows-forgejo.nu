@@ -76,6 +76,8 @@ export def test-forgejo-workflows [verbose: bool] {
       "README.md"
       "docs/**"
       "schemas/**"
+      "services/**/Dockerfile*"
+      "services/**/scripts/**"
       "services/**/*.nuon"
       "scripts/**"
     ]
