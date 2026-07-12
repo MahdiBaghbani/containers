@@ -137,7 +137,6 @@ export def build-single-version [
   push_deps: bool = false,
   tag_deps: bool = false,
   hash_graph: record = {},
-  cache_match: string = "",
   plane_ctx: any = null
 ] {
   let current_platform = (try { $version_spec.platform } catch { $platform })
@@ -350,8 +349,6 @@ export def build-single-version [
           $"($dep_service):($dep_version_spec.name)"
         })
         
-        let cache_hint = (if ($cache_match | str length) > 0 { $" [cache: ($cache_match)]" } else { "" })
-        
         let should_skip_build = (if $ci_mode and $dep_cache_mode != "off" {
           let expected_hash = (try { $hash_graph | get $dep_node } catch { "" })
           
@@ -362,7 +359,7 @@ export def build-single-version [
             let actual_hash = (get-service-def-hash-from-image $dep_image_ref)
             
             if ($actual_hash | str length) == 0 {
-              print $"CI: Dependency '($dep_label)' - local image missing or unlabeled, will auto-build($cache_hint)"
+              print $"CI: Dependency '($dep_label)' - local image missing or unlabeled, will auto-build"
               false
             } else if $actual_hash == $expected_hash {
               print $"CI: Dependency '($dep_label)' - found fresh image with matching hash, skipping build"
@@ -370,7 +367,7 @@ export def build-single-version [
             } else {
               let exp_short = ($expected_hash | short-hash)
               let act_short = ($actual_hash | short-hash)
-              print $"CI: Dependency '($dep_label)' - hash mismatch [exp: ($exp_short)... act: ($act_short)...], will auto-build($cache_hint)"
+              print $"CI: Dependency '($dep_label)' - hash mismatch [exp: ($exp_short)... act: ($act_short)...], will auto-build"
               false
             }
           }
@@ -384,7 +381,7 @@ export def build-single-version [
         
         let prev_cache = $current_cache
         try {
-          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $cache_match $plane_ctx)
+          let build_result = (build-single-version $dep_service $dep_version_spec $dep_push $dep_latest $dep_extra_tag $provenance_val $progress $dep_info $dep_meta $current_cache $dep_platform $dep_default_platform $dep_platforms_manifest $cache_bust_override $no_cache "strict" $push_deps $tag_deps $hash_graph $plane_ctx)
           $current_cache = (try { $build_result.sha_cache } catch { $prev_cache })
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })

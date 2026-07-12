@@ -100,9 +100,8 @@ Safety and fault tolerance:
 
 ## Dependency Reuse in CI
 
-Current CI uses workflow-local shard artifacts, not `actions/cache`, to
-reuse dependency images between jobs. The shipped generated workflows do not
-have an active `actions/cache` restore/save path.
+Current CI uses workflow-local shard artifacts to reuse dependency images
+between jobs in the same workflow run.
 
 ### Artifact Flow
 
@@ -126,13 +125,6 @@ service/version/platform node:
 Shard artifact names follow
 `shard-<service>-<version>-<platform|single>`. This keeps reuse scoped to
 the current workflow run and aligned with the generated service graph.
-
-### Legacy Cache Notes
-
-The CLI still documents `--cache-match` for legacy or custom callers, but
-the generated workflows no longer compute `exact`/`fallback`/`miss` labels
-through `actions/cache`, and they no longer restore or save image state with
-`actions/cache` at all.
 
 ## Service Definition Hash
 

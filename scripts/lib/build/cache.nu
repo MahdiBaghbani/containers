@@ -20,7 +20,6 @@
 
 use ../manifest/core.nu [check-versions-manifest-exists load-versions-manifest]
 use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifest get-platform-names]
-use ./pull.nu [compute-canonical-image-ref]
 use ../registries/info.nu [get-registry-info]
 
 # Cache directory constants
@@ -52,12 +51,6 @@ export def get-image-tarball-path [owner_service: string, image_id: string] {
 export def get-manifest-path [owner_service: string] {
     let cache_dir = (get-owner-cache-dir $owner_service)
     $"($cache_dir)/($MANIFEST_FILENAME)"
-}
-
-# Get the cache key for GitHub Actions cache
-# Format: images-{owner_service}-{ref}-{sha}
-export def get-owner-cache-key [owner_service: string, ref: string, sha: string] {
-    $"images-($owner_service)-($ref)-($sha)"
 }
 
 # Parse and validate dep-cache mode from CLI flag
@@ -142,78 +135,6 @@ export def get-dep-nodes-for-service [
     $nodes
 }
 
-# Get Docker image ID for a given image reference
-# Returns the full SHA256 image ID or empty string if image doesn't exist
-def get-docker-image-id [image_ref: string] {
-    try {
-        let result = (^docker image inspect $image_ref --format "{{.Id}}" | complete)
-        if $result.exit_code == 0 {
-            $result.stdout | str trim
-        } else {
-            ""
-        }
-    } catch {
-        ""
-    }
-}
-
-# Compute mapping from nodes to Docker image IDs
-# Returns: {
-#   nodes: {node_key: image_id},
-#   images: {image_id: {refs: [ref1, ref2], owner_service: string}}
-# }
-export def compute-node-image-map [
-    nodes: list,
-    registry_info: record,
-    is_local: bool
-] {
-    # Process each node to get its image ref and image ID
-    let result = ($nodes | reduce --fold {nodes: {}, images: {}} {|node, acc|
-        let node_key = $node.node_key
-        let owner_service = $node.owner_service
-
-        # Compute canonical image reference
-        let image_ref = (compute-canonical-image-ref $node_key $registry_info $is_local)
-
-        # Get Docker image ID
-        let image_id = (get-docker-image-id $image_ref)
-
-        if ($image_id | str length) == 0 {
-            # Image doesn't exist - record empty mapping
-            let updated_nodes = ($acc.nodes | upsert $node_key "")
-            {nodes: $updated_nodes, images: $acc.images}
-        } else {
-            # Update node -> image_id mapping
-            let updated_nodes = ($acc.nodes | upsert $node_key $image_id)
-
-            # Update image_id -> refs mapping (aggregate refs for dedup)
-            let existing_image = (try { $acc.images | get $image_id } catch { null })
-            let updated_images = (if $existing_image == null {
-                $acc.images | upsert $image_id {
-                    refs: [$image_ref],
-                    owner_service: $owner_service
-                }
-            } else {
-                # Add ref to existing image entry if not already present
-                let existing_refs = $existing_image.refs
-                let new_refs = (if $image_ref in $existing_refs {
-                    $existing_refs
-                } else {
-                    $existing_refs | append $image_ref
-                })
-                $acc.images | upsert $image_id {
-                    refs: $new_refs,
-                    owner_service: $owner_service
-                }
-            })
-
-            {nodes: $updated_nodes, images: $updated_images}
-        }
-    })
-
-    $result
-}
-
 # Write dep-cache manifest for an owner service
 export def write-manifest [owner_service: string, node_image_map: record] {
     let manifest_path = (get-manifest-path $owner_service)
@@ -248,143 +169,4 @@ export def read-manifest [owner_service: string] {
     } catch {
         null
     }
-}
-
-# Save tarballs for all images owned by a service (SHA-deduplicated)
-# Called after successful build to produce per-image .tar.zst files
-export def save-owner-tarballs [
-    owner_service: string,
-    registry_info: record,
-    is_local: bool
-] {
-    # Get all nodes for this service
-    let nodes = (get-dep-nodes-for-service $owner_service $registry_info $is_local)
-
-    if ($nodes | is-empty) {
-        print $"No nodes found for service '($owner_service)', skipping tarball save"
-        return
-    }
-
-    # Compute node -> image ID mapping
-    let node_image_map = (compute-node-image-map $nodes $registry_info $is_local)
-
-    # Get unique image IDs (skip empty ones - missing images)
-    let image_ids = ($node_image_map.images | columns)
-
-    if ($image_ids | is-empty) {
-        print $"No images found for service '($owner_service)', skipping tarball save"
-        return
-    }
-
-    let cache_dir = (get-owner-cache-dir $owner_service)
-
-    # Clear and recreate cache directory to remove stale tarballs from previous runs
-    if ($cache_dir | path exists) {
-        rm -rf $cache_dir
-    }
-    mkdir $cache_dir
-
-    print $"=== Saving ($image_ids | length) image\(s\) for ($owner_service) ==="
-
-    # Save each unique image ID as a tarball
-    for image_id in $image_ids {
-        let image_info = ($node_image_map.images | get $image_id)
-        let refs = $image_info.refs
-        let tarball_path = (get-image-tarball-path $owner_service $image_id)
-
-        # Skip if tarball already exists (dedup within build session)
-        if ($tarball_path | path exists) {
-            print $"Skipping ($image_id | str substring 0..16)... \(tarball exists\)"
-            continue
-        }
-
-        # Save image with all its refs/tags
-        let refs_str = ($refs | str join " ")
-        print $"Saving ($image_id | str substring 0..16)... with ($refs | length) ref\(s\)"
-
-        let save_result = (try {
-            # docker save outputs to stdout, pipe through zstd
-            let cmd_result = (^docker save ...$refs | ^zstd -T0 -3 -o $tarball_path | complete)
-            if $cmd_result.exit_code == 0 {
-                {success: true, error: ""}
-            } else {
-                {success: false, error: (try { $cmd_result.stderr } catch { "Unknown error" })}
-            }
-        } catch {|err|
-            {success: false, error: (try { $err.msg } catch { "Command failed" })}
-        })
-
-        if $save_result.success {
-            print $"OK: Saved ($tarball_path | path basename)"
-        } else {
-            print $"ERROR: Failed to save ($image_id | str substring 0..16)...: ($save_result.error)"
-        }
-    }
-
-    # Write manifest
-    write-manifest $owner_service $node_image_map
-    print $"Manifest written to ($cache_dir)/($MANIFEST_FILENAME)"
-}
-
-# Load tarballs from cache for an owner service
-# Returns record with load metrics
-export def load-owner-tarballs [owner_service: string] {
-    let manifest = (read-manifest $owner_service)
-
-    if $manifest == null {
-        print $"No manifest found for '($owner_service)', skipping load"
-        return {loaded: 0, skipped: 0, failed: 0}
-    }
-
-    let image_ids = ($manifest.images | columns)
-
-    if ($image_ids | is-empty) {
-        return {loaded: 0, skipped: 0, failed: 0}
-    }
-
-    print $"=== Loading ($image_ids | length) image\(s\) for ($owner_service) ==="
-
-    mut loaded = 0
-    mut skipped = 0
-    mut failed = 0
-
-    for image_id in $image_ids {
-        let tarball_path = (get-image-tarball-path $owner_service $image_id)
-
-        if not ($tarball_path | path exists) {
-            print $"WARNING: Tarball not found for ($image_id | str substring 0..16)..."
-            $failed = $failed + 1
-            continue
-        }
-
-        # Check if image already loaded (skip dedup)
-        let existing = (get-docker-image-id $image_id)
-        if ($existing | str length) > 0 {
-            print $"Skipping ($image_id | str substring 0..16)... \(already loaded\)"
-            $skipped = $skipped + 1
-            continue
-        }
-
-        # Load tarball
-        let load_result = (try {
-            let cmd_result = (^zstd -d -c $tarball_path | ^docker load | complete)
-            if $cmd_result.exit_code == 0 {
-                {success: true, error: ""}
-            } else {
-                {success: false, error: (try { $cmd_result.stderr } catch { "Unknown error" })}
-            }
-        } catch {|err|
-            {success: false, error: (try { $err.msg } catch { "Command failed" })}
-        })
-
-        if $load_result.success {
-            print $"OK: Loaded ($image_id | str substring 0..16)..."
-            $loaded = $loaded + 1
-        } else {
-            print $"ERROR: Failed to load ($image_id | str substring 0..16)...: ($load_result.error)"
-            $failed = $failed + 1
-        }
-    }
-
-    {loaded: $loaded, skipped: $skipped, failed: $failed}
 }

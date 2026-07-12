@@ -418,7 +418,7 @@ def run-all-services-build [ctx: record] {
         print $"\n--- Building ($build_label) ---"
         
         let build_result = (try {
-          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $f.provenance $f.progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $f.cache_bust $f.no_cache "strict" $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx
+          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $f.provenance $f.progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $f.cache_bust $f.no_cache "strict" $f.push_deps $f.tag_deps $hash_graph $plane_ctx
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
           print $"ERROR: Failed to build ($build_label)"
@@ -779,7 +779,7 @@ def run-single-service-build [ctx: record] {
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
+          let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $plane_ctx)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -849,7 +849,7 @@ def run-single-service-build [ctx: record] {
         
         let prev_cache = $sha_cache
         let result = (try {
-          let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
+          let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $plane_ctx)
           $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
           print $"OK: Successfully built ($build_label)"
           {success: true, label: $build_label}
@@ -932,7 +932,7 @@ def run-single-service-build [ctx: record] {
     
     for expanded_version in $expanded_versions {
       let prev_cache = $sha_cache
-      let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
+      let build_result = (build-single-version $f.service $expanded_version $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache $expanded_version.platform $default_platform $platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $plane_ctx)
       $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
     }
   } else {
@@ -952,7 +952,7 @@ def run-single-service-build [ctx: record] {
     }
     
     let prev_cache = $sha_cache
-    let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $f.cache_match $plane_ctx)
+    let build_result = (build-single-version $f.service $version_spec $f.push $f.latest $f.extra_tag $f.provenance $f.progress $info $meta $sha_cache "" "" null $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $plane_ctx)
     $sha_cache = (try { $build_result.sha_cache } catch { $prev_cache })
   }
   

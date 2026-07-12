@@ -25,22 +25,6 @@ export def rm-tmp [dir: string] {
     try { rm -rf $dir } catch { }
 }
 
-# Returns tmp_dir, owner_name, and owner_cache for merge-node-shards tests.
-export def make-merge-fixture [] {
-    let tmp_dir = (^mktemp -d | str trim)
-    let owner_name = ($tmp_dir | path basename)
-    {
-        tmp_dir: $tmp_dir
-        owner_name: $owner_name
-        owner_cache: $"/tmp/docker-images/($owner_name)"
-    }
-}
-
-export def cleanup-merge-fixture [tmp_dir: string, owner_cache: string] {
-    rm-tmp $tmp_dir
-    rm-tmp $owner_cache
-}
-
 # Returns test_svc and cache_dir for manifest round-trip tests.
 export def make-roundtrip-service [] {
     let tmp_marker = (^mktemp -d | str trim)

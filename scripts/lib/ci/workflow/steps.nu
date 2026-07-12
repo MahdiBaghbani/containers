@@ -64,88 +64,6 @@ export def step-common-setup [] {
     ]
 }
 
-# Generate dependency cache restore steps (up to 8)
-export def step-restore-deps [] {
-    1..8 | each {|i|
-        {
-            name: $"Restore dep($i) cache"
-            if: $"steps.deps.outputs.dep($i) != ''"
-            uses: "actions/cache/restore@v5"
-            with: {
-                path: $"/tmp/docker-images/${{ steps.deps.outputs.dep($i) }}/"
-                key: $"images-${{ steps.deps.outputs.dep($i) }}-${{ github.ref }}-${{ github.sha }}"
-                restore-keys: $"images-${{ steps.deps.outputs.dep($i) }}-${{ github.ref }}-"
-            }
-        }
-    }
-}
-
-export def step-parse-deps [] {
-    {
-        name: "Parse dependencies"
-        id: "deps"
-        run: "DEPS=\"${{ inputs.dependencies }}\"
-echo \"Parsing dependencies: '$DEPS'\"
-IFS=',' read -ra DEP_ARRAY <<< \"$DEPS\"
-COUNT=${#DEP_ARRAY[@]}
-for i in {1..8}; do
-  IDX=$((i - 1))
-  if [ $IDX -lt $COUNT ] && [ -n \"${DEP_ARRAY[$IDX]}\" ]; then
-    DEP=$(echo \"${DEP_ARRAY[$IDX]}\" | xargs)
-    echo \"dep${i}=${DEP}\" >> $GITHUB_OUTPUT
-  else
-    echo \"dep${i}=\" >> $GITHUB_OUTPUT
-  fi
-done
-echo \"Total dependencies: $COUNT (max 8 restored)\""
-    }
-}
-
-export def step-restore-owner-cache [] {
-    {
-        name: "Restore Docker image cache"
-        id: "cache-restore"
-        uses: "actions/cache/restore@v5"
-        with: {
-            path: "/tmp/docker-images/${{ inputs.service }}/"
-            key: "images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}"
-            restore-keys: "images-${{ inputs.service }}-${{ github.ref }}-"
-        }
-    }
-}
-
-export def step-cache-match-kind [] {
-    {
-        name: "Determine cache match kind"
-        id: "cache-match"
-        run: 'PRIMARY_KEY="images-${{ inputs.service }}-${{ github.ref }}-${{ github.sha }}"
-MATCHED_KEY="${{ steps.cache-restore.outputs.cache-matched-key }}"
-CACHE_HIT="${{ steps.cache-restore.outputs.cache-hit }}"
-if [ "$CACHE_HIT" = "true" ]; then
-  if [ "$MATCHED_KEY" = "$PRIMARY_KEY" ]; then
-    MATCH_KIND="exact"
-  else
-    MATCH_KIND="fallback"
-  fi
-else
-  MATCH_KIND="miss"
-fi
-echo "Cache match kind: $MATCH_KIND"
-echo "match_kind=$MATCH_KIND" >> $GITHUB_OUTPUT'
-    }
-}
-
-export def step-load-cached-images [] {
-    {
-        name: "Load cached images"
-        if: "steps.cache-restore.outputs.cache-hit == 'true'"
-        run: 'if [ -d "/tmp/docker-images/${{ inputs.service }}" ]; then
-  echo "Loading cached images for ${{ inputs.service }}..."
-  nu scripts/dockypody.nu ci load-owner --service ${{ inputs.service }}
-fi'
-    }
-}
-
 # Log in to container registry (only when push is enabled)
 export def step-login-registry [] {
     {
@@ -178,7 +96,7 @@ fi'
     }
 }
 
-# Build node using artifact-based deps (new flow without actions/cache)
+# Build node using artifact-based dependency shards
 export def step-build-node-artifact-deps [] {
     {
         name: "Build node"
@@ -192,27 +110,6 @@ nu scripts/dockypody.nu build \\
   $PLATFORM_FLAG \\
   --dep-cache=soft \\
   --pull=deps,externals \\
-  --disk-monitor=${{ inputs.disk_monitor_mode }} \\
-  ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \\
-  ${{ inputs.push && '--push' || '' }}"
-    }
-}
-
-# Legacy: Build node with cache-match (for backward compatibility, not used in new workflows)
-export def step-build-node [] {
-    {
-        name: "Build node"
-        run: "PLATFORM_FLAG=\"\"
-if [ -n \"${{ matrix.platform }}\" ]; then
-  PLATFORM_FLAG=\"--platform ${{ matrix.platform }}\"
-fi
-nu scripts/dockypody.nu build \\
-  --service ${{ inputs.service }} \\
-  --version ${{ matrix.version }} \\
-  $PLATFORM_FLAG \\
-  --dep-cache=soft \\
-  --pull=deps,externals \\
-  --cache-match=${{ steps.cache-match.outputs.match_kind }} \\
   --disk-monitor=${{ inputs.disk_monitor_mode }} \\
   ${{ inputs.prune_build_cache && '--prune-cache-mounts' || '' }} \\
   ${{ inputs.push && '--push' || '' }}"

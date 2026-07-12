@@ -437,11 +437,10 @@ nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 ### CI Dependency Shard Preparation
 
 In the shipped CI flow, dependency reuse happens through generated
-workflow-local shard artifacts, not `actions/cache`. The generated
-`build-orchestrator.yml` passes a comma-separated `dependencies` input to
-the generated `build-service.yml`, and each matrix node prepares the
-matching dependency shards before it builds. The current generated workflow
-set has no active `actions/cache` restore/save path for image state.
+workflow-local shard artifacts. The generated `build-orchestrator.yml` passes
+a comma-separated `dependencies` input to the generated
+`build-service.yml`, and each matrix node prepares the matching dependency
+shards before it builds.
 
 **How it works:**
 
@@ -476,10 +475,7 @@ build_cernbox_revad:
 ```
 
 Each shard upload uses an artifact name shaped like
-`shard-<service>-<version>-<platform|single>` with short retention. The
-generated workflow no longer expands `dependencies` into `dep1`..`dep8`
-slots, and it no longer restores or saves Docker images through
-`actions/cache`.
+`shard-<service>-<version>-<platform|single>` with short retention.
 
 ### Flag Propagation
 
@@ -967,7 +963,7 @@ scripts/
 - dockypody.nu                # Canonical CLI entrypoint
 - lib/
   - build/                    # Build domain
-    - cache.nu              # Dep-cache mode and tarball management
+    - cache.nu              # Dep-cache modes and dependency-cache manifest helpers
     - config.nu             # Service config loading and flag parsing
     - dependencies.nu       # Dependency resolution
     - docker.nu             # Docker buildx wrapper
@@ -979,7 +975,6 @@ scripts/
     - tags.nu               # Tag generation
   - ci/                       # CI domain
     - deps.nu               # Direct dependency resolution for CI
-    - tarballs.nu           # Tarball save/load operations
     - workflow.nu           # CI workflow generation
   - manifest/                 # Version manifest domain
     - core.nu               # Manifest loading and version resolution
@@ -1225,23 +1220,6 @@ The service definition hash enables different behaviors for local and CI builds:
 - **Soft mode (`--dep-cache=soft`, default for CI)**: Auto-build with a warning message
 - **Strict mode (`--dep-cache=strict`)**: Fail with an error
 
-### Cache Match Diagnostics
-
-The `--cache-match` flag is now a legacy/custom-caller diagnostic hook, not
-part of the generated shard-artifact workflows:
-
-```bash
-nu scripts/dockypody.nu build --service my-service --cache-match=exact
-```
-
-The build CLI accepts `--cache-match` as a free-form string and echoes it
-back in dependency cache diagnostics. Custom callers may still pass labels
-such as `exact`, `fallback`, or `miss`, but the generated workflows no
-longer populate those values.
-
-This label appears in auto-build warning messages to help diagnose cache
-behavior.
-
 ## Disk Monitoring
 
 The build system includes an optional disk monitoring feature for diagnosing disk usage on constrained CI runners. When enabled, the system emits human-readable disk usage snapshots at key build phases.
@@ -1279,8 +1257,8 @@ Disk usage snapshots are captured at four phases:
 The `after-version` phase is particularly useful for multi-version builds (e.g., `cernbox-web` with `testing`, `master`, `v1.0.0`) to identify which specific version exhausts disk space.
 
 **Note:** In CI, dependency images are loaded via `nu scripts/dockypody.nu ci
-load-deps` before `nu scripts/dockypody.nu build ...` runs. The `pre` and
-`after-deps` phases occur after cache restoration.
+prepare-node-deps` before `nu scripts/dockypody.nu build ...` runs. The
+`pre` and `after-deps` phases occur after shard loading.
 
 ### Snapshot Contents
 

@@ -50,13 +50,10 @@ nu scripts/dockypody.nu tls clean --service-ca-only
 nu scripts/dockypody.nu ssh key
 nu scripts/dockypody.nu ssh key --force
 
-# CI commands (--target is mandatory for workflow; cache-shard helpers are
-# legacy/manual)
+# CI commands (--target is mandatory for workflow)
 nu scripts/dockypody.nu ci list-deps --service nextcloud
 nu scripts/dockypody.nu ci workflow --target all --dry-run
 nu scripts/dockypody.nu ci images --service nextcloud
-# Legacy/manual maintenance only; shipped workflows use artifact shards instead
-nu scripts/dockypody.nu ci merge-cache-shards --service svc --ref r --sha s
 nu scripts/dockypody.nu ci ghcr-purge --dry-run
 # --max-deletes is a global budget across all services in the run
 nu scripts/dockypody.nu ci ghcr-purge --dry-run=false --max-deletes=200
@@ -88,15 +85,10 @@ nu scripts/dockypody.nu docs lint --fix
 | `tls clean` | Remove TLS artifacts | `tls/cli.nu [tls-cli]` |
 | `ssh key` | Generate SSH keypair | `ssh/cli.nu [ssh-cli]` |
 | `ci list-deps` | List dependency services | `ci/cli.nu [ci-cli]` |
-| `ci load-deps` | Load dependency tarballs | `ci/cli.nu [ci-cli]` |
-| `ci load-owner` | Load owner tarballs | `ci/cli.nu [ci-cli]` |
-| `ci save-owner` | Save owner tarballs | `ci/cli.nu [ci-cli]` |
 | `ci prepare-node-deps` | Download/load dep shards from run artifacts (CI) | `ci/cli.nu [ci-cli]` |
 | `ci workflow` | Write CI workflow YAML (--target ..., --dry-run) | `ci/cli.nu [ci-cli]` |
 | `ci images` | List canonical image references | `ci/cli.nu [ci-cli]` |
 | `ci login-registry` | Log into default container registry | `ci/cli.nu [ci-cli]` |
-| `ci merge-cache-shards` | Legacy/manual cache-shard merge helper; not used by generated artifact workflows | `ci/cli.nu [ci-cli]` |
-| `ci cleanup-cache-shards` | Legacy/manual cache-shard cleanup helper; not used by generated artifact workflows | `ci/cli.nu [ci-cli]` |
 | `ci ghcr-purge` | Purge stale GHCR package versions (SSOT-based) | `ci/cli.nu [ci-cli]` |
 | `docs lint` | Lint documentation files | `docs/cli.nu [docs-cli]` |
 
@@ -135,7 +127,7 @@ Build-related: `--service`, `--all-services`, `--push`, `--latest`,
 `--extra-tag`, `--provenance`, `--version`, `--all-versions`, `--versions`,
 `--latest-only`, `--platform`, `--matrix-json`, `--progress`, `--cache-bust`,
 `--no-cache`, `--show-build-order`, `--dep-cache`, `--push-deps`, `--tag-deps`,
-`--fail-fast`, `--pull`, `--cache-match`, `--disk-monitor`,
+`--fail-fast`, `--pull`, `--disk-monitor`,
 `--prune-cache-mounts`, `--plane`.
 
 Test: `--suite`, `--verbose`.
@@ -151,7 +143,7 @@ TLS: `--service` (comma-separated service names passed to clean), `--filter`
 SSH: `--force`.
 
 CI (shared fields): `--service`, `--version`, `--platform`,
-`--dependencies` (comma list), `--target`, `--ref`, `--sha`, `--transitive`,
+`--dependencies` (comma list), `--target`, `--transitive`,
 `--debug`, `--dry-run`, `--max-deletes`, `--force`,
 `--partial-success`.
 
@@ -260,14 +252,10 @@ Invoke as `nu scripts/dockypody.nu ci <subcommand> [flags]`.
 | Subcommand | Role | Typical flags |
 | ---------- | ------ | ------------- |
 | `list-deps` | Print dependency names (stdout lines) | `--service`, optional `--transitive`, `--debug` |
-| `load-deps` | Load dependency tarballs from cache | `--service` |
-| `load-owner` / `save-owner` | Load/save owner tarballs | `--service` |
 | `prepare-node-deps` | Download shard artifacts when run in GitHub Actions | `--service`, `--version`, optional `--platform`, `--dependencies` (comma), `--debug` |
 | `workflow` | Rewrite workflow files from templates | Mandatory `--target` (see targets below), `--dry-run` optional |
 | `images` | Print canonical refs for caches | `--service` |
 | `login-registry` | Registry login helper | `--debug` |
-| `merge-cache-shards` | Legacy/manual helper for older cache-shard flows; not part of generated artifact workflows | `--service`, `--ref`, `--sha`; optional `--debug`; base dir from `DOCKYPODY_SHARD_BASE_DIR` or `/tmp/docker-images/shards` |
-| `cleanup-cache-shards` | Legacy/manual helper for older cache-shard flows; not part of generated artifact workflows | `--service`, `--ref`, `--sha`; `--dry-run`, `--debug`; needs `GITHUB_TOKEN`, `GITHUB_REPOSITORY`, `gh` |
 | `ghcr-purge` | Trim GHCR package versions vs SSOT | Optional `--service` (omit = all services), `--dry-run`, `--max-deletes`, `--debug`, `--force` (needs single service, no dry-run), `--partial-success` (default is strict failure on live delete errors) |
 
 `ci workflow --target` must be exactly one of: `all`, `build`, `build-push`,
@@ -275,9 +263,7 @@ Invoke as `nu scripts/dockypody.nu ci <subcommand> [flags]`.
 is rejected by the routed `ci-cli` preflight before target resolution runs.
 
 Generated workflows use `ci prepare-node-deps` plus workflow-local shard
-artifacts for dependency reuse. `merge-cache-shards` and
-`cleanup-cache-shards` remain available only for legacy or manual maintenance
-flows.
+artifacts for dependency reuse.
 
 `ci ghcr-purge` reports run totals with separate `planned`, `attempted`,
 `deleted`, `failed`, `skipped`, and `charged` counts. Dry-run reports planned

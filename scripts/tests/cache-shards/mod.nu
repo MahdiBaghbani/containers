@@ -22,7 +22,6 @@
 use ../lib.nu [print-test-summary]
 use ./node-key.nu [node-key-tests]
 use ./shard-name.nu [shard-name-tests]
-use ./merge-shards.nu [merge-shards-tests]
 use ./cache-paths.nu [cache-paths-tests]
 use ./dep-cache-mode.nu [dep-cache-mode-tests]
 use ./manifest-roundtrip.nu [manifest-roundtrip-tests]
@@ -33,7 +32,6 @@ def main [--verbose] {
 
     $results = ($results | append (node-key-tests $verbose_flag))
     $results = ($results | append (shard-name-tests $verbose_flag))
-    $results = ($results | append (merge-shards-tests $verbose_flag))
     $results = ($results | append (cache-paths-tests $verbose_flag))
     $results = ($results | append (dep-cache-mode-tests $verbose_flag))
     $results = ($results | append (manifest-roundtrip-tests $verbose_flag))

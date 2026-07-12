@@ -92,7 +92,7 @@ export def test-local-plane-build-suppression [verbose: bool] {
                 let version_name = (get-default-version $manifest)
                 let version_spec = (apply-version-defaults $manifest (get-version-spec $manifest $version_name))
                 with-env {PATH: $patched_path} {
-                    build-single-version "parent-svc" $version_spec true true "publish" false "plain" $info $meta {} "" "" null "" false "off" true true {} "" $plane_ctx
+                    build-single-version "parent-svc" $version_spec true true "publish" false "plain" $info $meta {} "" "" null "" false "off" true true {} $plane_ctx
                 }
             }
             null
