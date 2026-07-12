@@ -18,7 +18,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
-ARG NUSHELL_REF="0.108.0"
+ARG NUSHELL_REF="0.113.1"
 ARG NUSHELL_URL="https://github.com/nushell/nushell"
 ARG TINI_REF="v0.19.0"
 ARG TINI_URL="https://github.com/krallin/tini"

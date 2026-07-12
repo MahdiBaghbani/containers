@@ -187,7 +187,7 @@ By default, each service computes its own cache bust value using this fallback c
 1. **Services with Git sources:** SHA256 hash of all source refs/SHAs (first 16 characters)
    - Source keys are sorted before hashing for consistency
    - Only Git sources are included (local sources are filtered out)
-   - Example: `reva:v3.3.3,nushell:0.108.0` -> `a1b2c3d4e5f6g7h8`
+   - Example: `reva:v3.3.3,nushell:0.113.1` -> `a1b2c3d4e5f6g7h8`
 2. **Services with only local sources:** Random UUID (always-bust behavior)
    - Local sources trigger always-bust cache behavior
    - Ensures builds pick up changes in local directories

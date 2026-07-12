@@ -28,6 +28,7 @@ use ./lib/build/cli.nu [build-help]
 use ./lib/validate/cli.nu [validate-help]
 use ./lib/test/cli.nu [test-help]
 use ./lib/inspect/cli.nu [inspect-help]
+use ./lib/core/version.nu [assert-nushell-version]
 
 def show-help [] {
   print "dockypody - DockyPody unified CLI"
@@ -112,6 +113,8 @@ def main [
   --max-deletes: int = 0,
   --verbose
 ] {
+  assert-nushell-version
+
   # Top-level help: positional "help" or no command. `--help`/`-h` never reach
   # here because Nushell's auto-help intercepts them before main runs.
   if $command == null or $command == "help" {

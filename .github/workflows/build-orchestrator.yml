@@ -40,13 +40,13 @@ on:
 #   firefox - depends on: kasm-base
 #   gaia - depends on: common-tools
 #   idp - depends on: common-tools
+#   jupyterhub - depends on: common-tools
 #   kasm-base - depends on: common-tools
 #   mitmproxy - depends on: common-tools
 #   nextcloud - depends on: nextcloud-base, common-tools
 #   nextcloud-base - depends on: common-tools
 #   nextcloud-contacts - depends on: common-tools, nextcloud
 #   nextcloud-webapp - depends on: common-tools, nextcloud-contacts
-#   jupyterhub - depends on: common-tools
 #   ocis - depends on: common-tools
 #   opencloud - depends on: common-tools
 #   opencloudmesh-go - depends on: common-tools
@@ -139,6 +139,18 @@ jobs:
       disk_monitor_mode: basic
       prune_build_cache: true
 
+  build_jupyterhub:
+    name: jupyterhub
+    needs:
+      - build_common_tools
+    uses: ./.github/workflows/build-service.yml
+    with:
+      service: jupyterhub
+      push: ${{ inputs.push }}
+      dependencies: "common-tools"
+      disk_monitor_mode: basic
+      prune_build_cache: true
+
   build_kasm_base:
     name: kasm-base
     needs:
@@ -214,18 +226,6 @@ jobs:
       disk_monitor_mode: basic
       prune_build_cache: true
 
-  build_jupyterhub:
-    name: jupyterhub
-    needs:
-      - build_common_tools
-    uses: ./.github/workflows/build-service.yml
-    with:
-      service: jupyterhub
-      push: ${{ inputs.push }}
-      dependencies: "common-tools"
-      disk_monitor_mode: basic
-      prune_build_cache: true
-
   build_ocis:
     name: ocis
     needs:
@@ -284,13 +284,13 @@ jobs:
       - build_firefox
       - build_gaia
       - build_idp
+      - build_jupyterhub
       - build_kasm_base
       - build_mitmproxy
       - build_nextcloud
       - build_nextcloud_base
       - build_nextcloud_contacts
       - build_nextcloud_webapp
-      - build_jupyterhub
       - build_ocis
       - build_opencloud
       - build_opencloudmesh_go

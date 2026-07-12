@@ -24,7 +24,7 @@ Quick start guide for building container images with the DockyPody build system.
 
 ## Prerequisites
 
-- Nushell 0.80 or later (`nu --version`)
+- Nushell 0.113 or later (`nu --version`)
 - GNU Make
 - OpenSSL
 - Docker Engine

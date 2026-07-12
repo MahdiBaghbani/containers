@@ -1063,7 +1063,7 @@ $cache = (try { $result.field } catch { $prev_cache })  # Works!
 
 - Some features (like `?` operator) require newer Nushell versions
 - Use `version` command to check Nushell version
-- This guide assumes Nushell 0.80+ (check compatibility if using older versions)
+- This guide assumes Nushell 0.113+ (check compatibility if using older versions)
 
 ## Quick Reference: Data Type Conversions
 

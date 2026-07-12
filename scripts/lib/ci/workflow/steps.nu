@@ -17,7 +17,7 @@
 
 # Reusable step definitions for GitHub Actions workflows
 
-const NU_VERSION = "0.108.0"
+use ./constants.nu [NU_VERSION]
 
 export def step-checkout [] {
     {

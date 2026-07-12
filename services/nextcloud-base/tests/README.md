@@ -160,5 +160,5 @@ Located in `fixtures/`:
 
 ## Requirements
 
-- Nushell 0.80 or later
+- Nushell 0.113 or later
 - No external dependencies required for test execution
