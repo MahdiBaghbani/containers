@@ -232,3 +232,94 @@ export def seed-synth-parent-graph-fixture [repo: string] {
     versions: [{ name: $SYNTH_PARENT_VERSION, overrides: {} }]
   } | save -f ($repo | path join $"services/($SYNTH_PARENT_SVC)/versions.nuon")
 }
+
+export const ALL_SERVICES_A = "all-svc-a"
+export const ALL_SERVICES_B = "all-svc-b"
+export const ALL_SERVICES_C = "all-svc-c"
+export const ALL_SERVICES_D = "all-svc-d"
+
+export def make-temp-build-repo [] {
+  let tmp = (make-temp-repo)
+  mkdir ($tmp | path join "scripts" "lib" "ssh")
+  "# test stub for prepare-ssh-context" | save -f ($tmp | path join "scripts" "lib" "ssh" "sshd.nu")
+  $tmp
+}
+
+export def seed-build-service-for-all-services [
+  repo: string,
+  name: string,
+  dependencies: record = {},
+  parent_defaults: record = {}
+] {
+  mkdir ($repo | path join "services" $name)
+  "FROM scratch" | save -f ($repo | path join "services" $name "Dockerfile")
+
+  mut manifest = {
+    name: $name
+    context: $"services/($name)"
+    dockerfile: $"services/($name)/Dockerfile"
+  }
+  if not ($dependencies | is-empty) {
+    $manifest = ($manifest | insert dependencies $dependencies)
+  }
+  $manifest | save -f ($repo | path join "services" $"($name).nuon")
+
+  mut versions = {
+    default: "v1"
+    versions: [{ name: "v1", latest: true }]
+  }
+  if not ($parent_defaults | is-empty) {
+    $versions = ($versions | insert defaults $parent_defaults)
+  }
+  $versions | save -f ($repo | path join "services" $name "versions.nuon")
+}
+
+export def seed-all-services-continue-fixture [repo: string] {
+  seed-build-service-for-all-services $repo $ALL_SERVICES_A
+  seed-build-service-for-all-services $repo $ALL_SERVICES_B {
+    ($ALL_SERVICES_A): { build_arg: "A_IMAGE" }
+  } {
+    dependencies: {
+      ($ALL_SERVICES_A): { version: "v1" }
+    }
+  }
+  seed-build-service-for-all-services $repo $ALL_SERVICES_C {
+    ($ALL_SERVICES_B): { build_arg: "B_IMAGE" }
+  } {
+    dependencies: {
+      ($ALL_SERVICES_B): { version: "v1" }
+    }
+  }
+  seed-build-service-for-all-services $repo $ALL_SERVICES_D
+}
+
+export def seed-all-services-dep-cache-fixture [repo: string] {
+  seed-build-service-for-all-services $repo $ALL_SERVICES_A
+  seed-build-service-for-all-services $repo $ALL_SERVICES_B {
+    ($ALL_SERVICES_A): { build_arg: "A_IMAGE" }
+  } {
+    dependencies: {
+      ($ALL_SERVICES_A): { version: "v1" }
+    }
+  }
+  seed-build-service-for-all-services $repo $ALL_SERVICES_D
+}
+
+export def make-docker-stub-fail-on [log_file: string, fail_pattern: string] {
+  let stub_dir = (^mktemp -d | str trim)
+  let script = (
+    "#!/bin/sh\n"
+    + $"printf '%s\\n' \"$*\" >> '($log_file)'\n"
+    + $"case \"$*\" in\n"
+    + $"  *($fail_pattern)*) exit 1 ;;\n"
+    + $"  *) exit 0 ;;\n"
+    + $"esac\n"
+  )
+  $script | save -f ($stub_dir | path join "docker")
+  ^chmod +x ($stub_dir | path join "docker")
+  $stub_dir
+}
+
+export def run-dockypody-in-repo [repo: string, entry: string, args: list<string>] {
+  do -i { cd $repo; ^nu $entry ...$args } | complete
+}

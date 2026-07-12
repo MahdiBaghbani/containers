@@ -415,18 +415,36 @@ def run-all-services-build [ctx: record] {
           $"($node_service):($node_version_spec.name)"
         })
         
-        print $"\n--- Building ($build_label) ---"
-        
-        let build_result = (try {
-          build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $f.provenance $f.progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $f.cache_bust $f.no_cache "strict" $f.push_deps $f.tag_deps $hash_graph $plane_ctx
+        let upstream_deps = ($merged_graph.edges | where {|e| $e.from == $node} | each {|e| $e.to})
+        let has_blocked_upstream = ($upstream_deps | any {|dep| ($acc.failures | any {|f| $f.label == $dep}) or ($acc.skipped | any {|s| $s.label == $dep})})
+
+        if $has_blocked_upstream {
+          let blocked_upstream = ($upstream_deps | where {|dep| ($acc.failures | any {|f| $f.label == $dep}) or ($acc.skipped | any {|s| $s.label == $dep})})
+          print $"\n--- Skipping ($build_label) ---"
+          print $"  Reason: Dependency failed: ($blocked_upstream)"
+          {
+            built_nodes: ($acc.built_nodes | append $node),
+            successes: $acc.successes,
+            failures: $acc.failures,
+            skipped: ($acc.skipped | append {label: $node, reason: $"Dependency failed: ($blocked_upstream)"}),
+            cache: $acc.cache
+          }
+        } else {
+          print $"\n--- Building ($build_label) ---"
+
+          let result = (try {
+          let build_result = (build-single-version $node_service $node_version_spec $node_push $node_latest $node_extra_tag $f.provenance $f.progress $node_info $node_meta $acc.cache $node_platform $node_default_platform $node_platforms_manifest $f.cache_bust $f.no_cache $f.dep_cache $f.push_deps $f.tag_deps $hash_graph $plane_ctx)
+          print $"OK: Successfully built ($build_label)"
+          {success: true, label: $build_label, build_result: $build_result}
         } catch {|err|
           let error_msg = (try { $err.msg } catch { "Unknown error" })
           print $"ERROR: Failed to build ($build_label)"
           print $"  Error: ($error_msg)"
-          error make { msg: $error_msg }
+          if $f.fail_fast {
+            error make {msg: $error_msg}
+          }
+          {success: false, label: $build_label, error: $error_msg}
         })
-        let result = {success: true, label: $build_label}
-        print $"OK: Successfully built ($build_label)"
         
         let new_built_nodes = ($acc.built_nodes | append $node)
         
@@ -436,36 +454,17 @@ def run-all-services-build [ctx: record] {
             successes: ($acc.successes | append {label: $result.label, success: true}),
             failures: $acc.failures,
             skipped: $acc.skipped,
-            cache: (try { $build_result.sha_cache } catch { $acc.cache })
+            cache: (try { $result.build_result.sha_cache } catch { $acc.cache })
           }
         } else {
-          let dependents = ($merged_graph.edges | where {|e| $e.from == $node} | each {|e| $e.to})
-          let new_skipped = ($dependents | reduce --fold $acc.skipped {|dep_item, skip_acc|
-            if not ($dep_item in $new_built_nodes) {
-              $skip_acc | append {
-                label: $dep_item,
-                reason: $"Dependency failed: ($build_label)"
-              }
-            } else {
-              $skip_acc
-            }
-          })
-          
-          let final_built_nodes = ($dependents | reduce --fold $new_built_nodes {|dep_item, built_acc|
-            if not ($dep_item in $built_acc) {
-              $built_acc | append $dep_item
-            } else {
-              $built_acc
-            }
-          })
-          
           {
-            built_nodes: $final_built_nodes,
+            built_nodes: $new_built_nodes,
             successes: $acc.successes,
             failures: ($acc.failures | append {label: $result.label, success: false, error: $result.error}),
-            skipped: $new_skipped,
+            skipped: $acc.skipped,
             cache: $acc.cache
           }
+        }
         }
       }
     }

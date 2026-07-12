@@ -23,7 +23,7 @@ use ../../../lib/build/args.nu [generate-build-args]
 use ../../../lib/build/config.nu [load-service-config detect-all-source-types]
 use ../../../lib/build/sources.nu [extract-source-ref-kinds]
 use ../../../lib/manifest/core.nu [get-version-or-null load-versions-manifest]
-use ../../../lib/platforms/core.nu [load-platforms-manifest]
+use ../../../lib/platforms/core.nu [load-platforms-manifest get-default-platform]
 use ../../mocks.nu [detect-build]
 use ../../helpers.nu [create-test-tls-meta]
 use ../../lib.nu [run-test]
@@ -252,8 +252,10 @@ export def service-drift-late-tests [verbose: bool] {
       let svc = "cernbox-web"
       let version = "master"
       let vm = (load-versions-manifest $svc)
+      let platforms_manifest = (load-platforms-manifest $svc)
+      let default_platform = (get-default-platform $platforms_manifest)
       let vspec = (get-version-or-null $vm $version)
-      let cfg = (load-service-config $svc $vspec "" null)
+      let cfg = (load-service-config $svc $vspec $default_platform $platforms_manifest null)
       let web_ref = (try { $cfg.sources.web.ref } catch { "" })
       if $web_ref != "cernbox" {
         error make {msg: $"Expected web ref 'cernbox' from tracked manifest, got: ($web_ref)"}
