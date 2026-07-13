@@ -17,7 +17,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-# Shared initialization functions used by all container modes
+# Shared initialization functions used by all container modes.
+# The start_log_tailing sidecar streams REVAD_LOG_OUTPUT to container stdout.
 
 use ./utils.nu [replace_in_file, get_env_or_default]
 
@@ -189,8 +190,42 @@ export def prepare_tls_certificates [] {
   }
 }
 
+# Decide whether to stream REVAD_LOG_OUTPUT to stdout. Returns the file path to
+# tail, or an empty string to skip (reva already writes stdout/stderr directly).
+export def log-tailing-target [] {
+  let log_output = (get_env_or_default "REVAD_LOG_OUTPUT" "/var/log/revad.log")
+  if ($log_output | str length) == 0 {
+    return ""
+  }
+  if $log_output in ["/dev/stdout", "stdout", "stderr"] {
+    return ""
+  }
+  $log_output
+}
+
+# Start a background tail sidecar that streams REVAD_LOG_OUTPUT to container stdout.
+# When REVAD_LOG_OUTPUT is a file, this keeps docker logs useful while revad runs in
+# the foreground under tini. The tail inherits the entrypoint's stdout (container
+# stdout), so no /proc redirect is needed. Stdio targets skip: reva writes them directly.
+export def start_log_tailing [] {
+  let target = (log-tailing-target)
+  if ($target | str length) == 0 {
+    return
+  }
+  if $target == "/var/log/revad.log" {
+    ensure_logfile
+  } else {
+    touch $target
+  }
+  print $"Streaming Reva logs from ($target) to stdout..."
+  ^sh -c $"tail -F ($target) 2>/dev/null &"
+}
+
 # Start Reva daemon with specific config file
 # Uses -c flag to load only the specified config file (not all configs in directory)
+# Runs revad in the foreground so tini -g can deliver SIGTERM and the container
+# exits with revad's exit code. Structured logs go to REVAD_LOG_OUTPUT via config;
+# the start_log_tailing sidecar streams that file to container stdout.
 export def start_reva_daemon [config_file: string] {
   let found = (not ((which revad | is-empty)))
   if not $found { 
@@ -205,18 +240,8 @@ export def start_reva_daemon [config_file: string] {
     error make {msg: $"Config file not found: ($config_path)"}
   }
   
-  print $"Starting Reva daemon with config: ($config_file)..."
-  # Start revad in background with specific config file (matches production Dockerfile.revad pattern)
-  # Redirect stderr to stdout and both to log file so we can see errors via tail
-  # The process will be reparented to PID 1 when Nushell exits, keeping it running
-  let log_output = (get_env_or_default "REVAD_LOG_OUTPUT" "/var/log/revad.log")
-  # Use sh -c to handle shell redirection for background process
-  ^sh -c $"revad -c ($config_path) >> ($log_output) 2>&1 &"
-  
-  # Wait a moment for revad to start
-  sleep 0.5sec
-  
-  print $"Reva daemon started in background. Check logs at ($log_output)"
+  print $"Starting Reva daemon in foreground with config: ($config_file)..."
+  ^revad -c $config_path
 }
 
 # Shared initialization function - processes common setup tasks for all container modes

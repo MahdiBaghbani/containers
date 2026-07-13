@@ -309,10 +309,10 @@ RUN if [ -d /tls ]; then \
     fi
 
 ENV PATH="/revad/cmd:${PATH}"
+ENV REVAD_LOG_OUTPUT=/var/log/revad.log
 
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/usr/bin/entrypoint.sh"]
-
-CMD ["tail", "-F", "/var/log/revad.log"]
+CMD []
 
 # Development images bake readiness so compose files can use service_healthy
 # without duplicating per-mode gRPC port probes. Production/distroless paths

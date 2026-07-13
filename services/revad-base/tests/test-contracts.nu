@@ -9,6 +9,8 @@ const CONTAINERS_ROOT = ($REVAD_BASE_DIR | path join "../..")
 const DEV_DOCKERFILE = ($REVAD_BASE_DIR | path join "Dockerfile.development")
 const HEALTHCHECK_SCRIPT = ($REVAD_BASE_DIR | path join "scripts/healthcheck.nu")
 
+use ../scripts/lib/shared.nu [log-tailing-target]
+
 def read-src [path: string] {
     open --raw $path
 }
@@ -214,12 +216,198 @@ def test-nextcloud-example-compose-contract [] {
     {passed: $passed, failed: $failed}
 }
 
+def extract-start-reva-daemon-src [shared_src: string] {
+    let marker = "export def start_reva_daemon"
+    let start = ($shared_src | str index-of $marker)
+    if $start == null {
+        return ""
+    }
+    let from_def = ($shared_src | str substring $start..)
+    let next = ($from_def | str index-of "\nexport def ")
+    if $next == null {
+        $from_def
+    } else {
+        $from_def | str substring 0..$next
+    }
+}
+
+def extract-start-log-tailing-src [shared_src: string] {
+    let marker = "export def start_log_tailing"
+    let start = ($shared_src | str index-of $marker)
+    if $start == null {
+        return ""
+    }
+    let from_def = ($shared_src | str substring $start..)
+    let next = ($from_def | str index-of "\nexport def ")
+    if $next == null {
+        $from_def
+    } else {
+        $from_def | str substring 0..$next
+    }
+}
+
+def last-meaningful-main-line [entrypoint_src: string] {
+    let parts = ($entrypoint_src | split row "def --wrapped main")
+    if ($parts | length) < 2 {
+        return ""
+    }
+    let body = ($parts | last)
+    let lines = (
+        $body
+        | lines
+        | each {|l| $l | str trim}
+        | where {|t|
+            ((not ($t | is-empty))
+                and (not ($t | str starts-with "#"))
+                and ($t != "{")
+                and ($t != "}"))
+        }
+    )
+    if ($lines | is-empty) {
+        ""
+    } else {
+        $lines | last
+    }
+}
+
+def test-development-dockerfile-foreground-contract [] {
+    print "Testing Dockerfile.development foreground execution contract..."
+    mut passed = 0
+    mut failed = 0
+
+    let dockerfile = (read-src $DEV_DOCKERFILE)
+    let shared_path = ($REVAD_BASE_DIR | path join "scripts/lib/shared.nu")
+    let entrypoint_path = ($REVAD_BASE_DIR | path join "scripts/entrypoint-init.nu")
+    let shared_src = (read-src $shared_path)
+    let start_src = (extract-start-reva-daemon-src $shared_src)
+    let tail_src = (extract-start-log-tailing-src $shared_src)
+    let entrypoint_src = (read-src $entrypoint_path)
+    let main_last = (last-meaningful-main-line $entrypoint_src)
+    let tail_call_idx = ($entrypoint_src | str index-of "\n  start_log_tailing\n")
+    let daemon_call_idx = ($entrypoint_src | str index-of "\n  start_reva_daemon $config_file")
+
+    mut checks = [
+        (assert-string-contains $dockerfile 'ENTRYPOINT ["/usr/bin/tini", "-g"'
+            "development Dockerfile ENTRYPOINT uses tini -g")
+        (assert-truthy (not ($dockerfile | str contains 'CMD ["tail"'))
+            "development Dockerfile has no CMD [\"tail\" keepalive")
+        (assert-string-contains $dockerfile "CMD []"
+            "development Dockerfile uses empty CMD []")
+        (assert-string-contains $dockerfile "ENV REVAD_LOG_OUTPUT=/var/log/revad.log"
+            "development Dockerfile sets REVAD_LOG_OUTPUT=/var/log/revad.log")
+        (assert-truthy (not ($dockerfile | str contains "ENV REVAD_LOG_OUTPUT=/dev/stdout"))
+            "development Dockerfile does not set REVAD_LOG_OUTPUT=/dev/stdout")
+        (assert-truthy (($start_src | str length) > 0)
+            "start_reva_daemon definition found in active lib/shared.nu")
+        (assert-truthy (not ($start_src | str contains "sh -c"))
+            "start_reva_daemon has no sh -c launch")
+        (assert-truthy (not ($start_src | str contains " &"))
+            "start_reva_daemon has no background & launch")
+        (assert-string-contains $start_src "^revad -c"
+            "start_reva_daemon launches revad in foreground via ^revad -c")
+        (assert-truthy (not ($start_src | str contains "sleep"))
+            "start_reva_daemon has no sleep wait")
+        (assert-truthy ((not ($start_src | str contains "2>&1")) and (not ($start_src | str contains ">>")))
+            "start_reva_daemon has no stdout/stderr file redirect")
+        (assert-truthy (($tail_src | str length) > 0)
+            "start_log_tailing definition found in active lib/shared.nu")
+        (assert-string-contains $tail_src "tail -F"
+            "start_log_tailing uses tail -F")
+        (assert-truthy (not ($tail_src | str contains "/proc/1/fd/1"))
+            "start_log_tailing does not use /proc/1/fd/1 (tail inherits container stdout)")
+        (assert-truthy (not ($entrypoint_src | str contains "Initialization complete, Reva daemon started"))
+            "entrypoint-init.nu has no stale Initialization complete print")
+        (assert-truthy (($tail_call_idx != null) and ($daemon_call_idx != null) and ($tail_call_idx < $daemon_call_idx))
+            "entrypoint-init.nu main calls start_log_tailing before start_reva_daemon")
+        (assert-truthy ($main_last | str starts-with "start_reva_daemon ")
+            "entrypoint-init.nu main ends with start_reva_daemon call")
+    ]
+
+    for check in $checks {
+        if $check.ok {
+            $passed = ($passed + 1)
+        } else {
+            print $"  [FAIL] ($check.label)"
+            $failed = ($failed + 1)
+        }
+    }
+
+    if $failed == 0 {
+        print "  [PASS] Development Dockerfile foreground contract: PASSED"
+    }
+    {passed: $passed, failed: $failed}
+}
+
+def test-log-tailing-target [] {
+    print "Testing log-tailing-target decision contract..."
+    mut passed = 0
+    mut failed = 0
+
+    let prev_set = ("REVAD_LOG_OUTPUT" in $env)
+    let prev_val = (if $prev_set { $env.REVAD_LOG_OUTPUT } else { null })
+
+    mut checks = []
+
+    $env.REVAD_LOG_OUTPUT = "/var/log/revad.log"
+    $checks = ($checks | append (
+        assert-truthy ((log-tailing-target) == "/var/log/revad.log")
+            "default file path returns itself"
+    ))
+
+    $env.REVAD_LOG_OUTPUT = "/tmp/custom-revad.log"
+    $checks = ($checks | append (
+        assert-truthy ((log-tailing-target) == "/tmp/custom-revad.log")
+            "custom file path returns itself"
+    ))
+
+    for stdio_target in ["/dev/stdout", "stdout", "stderr"] {
+        $env.REVAD_LOG_OUTPUT = $stdio_target
+        $checks = ($checks | append (
+            assert-truthy ((log-tailing-target) == "")
+                $"($stdio_target) returns empty skip"
+        ))
+    }
+
+    $env.REVAD_LOG_OUTPUT = ""
+    $checks = ($checks | append (
+        assert-truthy ((log-tailing-target) == "")
+            "explicit empty REVAD_LOG_OUTPUT returns empty skip"
+    ))
+
+    hide-env REVAD_LOG_OUTPUT
+    $checks = ($checks | append (
+        assert-truthy ((log-tailing-target) == "/var/log/revad.log")
+            "unset REVAD_LOG_OUTPUT defaults to /var/log/revad.log"
+    ))
+
+    # Unset case already hid the var; restore only when it was previously set.
+    if $prev_set {
+        $env.REVAD_LOG_OUTPUT = $prev_val
+    }
+
+    for check in $checks {
+        if $check.ok {
+            $passed = ($passed + 1)
+        } else {
+            print $"  [FAIL] ($check.label)"
+            $failed = ($failed + 1)
+        }
+    }
+
+    if $failed == 0 {
+        print "  [PASS] log-tailing-target decision: PASSED"
+    }
+    {passed: $passed, failed: $failed}
+}
+
 def main [--verbose] {
     mut total_passed = 0
     mut total_failed = 0
 
     for result in [
         (test-development-dockerfile-baked-health)
+        (test-development-dockerfile-foreground-contract)
+        (test-log-tailing-target)
         (test-cernbox-example-compose-contract "one-cernbox" "one-cernbox-idp" "one-cernbox-1" "one-cernbox-1-web")
         (test-cernbox-example-compose-contract "two-cernbox" "two-cernbox-idp1" "two-cernbox-1" "two-cernbox-1-web")
         (test-cernbox-example-compose-contract "two-cernbox" "two-cernbox-idp2" "two-cernbox-2" "two-cernbox-2-web")
