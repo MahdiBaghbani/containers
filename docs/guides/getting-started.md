@@ -63,7 +63,7 @@ The SSH keypair enables dev and E2E SSH access between containers. It is NOT use
 nu scripts/dockypody.nu build --service revad-base
 
 # Build specific version
-nu scripts/dockypody.nu build --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 
 # Build all versions
 nu scripts/dockypody.nu build --service revad-base --all-versions
@@ -84,7 +84,7 @@ make build
 nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Build specific versions
-nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --versions v3.10.1,master
 
 # Build latest-marked only
 nu scripts/dockypody.nu build --service revad-base --latest-only

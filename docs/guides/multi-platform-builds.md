@@ -1259,7 +1259,7 @@ Service with multiple versions, each requiring different dependency versions per
                 "build_arg": "BASE_SERVICE_IMAGE"
               },
               "common-tools": {
-                "version": "v1.5.0-debian",  // Different version for debian
+                "version": "v1.0.0-debian",  // Different version for debian
                 "build_arg": "COMMON_TOOLS_IMAGE"
               }
             }
@@ -1300,8 +1300,8 @@ Service with multiple versions, each requiring different dependency versions per
 
 **Build behavior:**
 
-- Building `v2.0.0-debian`: Uses `base-service:v2.0.0-debian` and `common-tools:v1.5.0-debian`
-- Building `v2.0.0-alpine`: Uses `base-service:v2.0.0-alpine` and `common-tools:v2.0.0-alpine` (inherited)
+- Building `v2.0.0-debian`: Uses `base-service:v2.0.0-debian` and `common-tools:v1.0.0-debian`
+- Building `v2.0.0-alpine`: Uses `base-service:v2.0.0-alpine` and `common-tools:v1.0.0-alpine` (inherited)
 - Building `v1.0.0-debian`: Uses `base-service:v1.0.0-debian` (inherits platform)
 - Building `v1.0.0-alpine`: Uses `base-service:v1.0.0-alpine` (inherits platform)
 

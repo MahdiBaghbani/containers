@@ -31,6 +31,7 @@ use ./pattern-coverage.nu [pattern-coverage-tests]
 use ./category-coverage.nu [category-coverage-tests]
 use ./discovery.nu [discovery-tests]
 use ./scan-docs.nu [scan-docs-tests]
+use ./freshness.nu [freshness-tests]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })
@@ -44,6 +45,7 @@ def main [--verbose] {
     $results = ($results | append (category-coverage-tests $verbose_flag))
     $results = ($results | append (discovery-tests $verbose_flag))
     $results = ($results | append (scan-docs-tests $verbose_flag))
+    $results = ($results | append (freshness-tests $verbose_flag))
 
     print-test-summary $results
 

@@ -207,7 +207,7 @@ nu scripts/dockypody.nu inspect effective-config --service <name>
 Example (local-only version name):
 
 ```bash
-nu scripts/dockypody.nu inspect effective-config --plane local --service nextcloud-contacts --version local
+nu scripts/dockypody.nu inspect effective-config --plane local --service nextcloud-contacts --version main-nc-master
 ```
 
 ### tls
@@ -341,7 +341,7 @@ the same modes and rules.
 Example (preview a local-plane merge without building):
 
 ```bash
-nu scripts/dockypody.nu inspect effective-config --plane local --service gaia --version dev
+nu scripts/dockypody.nu inspect effective-config --plane local --service gaia --version master
 ```
 
 ## Service Selection Flags
@@ -420,7 +420,7 @@ nu scripts/dockypody.nu build --all-services --show-build-order
 Build a specific version from the manifest:
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 ```
 
 ### `--all-versions`
@@ -444,7 +444,7 @@ nu scripts/dockypody.nu build --service revad-base --latest-only
 Build multiple specific versions (comma-separated list):
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --versions v3.10.1,master
 ```
 
 **Note:** `--version` (singular) for single version, `--versions` (plural) for multiple versions.
@@ -661,13 +661,13 @@ Display the dependency build order without actually building:
 nu scripts/dockypody.nu build --service cernbox-web --show-build-order
 
 # Show build order for specific version
-nu scripts/dockypody.nu build --service cernbox-web --show-build-order --version v1.0.0
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --version v1.0.25
 
 # Show build order for all versions
 nu scripts/dockypody.nu build --service cernbox-web --show-build-order --all-versions
 
 # Show build order for specific versions
-nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.25,ocm-webapp-share
 
 # Show build order for latest versions only
 nu scripts/dockypody.nu build --service cernbox-web --show-build-order --latest-only
@@ -678,9 +678,9 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order --latest-
 ```text
 === Build Order ===
 
-1. revad-base:v3.3.3
-2. cernbox-revad:v1.0.0
-3. cernbox-web:v1.0.0
+1. revad-base:v3.10.1
+2. cernbox-revad:v3.10.1
+3. cernbox-web:v1.0.25
 ```
 
 **Multi-Version Output Format:**
@@ -688,15 +688,15 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order --latest-
 ```text
 === Build Order ===
 
-Version: v1.0.0
-1. revad-base:v3.3.3
-2. cernbox-revad:v1.0.0
-3. cernbox-web:v1.0.0
+Version: v1.0.25
+1. revad-base:v3.10.1
+2. cernbox-revad:v3.10.1
+3. cernbox-web:v1.0.25
 
-Version: v1.1.0
-1. revad-base:v3.3.3
-2. cernbox-revad:v1.1.0
-3. cernbox-web:v1.1.0
+Version: ocm-webapp-share
+1. revad-base:ocm-webapp-share
+2. cernbox-revad:ocm-webapp-share
+3. cernbox-web:ocm-webapp-share
 ```
 
 **Multi-Platform Output Format:**
@@ -707,15 +707,15 @@ displayed separately:
 ```text
 === Build Order ===
 
-Version: v1.0.0 (production)
-1. revad-base:v3.3.3:production
-2. cernbox-revad:v1.0.0:production
-3. cernbox-web:v1.0.0:production
+Version: v1.0.25 (production)
+1. revad-base:v3.10.1:production
+2. cernbox-revad:v3.10.1:production
+3. cernbox-web:v1.0.25:production
 
-Version: v1.0.0 (development)
-1. revad-base:v3.3.3:development
-2. cernbox-revad:v1.0.0:development
-3. cernbox-web:v1.0.0:development
+Version: v1.0.25 (development)
+1. revad-base:v3.10.1:development
+2. cernbox-revad:v3.10.1:development
+3. cernbox-web:v1.0.25:development
 ```
 
 **Multi-Version Flags:**
@@ -762,7 +762,7 @@ nu scripts/dockypody.nu build --service revad-base --all-versions --fail-fast
 Push built images to registry:
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v3.3.3 --push
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1 --push
 ```
 
 ### `--progress <string>`
@@ -778,7 +778,7 @@ nu scripts/dockypody.nu build --service revad-base --all-versions --progress pla
 Control latest tag generation:
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v1.28.0 --latest false
+nu scripts/dockypody.nu build --service revad-base --version master --latest false
 ```
 
 ## Disk Management Flags

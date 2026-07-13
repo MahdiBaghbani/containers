@@ -43,7 +43,7 @@ def show-help [] {
   print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean)"
   print "  ssh <subcommand>   Manage SSH keypair (key)"
   print "  ci <subcommand>    CI helper operations (list-deps, prepare-node-deps, images, ghcr-purge, etc.)"
-  print "  docs <subcommand>  Documentation tools (lint)"
+  print "  docs <subcommand>  Documentation tools (lint, lint-refs)"
   print ""
   print "Examples:"
   print "  nu scripts/dockypody.nu build --service gaia"
@@ -54,6 +54,7 @@ def show-help [] {
   print "  nu scripts/dockypody.nu ssh key --force"
   print "  nu scripts/dockypody.nu ci list-deps --service nextcloud"
   print "  nu scripts/dockypody.nu docs lint"
+  print "  nu scripts/dockypody.nu docs lint-refs"
   print ""
   print "Run with <command> help for command-specific options."
 }

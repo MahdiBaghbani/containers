@@ -218,7 +218,7 @@ Use this JSONC-style form instead:
 {
   "versions": [
     {
-      "name": "dev",
+      "name": "master",
       "latest": false,
       "overrides": {
         "sources": {
@@ -235,7 +235,7 @@ Use this JSONC-style form instead:
 Build with:
 
 ```bash
-nu scripts/dockypody.nu build --plane local --service opencloudmesh-go --version dev
+nu scripts/dockypody.nu build --plane local --service opencloudmesh-go --version master
 ```
 
 The local plane merges this fragment with the tracked manifest. Local versions

@@ -61,3 +61,57 @@ export def make-git-discovery-fixture [] {
 
     $dir
 }
+
+# Parser fixture bodies for docs freshness (service/version + Nushell refs).
+export def freshness-fixture-clone-source [] {
+    $"
+# Clone source docs
+
+Copy `scripts/lib/clone-source.nu` into the build context.
+
+```dockerfile
+COPY --chmod=755 ./scripts/lib/clone-source.nu /tmp/clone-source.nu
+RUN nu /tmp/clone-source.nu --mode local --local-dir .build-sources/reva
+```
+
+Local dirs land under `.build-sources/{source_key}/`.
+"
+}
+
+export def freshness-fixture-placeholder [] {
+    "nu scripts/dockypody.nu build --service my-service --version v1.0.0\n"
+}
+
+export def freshness-fixture-external-url [] {
+    "See upstream https://example.com/revad-base:v3.3.3 for history.\n"
+}
+
+export def freshness-fixture-live-path [live_tag: string = "v3.10.1"] {
+    $"# Live\n\nImage `revad-base:($live_tag)` is current.\n"
+}
+
+export def freshness-fixture-stale-path [stale_tag: string = "v3.3.3"] {
+    # Image-only qualified tag (no --service/--version). Must be detected.
+    $"# Stale\n\n- Example: `revad-base:($stale_tag)`\n"
+}
+
+export def freshness-fixture-allow-comment [stale_tag: string = "v3.3.3"] {
+    $"<!-- dockypody-docs-allow: revad-base:($stale_tag) -->\n# Historical\n\nKept for context: `revad-base:($stale_tag)`.\n"
+}
+
+export def freshness-fixture-nushell-machine-ok [] {
+    "Pin with `NUSHELL_REF=0.113.1` and `\"ref\": \"0.113.1\"`.\n"
+}
+
+export def freshness-fixture-nushell-machine-stale [] {
+    "Pin with `NUSHELL_REF=0.108.0`.\n"
+}
+
+export def freshness-fixture-nushell-prose-ok [] {
+    "Requires Nushell 0.113 or later.\n"
+}
+
+export def freshness-fixture-nushell-prose-stale [] {
+    "Requires Nushell 0.80 or later.\n"
+}
+

@@ -141,11 +141,11 @@ When injecting build arguments, the build system applies them in this order (lat
 // services/cernbox-revad/versions.nuon
 {
   "versions": [{
-    "name": "v1.0.0",
+    "name": "v3.10.1",
     "overrides": {
       "dependencies": {
         "revad-base": {
-          "version": "v3.3.3"
+          "version": "v3.10.1"
         }
       }
     }
@@ -165,16 +165,16 @@ export REVAD_BASE_IMAGE="revad-base:env-override"
 ARG REVAD_BASE_IMAGE="revad-base:latest"
 ```
 
-**Final Build Arg Value:** `REVAD_BASE_IMAGE="revad-base:v3.3.3"`
+**Final Build Arg Value:** `REVAD_BASE_IMAGE="revad-base:v3.10.1"`
 
 #### Explanation
 
 1. Dockerfile default: `revad-base:latest` (lowest priority, ignored)
 2. Config `build_args`: `revad-base:custom` (overridden by env)
 3. Environment variable: `revad-base:env-override` (overridden by dependency - dependencies win)
-4. Dependency resolution: `revad-base:v3.3.3` (highest priority - wins, overrides env var)
+4. Dependency resolution: `revad-base:v3.10.1` (highest priority - wins, overrides env var)
 
-The dependency resolution step constructs the image reference from the resolved dependency version (`v3.3.3`) and overrides all previous values, including environment variables.
+The dependency resolution step constructs the image reference from the resolved dependency version (`v3.10.1`) and overrides all previous values, including environment variables.
 
 ## Cache Busting
 
@@ -380,7 +380,7 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order
 nu scripts/dockypody.nu build --service cernbox-web --show-build-order --all-versions
 
 # Specific versions
-nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.25,ocm-webapp-share
 ```
 
 **Output (single version):**
@@ -388,9 +388,9 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order --version
 ```text
 === Build Order ===
 
-1. revad-base:v3.3.3
-2. cernbox-revad:v1.0.0
-3. cernbox-web:v1.0.0
+1. revad-base:v3.10.1
+2. cernbox-revad:v3.10.1
+3. cernbox-web:v1.0.25
 ```
 
 ## Automatic Dependency Building
@@ -582,9 +582,9 @@ When `--pull=deps` is specified:
 
 **Image reference format:**
 
-- Multi-platform services: `{service}:{version}-{platform}` (e.g., `revad-base:v3.3.3-production`)
-- Single-platform services: `{service}:{version}` (e.g., `gaia:v1.0.0`)
-- In CI: Full registry path (e.g., `ghcr.io/owner/repo/revad-base:v3.3.3-production`)
+- Multi-platform services: `{service}:{version}-{platform}` (e.g., `revad-base:v3.10.1-production`)
+- Single-platform services: `{service}:{version}` (e.g., `gaia:master`)
+- In CI: Full registry path (e.g., `ghcr.io/owner/repo/revad-base:v3.10.1-production`)
 
 ### Externals Mode (Fail-Fast Preflight)
 
@@ -613,7 +613,7 @@ ERROR: External image preflight failed
     Error: manifest unknown
 
   Missing: gcr.io/distroless/static-debian12:nonroot
-    Required by: revad-base:v3.3.3:production
+    Required by: revad-base:v3.10.1-production
     Error: unauthorized
 ```
 
@@ -678,15 +678,15 @@ FAILED: 1
 SKIPPED: 0
 
 SUCCESS:
-  - revad-base:v3.3.3
-  - revad-base:v3.4.0
+  - revad-base:v3.10.1
+  - revad-base:master
 
 FAILED:
-  - revad-base:v3.5.0
+  - revad-base:ocm-webapp-share
     Error: Build failed: ...
 
 SKIPPED:
-  - revad-base:v3.6.0
+  - revad-base:v3.10.1-development
     Reason: Dependency build failed
 ```
 
@@ -709,7 +709,7 @@ When auto-building dependencies:
 
 - **Dependency build failures cause immediate stop** (fail fast, regardless of `--fail-fast` flag)
 - Error message includes context (which service was being built, which dependency failed)
-- Example: `Failed to build dependency 'revad-base:v3.3.3' while building 'cernbox-web:v1.0.0'`
+- Example: `Failed to build dependency 'revad-base:v3.10.1' while building 'cernbox-web:v1.0.25'`
 - The `--fail-fast` flag only applies to multi-version builds of the target service, not dependency builds
 
 ## Building All Services

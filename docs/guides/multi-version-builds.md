@@ -43,29 +43,29 @@ Create `services/{name}/versions.nuon`:
 
 ```nuon
 {
-  "default": "v1.29.0",
+  "default": "v3.10.1",
   "versions": [
     {
-      "name": "v1.29.0",
+      "name": "v3.10.1",
       "latest": true,
-      // Tags auto-generated: ["v1.29.0", "latest", "v1.29", "v1"]
-      "tags": ["v1.29", "v1"],
+      // Tags auto-generated: ["v3.10.1", "latest", "v3.10", "v3"]
+      "tags": ["v3.10", "v3"],
       "overrides": {
         "sources": {
-          "reva": {
-            "ref": "v1.29.0"
+          "revad": {
+            "ref": "v3.10.1"
           }
         }
       }
     },
     {
-      "name": "v1.28.0",
-      // Tags auto-generated: ["v1.28.0", "v1.28"]
-      "tags": ["v1.28"],
+      "name": "master",
+      // Tags auto-generated: ["master"]
+      "tags": [],
       "overrides": {
         "sources": {
-          "reva": {
-            "ref": "v1.28.0"
+          "revad": {
+            "ref": "fix/ocm-incoming-share-user-id-normalization"
           }
         }
       }
@@ -77,7 +77,7 @@ Create `services/{name}/versions.nuon`:
 ### 2. Build Specific Version
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v1.29.0
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 ```
 
 ### 3. Build All Versions
@@ -496,15 +496,17 @@ Dependencies resolve their version in this order:
 
 ### Single Version Builds
 
+<!-- dockypody-docs-allow: revad-base:v9.99.99 -->
+
 ```bash
 # Build default version from manifest
 nu scripts/dockypody.nu build --service revad-base
 
 # Build specific version from manifest
-nu scripts/dockypody.nu build --service revad-base --version v1.29.0
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 
-# Missing manifest versions fail validation
-nu scripts/dockypody.nu build --service revad-base --version v1.30.0-rc1
+# Missing manifest versions fail validation (v9.99.99 is not in the manifest)
+nu scripts/dockypody.nu build --service revad-base --version v9.99.99
 ```
 
 ### Multi-Version Builds
@@ -515,7 +517,7 @@ nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Build specific versions (comma-separated list)
 # Note: --versions (plural) for multiple versions, --version (singular) for single version
-nu scripts/dockypody.nu build --service revad-base --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --versions v3.10.1,master
 
 # Build only versions marked as "latest"
 nu scripts/dockypody.nu build --service revad-base --latest-only
@@ -538,8 +540,8 @@ Output:
 ```json
 {
   "include": [
-    { "version": "v1.29.0", "latest": true, "tags": "v1.29.0,v1.29,v1,latest" },
-    { "version": "v1.28.0", "latest": false, "tags": "v1.28.0,v1.28" }
+    { "version": "v3.10.1", "latest": true, "tags": "v3.10.1,v3.10,v3,latest" },
+    { "version": "master", "latest": false, "tags": "master" }
   ]
 }
 ```
@@ -556,7 +558,7 @@ nu scripts/dockypody.nu build --service revad-base --show-build-order
 nu scripts/dockypody.nu build --service revad-base --show-build-order --all-versions
 
 # Show build order for specific versions
-nu scripts/dockypody.nu build --service revad-base --show-build-order --versions v1.29.0,v1.28.0
+nu scripts/dockypody.nu build --service revad-base --show-build-order --versions v3.10.1,master
 
 # Show build order for latest versions only
 nu scripts/dockypody.nu build --service revad-base --show-build-order --latest-only
@@ -573,7 +575,7 @@ For single-version:
 === Build Order ===
 
 1. common-tools:v1.0.0
-2. revad-base:v1.29.0
+2. revad-base:v3.10.1
 ```
 
 For multi-version:
@@ -581,13 +583,13 @@ For multi-version:
 ```text
 === Build Order ===
 
-Version: v1.29.0
+Version: v3.10.1
 1. common-tools:v1.0.0
-2. revad-base:v1.29.0
+2. revad-base:v3.10.1
 
-Version: v1.28.0
+Version: master
 1. common-tools:v1.0.0
-2. revad-base:v1.28.0
+2. revad-base:master
 ```
 
 For services using `platforms.nuon`, each version/platform combination is
@@ -596,13 +598,13 @@ displayed separately:
 ```text
 === Build Order ===
 
-Version: v1.29.0 (production)
+Version: v3.10.1 (production)
 1. common-tools:v1.0.0:production
-2. revad-base:v1.29.0:production
+2. revad-base:v3.10.1:production
 
-Version: v1.29.0 (development)
+Version: v3.10.1 (development)
 1. common-tools:v1.0.0:development
-2. revad-base:v1.29.0:development
+2. revad-base:v3.10.1:development
 ```
 
 **Use Cases:**
@@ -620,13 +622,13 @@ All standard build flags work with version manifests:
 
 ```bash
 # Build and push
-nu scripts/dockypody.nu build --service revad-base --version v1.29.0 --push
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1 --push
 
 # Build with progress output
 nu scripts/dockypody.nu build --service revad-base --all-versions --progress plain
 
 # Build without latest tag
-nu scripts/dockypody.nu build --service revad-base --version v1.28.0 --latest false
+nu scripts/dockypody.nu build --service revad-base --version master --latest false
 ```
 
 ---
@@ -696,30 +698,29 @@ jobs:
 
 ### Example 1: Simple Multi-Version Service
 
-**Use Case:** Build Reva v1.29 and v1.28
+**Use Case:** Build Reva v3.10.1 and master
 
 `services/revad-base/versions.nuon`:
 
 ```nuon
 {
-  "default": "v1.29.0",
+  "default": "v3.10.1",
   "versions": [
     {
-      "name": "v1.29.0",
+      "name": "v3.10.1",
       "latest": true,
-      "tags": ["v1.29"],  // Only additional aliases; "v1.29.0" and "latest" are auto-generated
+      "tags": ["v3.10"],  // Only additional aliases; "v3.10.1" and "latest" are auto-generated
       "overrides": {
         "sources": {
-          "reva": {"ref": "v1.29.0"}
+          "revad": {"ref": "v3.10.1"}
         }
       }
     },
     {
-      "name": "v1.28.0",
-      "tags": ["v1.28"],  // Only additional alias; "v1.28.0" is auto-generated
+      "name": "master",
       "overrides": {
         "sources": {
-          "reva": {"ref": "v1.28.0"}
+          "revad": {"ref": "fix/ocm-incoming-share-user-id-normalization"}
         }
       }
     }
@@ -734,8 +735,8 @@ Build commands:
 nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Result:
-# - revad-base:v1.29.0, revad-base:latest, revad-base:v1.29
-# - revad-base:v1.28.0, revad-base:v1.28
+# - revad-base:v3.10.1, revad-base:latest
+# - revad-base:master
 ```
 
 ### Example 2: Complex Version Matrix
@@ -920,13 +921,13 @@ local `versions.nuon` for that service first.
 
 ### Dependency Version Mismatch
 
-**Problem:** Service wants `revad-base:v2` but only `v3` is available.
+**Problem:** Service wants `revad-base:ocm-webapp-share` but only `v3.10.1` is built.
 
 **Solution:** Build the required dependency version first:
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v2
-nu scripts/dockypody.nu build --service cernbox-revad --version v2
+nu scripts/dockypody.nu build --service revad-base --version ocm-webapp-share
+nu scripts/dockypody.nu build --service cernbox-revad --version ocm-webapp-share
 ```
 
 ---

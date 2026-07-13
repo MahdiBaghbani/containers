@@ -293,12 +293,12 @@ Message: `Warning: Dependency has both platform suffix... and single_platform: t
 #### Local Builds
 
 - Format: `{service}:{tag}`
-- Example: `revad-base:v3.3.3`
+- Example: `revad-base:v3.10.1`
 
 #### CI Builds
 
 - Format: `{registry}/{path}/{service}:{tag}`
-- Example: `ghcr.io/open-cloud-mesh/containers/revad-base:v3.3.3`
+- Example: `ghcr.io/open-cloud-mesh/containers/revad-base:v3.10.1`
 - Both GHCR and Forgejo registries are used
 
 ## Dependency Existence Check
@@ -308,7 +308,7 @@ Before building, the system checks if dependency images exist:
 ### Local Builds (Existence Check)
 
 - Checks local Docker images using: `docker images --format "{{.Repository}}:{{.Tag}}"` and filters for exact match
-- Checks for exact tag match: `{service}:{tag}` (e.g., `revad-base:v3.3.3`)
+- Checks for exact tag match: `{service}:{tag}` (e.g., `revad-base:v3.10.1`)
 - **Important limitations:**
   - Does NOT check image digests (e.g., `revad-base@sha256:...`)
   - Does NOT check alternative tags (e.g., if `revad-base:latest` points to `v3.3.3`, it still won't match)
@@ -320,15 +320,15 @@ Before building, the system checks if dependency images exist:
 
 - Assumes dependencies are pre-built (earlier in workflow)
 - Checks remote registries via `docker manifest inspect {full-registry-path}`
-- Full registry path format: `{registry}/{path}/{service}:{tag}` (e.g., `ghcr.io/open-cloud-mesh/containers/revad-base:v3.3.3`)
+- Full registry path format: `{registry}/{path}/{service}:{tag}` (e.g., `ghcr.io/open-cloud-mesh/containers/revad-base:v3.10.1`)
 - **Important:** Checks for exact tag match in remote registry, not digests or alternative tags
 - Fails with error if missing
 
 ### Error Message
 
 ```text
-Error: Dependency image 'revad-base:v3.3.3' not found.
-Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.3.3
+Error: Dependency image 'revad-base:v3.10.1' not found.
+Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 ```
 
 **Note:** For local builds, the check verifies the image exists in the local Docker daemon before proceeding. For CI builds, the check verifies the image exists in the remote registry. In both cases, only exact tag matches are checked - digests and alternative tags are not considered.
@@ -400,8 +400,8 @@ When auto-building, the build order is displayed:
 ```text
 === Building Dependencies ===
 Build order:
-  1. revad-base:v3.3.3
-  2. cernbox-revad:v1.0.0
+  1. revad-base:v3.10.1
+  2. cernbox-revad:v3.10.1
 ```
 
 ### Recursive Dependencies
@@ -422,17 +422,17 @@ For each dependency:
 
 **Example:**
 
-- Building `cernbox-web:v1.0.0-debian` requires `revad-base:v3.3.3-debian`
-- Only `revad-base:v3.3.3-debian` is built (not `v3.3.3-alpine` or other versions)
+- Building `cernbox-web:v1.0.25-debian` requires `revad-base:v3.10.1-production`
+- Only `revad-base:v3.10.1-production` is built (not `v3.10.1-development` or other versions)
 
 ## Version Resolution Examples
 
 | Parent Version           | Dependency Config                    | Resolved Dependency        | Reason                                |
 | ------------------------ | ------------------------------------ | -------------------------- | ------------------------------------- |
-| `v3.3.3` (from manifest) | Explicit: `version: "v3.3.3"`        | `revad-base:v3.3.3`        | Explicit version always wins          |
-| `v3.3.3` (from manifest) | Not specified                        | `revad-base:v3.3.3`        | Inherits from parent version          |
-| `v2.0.0` (from manifest) | Not specified                        | `revad-base:v2.0.0`        | Inherits from parent version          |
-| Any                      | Explicit: `version: "v1.0.0-debian"` | `revad-base:v1.0.0-debian` | Explicit version with platform suffix |
+| `v3.10.1` (from manifest) | Explicit: `version: "v3.10.1"`        | `revad-base:v3.10.1`        | Explicit version always wins          |
+| `v3.10.1` (from manifest) | Not specified                        | `revad-base:v3.10.1`        | Inherits from parent version          |
+| `ocm-webapp-share` (from manifest) | Not specified                        | `revad-base:ocm-webapp-share`        | Inherits from parent version          |
+| Any                      | Explicit: `version: "v3.10.1-production"` | `revad-base:v3.10.1-production` | Explicit version with platform suffix |
 | Any                      | Not specified, no parent version     | **Error**                  | No version can be determined          |
 
 ### Complex Example: Multi-Platform Service with Dependency Chain
@@ -484,8 +484,8 @@ Treat it as a real problem only if graph or suffix resolution fails.
 #### Problem: Dependency Image Not Found
 
 ```text
-Error: Dependency image 'revad-base:v3.3.3' not found.
-Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.3.3
+Error: Dependency image 'revad-base:v3.10.1' not found.
+Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 ```
 
 #### Solution: Build Dependency First
@@ -494,7 +494,7 @@ Build the dependency service first:
 
 ```bash
 # Build the dependency
-nu scripts/dockypody.nu build --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 
 # Then build the dependent service
 nu scripts/dockypody.nu build --service my-service --version v1.0.0
@@ -503,8 +503,8 @@ nu scripts/dockypody.nu build --service my-service --version v1.0.0
 #### For Multi-Platform Builds
 
 ```text
-Error: Dependency image 'revad-base:v3.3.3-debian' not found for platform 'debian'.
-Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.3.3-debian
+Error: Dependency image 'revad-base:v3.10.1' not found for platform 'development'.
+Please build it first: nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 ```
 
 #### Solution: Build Dependency for Platform
@@ -513,10 +513,10 @@ Build the dependency for the specific platform:
 
 ```bash
 # Build dependency for the platform
-nu scripts/dockypody.nu build --service revad-base --version v3.3.3 --platform debian
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1 --platform development
 
 # Or build all platforms
-nu scripts/dockypody.nu build --service revad-base --version v3.3.3
+nu scripts/dockypody.nu build --service revad-base --version v3.10.1
 ```
 
 ### Info: Shared single-platform dependency under `platforms.nuon`
