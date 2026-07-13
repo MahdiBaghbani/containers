@@ -104,7 +104,6 @@ export def test-pr-signal-workflow [verbose: bool] {
       "nu scripts/dockypody.nu build --all-services --matrix-json --latest-only | jq . >/dev/null"
       "nu scripts/dockypody.nu ci workflow --target all --dry-run >/dev/null"
       "nu scripts/dockypody.nu test --suite ci"
-      "nu scripts/dockypody.nu test --suite all"
       "nu scripts/dockypody.nu docs lint"
     ]
     let dockypody_runs = (
@@ -125,6 +124,15 @@ export def test-pr-signal-workflow [verbose: bool] {
           error make {
             msg: $"($wf) forbids image-building build step without --matrix-json: ($cmd)"
           }
+        }
+      }
+    }
+
+    # test --suite all indirectly builds images via e2e-smoke; forbidden in static PR gate.
+    for cmd in $dockypody_runs {
+      if ($cmd == "nu scripts/dockypody.nu test --suite all") or ($cmd | str contains "test --suite all") {
+        error make {
+          msg: $"($wf) forbids 'test --suite all' in static PR gate: it builds images via e2e-smoke (needs Docker + origin remote + network) and violates the no-image-builds contract: ($cmd)"
         }
       }
     }

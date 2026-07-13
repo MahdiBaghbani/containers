@@ -71,8 +71,5 @@ jobs:
       - name: Run CI test suite
         run: nu scripts/dockypody.nu test --suite ci
 
-      - name: Run full test suite
-        run: nu scripts/dockypody.nu test --suite all
-
       - name: Lint docs
         run: nu scripts/dockypody.nu docs lint
