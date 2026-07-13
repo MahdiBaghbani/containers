@@ -18,8 +18,9 @@
 # Test CLI facade - runs test suites
 # See docs/reference/cli-reference.md for usage
 
-# Canonical suite inventory for the non-Docker bundle.
+# Canonical suite inventory for the public bundle.
 # Single source of truth: test-help and test-cli both derive from this.
+# e2e-smoke is public and suite-all automatic; it prints SKIPPED: without a daemon.
 const suite_inventory = [
     {name: "architecture",   desc: "Architecture enforcement tests"}
     {name: "manifests",      desc: "Version manifest tests"}
@@ -42,6 +43,7 @@ const suite_inventory = [
     {name: "orchestration",  desc: "Non-Docker build metadata paths (matrix-json, show-build-order)"}
     {name: "dep-contract",     desc: "Dependency tag/key contract tests (dependencies, order, hash)"}
     {name: "service-def-hash", desc: "Service definition hash stability tests"}
+    {name: "e2e-smoke",      desc: "End-to-end Docker smoke (auto-skips without daemon)"}
 ]
 
 # Show test CLI help
@@ -53,15 +55,10 @@ export def test-help [] {
   print "  --verbose        Show detailed output"
   print ""
   print "Available suites:"
-  print "  all                  Run all non-Docker test suites"
+  print "  all                  Run all public test suites"
   for s in $suite_inventory {
     print $"  ($s.name | fill -a l -w 20) ($s.desc)"
   }
-  print ""
-  print "Opt-in suites (excluded from 'all', require Docker daemon):"
-  print "  docker-integration   Docker CLI and daemon reachability tests"
-  print "    Routed:  DOCKYPODY_DOCKER_INTEGRATION=1 nu scripts/dockypody.nu test --suite docker-integration"
-  print "    Direct:  nu scripts/tests/docker-integration/mod.nu --docker"
 }
 
 # Test CLI entrypoint - called from dockypody.nu
@@ -70,7 +67,7 @@ export def test-cli [
   verbose: bool = false   # Show detailed output
 ] {
   let public_suites = ($suite_inventory | get name)
-  let supported_suites = ($public_suites | append "docker-integration")
+  let supported_suites = $public_suites
 
   let test_suites = if $suite == "all" {
     $public_suites
@@ -94,7 +91,7 @@ export def test-cli [
       nu $"scripts/tests/($suite_name)/mod.nu" | complete
     })
 
-    # Detect suites that skipped via the SKIPPED: marker (zero exit, opt-in not set).
+    # Detect suites that skipped via the SKIPPED: marker (zero exit, no daemon).
     let has_skip_marker = ($result.stdout | lines | any {|l| $l | str starts-with "SKIPPED:"})
     let is_skipped = ($result.exit_code == 0 and $has_skip_marker)
 
