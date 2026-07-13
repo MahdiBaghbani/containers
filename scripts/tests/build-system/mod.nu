@@ -25,6 +25,7 @@ use ./cache-busting.nu [cache-busting-tests]
 use ./build-order.nu [build-order-tests]
 use ./automatic-deps.nu [automatic-deps-tests]
 use ./continue-on-failure.nu [continue-on-failure-tests]
+use ./all-services-continue-on-failure.nu [all-services-continue-on-failure-tests]
 use ./docker-sentinel.nu [docker-sentinel-tests]
 use ./synthetic-deps.nu [synthetic-deps-tests]
 use ./disk-parsing.nu [disk-parsing-tests]
@@ -41,6 +42,7 @@ def main [--verbose] {
   $results = ($results | append (build-order-tests $verbose_flag))
   $results = ($results | append (automatic-deps-tests $verbose_flag))
   $results = ($results | append (continue-on-failure-tests $verbose_flag))
+  $results = ($results | append (all-services-continue-on-failure-tests $verbose_flag))
   $results = ($results | append (docker-sentinel-tests $verbose_flag))
   $results = ($results | append (synthetic-deps-tests $verbose_flag))
   $results = ($results | append (disk-parsing-tests $verbose_flag))

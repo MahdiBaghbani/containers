@@ -65,7 +65,7 @@
     "nushell": {
       // Git source example - generates: NUSHELL_REF, NUSHELL_URL, NUSHELL_REF_KIND
       "url": "https://github.com/nushell/nushell",
-      "ref": "0.108.0"
+      "ref": "0.113.1"
       // OR use path for local development:
       // "path": "../nushell" // string (required for local sources) - relative or absolute path to local directory (mutually exclusive with url/ref)
     }

@@ -33,7 +33,7 @@ use ./help-dispatch.nu [
 use ./make-routing.nu [test-smoke-make-certs-filter]
 use ./tls-force-hermetic.nu [test-smoke-tls-ca-force-routing]
 use ./test-suite-metadata.nu [
-    test-smoke-test-help test-smoke-docker-integration-skipped test-smoke-test-help-inventory
+    test-smoke-test-help test-smoke-e2e-smoke-skipped-without-daemon test-smoke-test-help-inventory
 ]
 use ./local-plane-build.nu [
     test-smoke-local-missing-root test-smoke-local-empty-topology
@@ -66,7 +66,7 @@ def main [--verbose] {
         (test-smoke-make-certs-filter $verbose_flag)
         (test-smoke-tls-ca-force-routing $verbose_flag)
         (test-smoke-test-help $verbose_flag)
-        (test-smoke-docker-integration-skipped $verbose_flag)
+        (test-smoke-e2e-smoke-skipped-without-daemon $verbose_flag)
         (test-smoke-test-help-inventory $verbose_flag)
         (test-smoke-local-missing-root $verbose_flag)
         (test-smoke-local-empty-topology $verbose_flag)

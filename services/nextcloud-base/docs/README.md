@@ -93,14 +93,14 @@ make tls all
 make build
 
 # Build specific version
-nu scripts/dockypody.nu build --service nextcloud --version v33.0.3
+nu scripts/dockypody.nu build --service nextcloud --version v33.0.6
 ```
 
 ### Running
 
 ```bash
 # Basic run
-docker run -d -p 80:80 nextcloud:v33.0.3-debian
+docker run -d -p 80:80 nextcloud:v33.0.6-debian
 
 # With environment variables
 docker run -d \
@@ -111,13 +111,13 @@ docker run -d \
   -e MYSQL_DATABASE=nextcloud \
   -e MYSQL_USER=nextcloud \
   -e MYSQL_PASSWORD=dbsecret \
-  nextcloud:v33.0.3-debian
+  nextcloud:v33.0.6-debian
 
 # With hooks
 docker run -d \
   -p 80:80 \
   -v ./hooks/post-installation:/docker-entrypoint-hooks.d/post-installation:ro \
-  nextcloud:v33.0.3-debian
+  nextcloud:v33.0.6-debian
 ```
 
 ## Environment Variables
@@ -187,17 +187,17 @@ docker run -d \
 # HTTP-only (default, for reverse proxy)
 docker run -d -p 80:80 \
   -e NEXTCLOUD_HTTPS_MODE=off \
-  nextcloud:v33.0.3-debian
+  nextcloud:v33.0.6-debian
 
 # HTTPS-only (direct HTTPS access)
 docker run -d -p 80:80 -p 443:443 \
   -e NEXTCLOUD_HTTPS_MODE=https-only \
-  nextcloud:v33.0.3-debian
+  nextcloud:v33.0.6-debian
 
 # Both HTTP and HTTPS
 docker run -d -p 80:80 -p 443:443 \
   -e NEXTCLOUD_HTTPS_MODE=http-and-https \
-  nextcloud:v33.0.3-debian
+  nextcloud:v33.0.6-debian
 ```
 
 ### TLS Requirements

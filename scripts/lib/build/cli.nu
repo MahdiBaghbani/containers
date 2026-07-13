@@ -52,7 +52,6 @@ export def build-help [] {
   print "  --no-cache             Disable Docker layer cache"
   print "  --cache-bust <key>     Force cache invalidation"
   print "  --dep-cache <mode>     Dependency cache mode (off, soft, strict)"
-  print "  --cache-match <label>  Legacy/custom-caller diagnostic label; generated workflows no longer populate it"
   print ""
   print "Build Behavior:"
   print "  --latest-only          Only build latest version"
@@ -91,7 +90,6 @@ export def build-cli [
   --tag-deps,
   --fail-fast,
   --pull: string = "",
-  --cache-match: string = "",
   --disk-monitor: string = "off",
   --prune-cache-mounts,
   --plane: string = "tracked"
@@ -151,7 +149,6 @@ export def build-cli [
       tag_deps: $tag_deps_val,
       fail_fast: $fail_fast_val,
       pull: $pull_modes,
-      cache_match: $cache_match,
       disk_monitor: $disk_monitor,
       prune_cache_mounts: $prune_cache_mounts_val,
       plane: $plane

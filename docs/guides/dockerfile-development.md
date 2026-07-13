@@ -312,7 +312,7 @@ In `versions.nuon`, define tags:
 ARG BASE_BUILD_IMAGE="node:24-trixie-slim"
 
 # Runtime image (dependency)
-ARG NEXTCLOUD_IMAGE="nextcloud:v32.0.2-debian"
+ARG NEXTCLOUD_IMAGE="nextcloud:v32.0.12-debian"
 
 # Stage 1: Build
 FROM ${BASE_BUILD_IMAGE} AS builder

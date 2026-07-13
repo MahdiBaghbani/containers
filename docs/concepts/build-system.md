@@ -141,11 +141,11 @@ When injecting build arguments, the build system applies them in this order (lat
 // services/cernbox-revad/versions.nuon
 {
   "versions": [{
-    "name": "v1.0.0",
+    "name": "v3.10.1",
     "overrides": {
       "dependencies": {
         "revad-base": {
-          "version": "v3.3.3"
+          "version": "v3.10.1"
         }
       }
     }
@@ -165,16 +165,16 @@ export REVAD_BASE_IMAGE="revad-base:env-override"
 ARG REVAD_BASE_IMAGE="revad-base:latest"
 ```
 
-**Final Build Arg Value:** `REVAD_BASE_IMAGE="revad-base:v3.3.3"`
+**Final Build Arg Value:** `REVAD_BASE_IMAGE="revad-base:v3.10.1"`
 
 #### Explanation
 
 1. Dockerfile default: `revad-base:latest` (lowest priority, ignored)
 2. Config `build_args`: `revad-base:custom` (overridden by env)
 3. Environment variable: `revad-base:env-override` (overridden by dependency - dependencies win)
-4. Dependency resolution: `revad-base:v3.3.3` (highest priority - wins, overrides env var)
+4. Dependency resolution: `revad-base:v3.10.1` (highest priority - wins, overrides env var)
 
-The dependency resolution step constructs the image reference from the resolved dependency version (`v3.3.3`) and overrides all previous values, including environment variables.
+The dependency resolution step constructs the image reference from the resolved dependency version (`v3.10.1`) and overrides all previous values, including environment variables.
 
 ## Cache Busting
 
@@ -187,7 +187,7 @@ By default, each service computes its own cache bust value using this fallback c
 1. **Services with Git sources:** SHA256 hash of all source refs/SHAs (first 16 characters)
    - Source keys are sorted before hashing for consistency
    - Only Git sources are included (local sources are filtered out)
-   - Example: `reva:v3.3.3,nushell:0.108.0` -> `a1b2c3d4e5f6g7h8`
+   - Example: `reva:v3.3.3,nushell:0.113.1` -> `a1b2c3d4e5f6g7h8`
 2. **Services with only local sources:** Random UUID (always-bust behavior)
    - Local sources trigger always-bust cache behavior
    - Ensures builds pick up changes in local directories
@@ -380,7 +380,7 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order
 nu scripts/dockypody.nu build --service cernbox-web --show-build-order --all-versions
 
 # Specific versions
-nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.0,v1.1.0
+nu scripts/dockypody.nu build --service cernbox-web --show-build-order --versions v1.0.25,ocm-webapp-share
 ```
 
 **Output (single version):**
@@ -388,9 +388,9 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order --version
 ```text
 === Build Order ===
 
-1. revad-base:v3.3.3
-2. cernbox-revad:v1.0.0
-3. cernbox-web:v1.0.0
+1. revad-base:v3.10.1
+2. cernbox-revad:v3.10.1
+3. cernbox-web:v1.0.25
 ```
 
 ## Automatic Dependency Building
@@ -437,11 +437,10 @@ nu scripts/dockypody.nu build --service cernbox-web --dep-cache=strict
 ### CI Dependency Shard Preparation
 
 In the shipped CI flow, dependency reuse happens through generated
-workflow-local shard artifacts, not `actions/cache`. The generated
-`build-orchestrator.yml` passes a comma-separated `dependencies` input to
-the generated `build-service.yml`, and each matrix node prepares the
-matching dependency shards before it builds. The current generated workflow
-set has no active `actions/cache` restore/save path for image state.
+workflow-local shard artifacts. The generated `build-orchestrator.yml` passes
+a comma-separated `dependencies` input to the generated
+`build-service.yml`, and each matrix node prepares the matching dependency
+shards before it builds.
 
 **How it works:**
 
@@ -476,10 +475,7 @@ build_cernbox_revad:
 ```
 
 Each shard upload uses an artifact name shaped like
-`shard-<service>-<version>-<platform|single>` with short retention. The
-generated workflow no longer expands `dependencies` into `dep1`..`dep8`
-slots, and it no longer restores or saves Docker images through
-`actions/cache`.
+`shard-<service>-<version>-<platform|single>` with short retention.
 
 ### Flag Propagation
 
@@ -586,9 +582,9 @@ When `--pull=deps` is specified:
 
 **Image reference format:**
 
-- Multi-platform services: `{service}:{version}-{platform}` (e.g., `revad-base:v3.3.3-production`)
-- Single-platform services: `{service}:{version}` (e.g., `gaia:v1.0.0`)
-- In CI: Full registry path (e.g., `ghcr.io/owner/repo/revad-base:v3.3.3-production`)
+- Multi-platform services: `{service}:{version}-{platform}` (e.g., `revad-base:v3.10.1-production`)
+- Single-platform services: `{service}:{version}` (e.g., `gaia:master`)
+- In CI: Full registry path (e.g., `ghcr.io/owner/repo/revad-base:v3.10.1-production`)
 
 ### Externals Mode (Fail-Fast Preflight)
 
@@ -617,7 +613,7 @@ ERROR: External image preflight failed
     Error: manifest unknown
 
   Missing: gcr.io/distroless/static-debian12:nonroot
-    Required by: revad-base:v3.3.3:production
+    Required by: revad-base:v3.10.1-production
     Error: unauthorized
 ```
 
@@ -682,15 +678,15 @@ FAILED: 1
 SKIPPED: 0
 
 SUCCESS:
-  - revad-base:v3.3.3
-  - revad-base:v3.4.0
+  - revad-base:v3.10.1
+  - revad-base:master
 
 FAILED:
-  - revad-base:v3.5.0
+  - revad-base:ocm-webapp-share
     Error: Build failed: ...
 
 SKIPPED:
-  - revad-base:v3.6.0
+  - revad-base:v3.10.1-development
     Reason: Dependency build failed
 ```
 
@@ -713,7 +709,7 @@ When auto-building dependencies:
 
 - **Dependency build failures cause immediate stop** (fail fast, regardless of `--fail-fast` flag)
 - Error message includes context (which service was being built, which dependency failed)
-- Example: `Failed to build dependency 'revad-base:v3.3.3' while building 'cernbox-web:v1.0.0'`
+- Example: `Failed to build dependency 'revad-base:v3.10.1' while building 'cernbox-web:v1.0.25'`
 - The `--fail-fast` flag only applies to multi-version builds of the target service, not dependency builds
 
 ## Building All Services
@@ -967,7 +963,7 @@ scripts/
 - dockypody.nu                # Canonical CLI entrypoint
 - lib/
   - build/                    # Build domain
-    - cache.nu              # Dep-cache mode and tarball management
+    - cache.nu              # Dep-cache modes and dependency-cache manifest helpers
     - config.nu             # Service config loading and flag parsing
     - dependencies.nu       # Dependency resolution
     - docker.nu             # Docker buildx wrapper
@@ -979,7 +975,6 @@ scripts/
     - tags.nu               # Tag generation
   - ci/                       # CI domain
     - deps.nu               # Direct dependency resolution for CI
-    - tarballs.nu           # Tarball save/load operations
     - workflow.nu           # CI workflow generation
   - manifest/                 # Version manifest domain
     - core.nu               # Manifest loading and version resolution
@@ -1225,23 +1220,6 @@ The service definition hash enables different behaviors for local and CI builds:
 - **Soft mode (`--dep-cache=soft`, default for CI)**: Auto-build with a warning message
 - **Strict mode (`--dep-cache=strict`)**: Fail with an error
 
-### Cache Match Diagnostics
-
-The `--cache-match` flag is now a legacy/custom-caller diagnostic hook, not
-part of the generated shard-artifact workflows:
-
-```bash
-nu scripts/dockypody.nu build --service my-service --cache-match=exact
-```
-
-The build CLI accepts `--cache-match` as a free-form string and echoes it
-back in dependency cache diagnostics. Custom callers may still pass labels
-such as `exact`, `fallback`, or `miss`, but the generated workflows no
-longer populate those values.
-
-This label appears in auto-build warning messages to help diagnose cache
-behavior.
-
 ## Disk Monitoring
 
 The build system includes an optional disk monitoring feature for diagnosing disk usage on constrained CI runners. When enabled, the system emits human-readable disk usage snapshots at key build phases.
@@ -1279,8 +1257,8 @@ Disk usage snapshots are captured at four phases:
 The `after-version` phase is particularly useful for multi-version builds (e.g., `cernbox-web` with `testing`, `master`, `v1.0.0`) to identify which specific version exhausts disk space.
 
 **Note:** In CI, dependency images are loaded via `nu scripts/dockypody.nu ci
-load-deps` before `nu scripts/dockypody.nu build ...` runs. The `pre` and
-`after-deps` phases occur after cache restoration.
+prepare-node-deps` before `nu scripts/dockypody.nu build ...` runs. The
+`pre` and `after-deps` phases occur after shard loading.
 
 ### Snapshot Contents
 

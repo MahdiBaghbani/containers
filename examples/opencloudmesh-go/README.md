@@ -8,7 +8,7 @@ exist for `opencloudmesh-go`.
 
 Use the sibling checkout path `../opencloudmesh-go` for local source builds
 from `repos/containers`. Do not commit a tracked `local` version; define a
-dev-only version in the off-git local plane instead.
+local source path override in the off-git local plane instead.
 
 1. Create the local plane root (once):
 
@@ -25,7 +25,7 @@ Nushell `to nuon` output or NUON table syntax for this file.
 {
   "versions": [
     {
-      "name": "dev",
+      "name": "master",
       "latest": false,
       "overrides": {
         "sources": {
@@ -44,7 +44,7 @@ Save as `.dockypody.local/services/opencloudmesh-go/versions.nuon`.
 3. Build:
 
 ```bash
-nu scripts/dockypody.nu build --plane local --service opencloudmesh-go --version dev
+nu scripts/dockypody.nu build --plane local --service opencloudmesh-go --version master
 ```
 
 ## Mode and path env notes

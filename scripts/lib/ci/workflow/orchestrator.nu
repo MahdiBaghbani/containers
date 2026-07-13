@@ -19,7 +19,7 @@
 
 use ../../services/core.nu [list-service-names]
 use ../deps.nu [get-direct-dependency-services get-all-dependency-services]
-use ./constants.nu [gen-workflow-header service-to-job-id services-to-job-ids format-needs-list]
+use ./constants.nu [NU_VERSION gen-workflow-header service-to-job-id services-to-job-ids format-needs-list]
 use ./steps.nu [step-checkout step-install-nushell]
 
 def get-services-with-deps [] {
@@ -137,9 +137,9 @@ def gen-build-push-purge-job [max_deletes: int] {
         uses: actions/checkout@v5
       - name: Install Nushell
         env:
-          NU_VERSION: 0.108.0
+          NU_VERSION: ($NU_VERSION)
         run: |
-          curl -fsSL -o /tmp/nu.tar.gz \"https://github.com/nushell/nushell/releases/download/0.108.0/nu-0.108.0-x86_64-unknown-linux-gnu.tar.gz\"
+          curl -fsSL -o /tmp/nu.tar.gz \"https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz\"
           mkdir -p /tmp/nu
           tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
           sudo mv /tmp/nu/nu /usr/local/bin/nu
@@ -223,7 +223,7 @@ export def generate-ghcr-purge [] {
         type: boolean
         default: false')
 
-    $header + '
+    $header + $"
 jobs:
   purge_ghcr:
     name: GHCR Purge Stale Versions
@@ -236,9 +236,9 @@ jobs:
         uses: actions/checkout@v5
       - name: Install Nushell
         env:
-          NU_VERSION: 0.108.0
+          NU_VERSION: ($NU_VERSION)
         run: |
-          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/0.108.0/nu-0.108.0-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL -o /tmp/nu.tar.gz \"https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz\"
           mkdir -p /tmp/nu
           tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
           sudo mv /tmp/nu/nu /usr/local/bin/nu
@@ -248,19 +248,19 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          SERVICE_FLAG=""
-          if [ -n "${{ inputs.service }}" ]; then
-            SERVICE_FLAG="--service ${{ inputs.service }}"
+          SERVICE_FLAG=\"\"
+          if [ -n \"${{ inputs.service }}\" ]; then
+            SERVICE_FLAG=\"--service ${{ inputs.service }}\"
           fi
-          FORCE_FLAG=""
-          if [ "${{ inputs.force }}" = "true" ]; then
-            FORCE_FLAG="--force"
+          FORCE_FLAG=\"\"
+          if [ \"${{ inputs.force }}\" = \"true\" ]; then
+            FORCE_FLAG=\"--force\"
           fi
           # --max-deletes is a global budget across ALL services in this run.
-          nu scripts/dockypody.nu ci ghcr-purge \
-            --dry-run=${{ inputs.dry_run }} \
-            --max-deletes=${{ inputs.max_deletes }} \
-            $SERVICE_FLAG \
+          nu scripts/dockypody.nu ci ghcr-purge \\
+            --dry-run=${{ inputs.dry_run }} \\
+            --max-deletes=${{ inputs.max_deletes }} \\
+            $SERVICE_FLAG \\
             $FORCE_FLAG
-'
+"
 }

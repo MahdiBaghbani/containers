@@ -1,6 +1,11 @@
 {
   "default": "v12.2.2",
   "defaults": {
+    "external_images": {
+      "runtime": {
+        "tag": "12.2.2"
+      }
+    },
     "dependencies": {
       "common-tools": {
         "version": "v1.0.0-debian"

@@ -125,7 +125,14 @@ def discover-default-files [] {
   })
 
   if $repo_root_result.exit_code != 0 {
-    return (glob "**/*.md" | where {|f| not ($f | str contains "/.git/")})
+    return (
+      (glob "docs/**/*.md")
+      | append (glob "services/**/*.md")
+      | append (glob "examples/**/*.md")
+      | append (glob "*.md")
+      | uniq
+      | where {|f| not ($f | str contains "/.git/")}
+    )
   }
 
   let repo_root = ($repo_root_result.stdout | str trim)
@@ -136,7 +143,14 @@ def discover-default-files [] {
   })
 
   if $ls_files_result.exit_code != 0 {
-    return (glob "**/*.md" | where {|f| not ($f | str contains "/.git/")})
+    return (
+      (glob "docs/**/*.md")
+      | append (glob "services/**/*.md")
+      | append (glob "examples/**/*.md")
+      | append (glob "*.md")
+      | uniq
+      | where {|f| not ($f | str contains "/.git/")}
+    )
   }
 
   $ls_files_result.stdout
@@ -204,7 +218,9 @@ export def lint-docs [
     }
   }
 
+  print "docs ASCII: resolving markdown files..."
   let files_to_check = (resolve-files $files)
+  print $"docs ASCII: scanning ($files_to_check | length) file\(s\)..."
   let prohibited = (get-prohibited-patterns)
 
   let violations = (scan-docs $files_to_check $prohibited)

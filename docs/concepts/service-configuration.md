@@ -218,7 +218,7 @@ Use this JSONC-style form instead:
 {
   "versions": [
     {
-      "name": "dev",
+      "name": "master",
       "latest": false,
       "overrides": {
         "sources": {
@@ -235,7 +235,7 @@ Use this JSONC-style form instead:
 Build with:
 
 ```bash
-nu scripts/dockypody.nu build --plane local --service opencloudmesh-go --version dev
+nu scripts/dockypody.nu build --plane local --service opencloudmesh-go --version master
 ```
 
 The local plane merges this fragment with the tracked manifest. Local versions
@@ -522,7 +522,7 @@ RUN nu /tmp/clone-source.nu \
   },
   "nushell": {
     "url": "https://github.com/nushell/nushell",
-    "ref": "0.108.0"
+    "ref": "0.113.1"
   },
   "upx": {
     "url": "https://github.com/upx/upx",
@@ -534,7 +534,7 @@ RUN nu /tmp/clone-source.nu \
 **Generated Build Args:**
 
 - `REVAD_REF=v3.3.3`, `REVAD_URL=...`, `REVAD_REF_KIND=ref` (+ optional SHA)
-- `NUSHELL_REF=0.108.0`, `NUSHELL_URL=...`, `NUSHELL_REF_KIND=ref` (+ optional SHA)
+- `NUSHELL_REF=0.113.1`, `NUSHELL_URL=...`, `NUSHELL_REF_KIND=ref` (+ optional SHA)
 - `UPX_REF=v5.0.2`, `UPX_URL=...`, `UPX_REF_KIND=ref` (+ optional SHA)
 
 ### Version Overrides
@@ -973,7 +973,7 @@ For each source, two labels are automatically generated:
     },
     "nushell": {
       "url": "https://github.com/nushell/nushell",
-      "ref": "0.108.0"
+      "ref": "0.113.1"
     }
   }
 }
@@ -985,9 +985,9 @@ For each source, two labels are automatically generated:
 - `org.opencloudmesh.source.reva.revision=2912f0a`
 - `org.opencloudmesh.source.reva.ref=v3.3.3`
 - `org.opencloudmesh.source.reva.url=https://github.com/cs3org/reva`
-- `org.opencontainers.image.source.nushell.revision=da141be` (extracted from tag `0.108.0`)
+- `org.opencontainers.image.source.nushell.revision=da141be` (extracted from tag `0.113.1`)
 - `org.opencloudmesh.source.nushell.revision=da141be`
-- `org.opencloudmesh.source.nushell.ref=0.108.0`
+- `org.opencloudmesh.source.nushell.ref=0.113.1`
 - `org.opencloudmesh.source.nushell.url=https://github.com/nushell/nushell`
 
 #### Missing SHA Handling

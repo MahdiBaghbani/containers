@@ -303,7 +303,7 @@ chmod +x /docker-entrypoint-hooks.d/*/*.nu
 ```bash
 docker run -d \
   -v ./hooks/post-installation:/docker-entrypoint-hooks.d/post-installation:ro \
-  nextcloud:v33.0.3-debian
+  nextcloud:v33.0.6-debian
 ```
 
 **Docker Compose:**
@@ -311,7 +311,7 @@ docker run -d \
 ```yaml
 services:
   nextcloud:
-    image: nextcloud:v33.0.3-debian
+    image: nextcloud:v33.0.6-debian
     volumes:
       - ./hooks/post-installation:/docker-entrypoint-hooks.d/post-installation:ro
 ```
@@ -333,7 +333,7 @@ kind: Pod
 spec:
   containers:
     - name: nextcloud
-      image: nextcloud:v33.0.3-debian
+      image: nextcloud:v33.0.6-debian
       volumeMounts:
         - name: hooks
           mountPath: /docker-entrypoint-hooks.d/post-installation
@@ -465,7 +465,7 @@ rsync -rlD /usr/src/nextcloud/ /var/www/html/
 docker run -d \
   -v ./nextcloud-source:/usr/src/nextcloud:ro \
   -v nextcloud-data:/var/www/html \
-  nextcloud:v33.0.3-debian
+  nextcloud:v33.0.6-debian
 ```
 
 Entrypoint detects mount and copies on first start.

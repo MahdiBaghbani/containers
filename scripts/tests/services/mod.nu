@@ -27,6 +27,7 @@ use ./integrity.nu [integrity-tests]
 
 const NEXTCLOUD_RUNTIME_CONTRACT = "services/nextcloud-webapp/tests/runtime-contract-test.nu"
 const JUPYTERHUB_RUNTIME_CONTRACT = "services/jupyterhub/tests/runtime-contract-test.nu"
+const OCM_GO_FOREGROUND_CONTRACT = "services/opencloudmesh-go/tests/test-foreground-contracts.nu"
 
 def run-contract-script [script: string] {
   let result = (^nu $script | complete)
@@ -50,6 +51,9 @@ def runtime-contract-tests [verbose: bool] {
     } $verbose)
     (run-test "jupyterhub runtime contract" {
       run-contract-script $JUPYTERHUB_RUNTIME_CONTRACT
+    } $verbose)
+    (run-test "opencloudmesh-go foreground contract" {
+      run-contract-script $OCM_GO_FOREGROUND_CONTRACT
     } $verbose)
   ]
 }

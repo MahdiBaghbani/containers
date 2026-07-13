@@ -123,16 +123,16 @@ for:
 
 ### Standard Version
 
-- **Default**: `v8.1.0-nc-master`
+- **Default**: `v8.7.2-nc-master`
 - **Source**: `https://github.com/nextcloud/contacts`
-- **Ref**: `v8.1.0`
+- **Ref**: `v8.7.2`
 - **Features**: Standard Contacts app, no OCM Invites
 
 ### OCM Variant
 
-- **Name**: `v8.1.0-ocm-nc-master`
-- **Source**: `https://github.com/MahdiBaghbani/nextcloud-contacts`
-- **Ref**: `mahdi/fix/ui-optional-email`
+- **Name**: `ocm-contacts-app`
+- **Source**: `https://github.com/sara-nl/nextcloud-contacts`
+- **Ref**: `invite-for-cloudid-exchange`
 - **Features**: Contacts app with OCM Invites feature
 - **Usage**: Set `CONTACTS_ENABLE_OCM_INVITES=true` to enable OCM
   functionality
@@ -140,6 +140,8 @@ for:
 The `sta-ocm-m6` variant is also tracked for milestone-specific testing.
 
 ### Local-plane dev version (off-git, not tracked)
+
+<!-- dockypody-docs-allow: nextcloud-contacts:local -->
 
 The bundled `examples/nextcloud-contacts` stack uses image tag `local`, but
 that name is **not** a tracked manifest version. Define it in the off-git
@@ -174,7 +176,7 @@ workflow:
 ### Enabling OCM Invites
 
 1. Use an OCM-capable version, for example
-   `nextcloud-contacts:v8.1.0-ocm-nc-master`
+   `nextcloud-contacts:ocm-contacts-app`
 2. Set environment variable: `CONTACTS_ENABLE_OCM_INVITES=true`
 3. Optionally set mode: `CONTACTS_OCM_INVITES_MODE=basic` or `advanced`
 4. Optionally configure mesh providers service:
@@ -202,7 +204,7 @@ docker run -d \
   -e CONTACTS_ENABLE_OCM_INVITES=true \
   -e CONTACTS_OCM_INVITES_MODE=advanced \
   -e CONTACTS_MESH_PROVIDERS_SERVICE=https://example.com/providers.json \
-  nextcloud-contacts:v8.1.0-ocm-nc-master
+  nextcloud-contacts:ocm-contacts-app
 ```
 
 ### Manual Configuration
@@ -253,7 +255,7 @@ Hooks execute alphabetically:
 nu scripts/dockypody.nu build --service nextcloud-contacts
 
 # Build specific OCM-enabled version
-nu scripts/dockypody.nu build --service nextcloud-contacts --version v8.1.0-ocm-nc-master
+nu scripts/dockypody.nu build --service nextcloud-contacts --version ocm-contacts-app
 
 # Build local-plane dev version (requires off-git fragment; see Versions)
 nu scripts/dockypody.nu build --plane local --service nextcloud-contacts --version local

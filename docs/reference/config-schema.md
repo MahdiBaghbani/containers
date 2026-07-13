@@ -668,7 +668,7 @@ Service depending on multiple services with different versions:
     "overrides": {
       "dependencies": {
         "revad-base": {
-          "version": "v3.3.3"
+          "version": "v3.10.1"
         },
         "common-tools-builder": {
           "version": "v1.0.0-debian"
@@ -684,7 +684,7 @@ Service depending on multiple services with different versions:
 
 ### Dependency Resolution
 
-- `revad-base` resolves to `revad-base:v3.3.3` (version from overrides)
+- `revad-base` resolves to `revad-base:v3.10.1` (version from overrides)
 - `common-tools-builder` resolves to `common-tools:v1.0.0-debian` (version from overrides)
 - `common-tools-runtime` resolves to `common-tools:v1.0.0-alpine` (version from overrides)
 

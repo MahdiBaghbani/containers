@@ -28,6 +28,7 @@ use ./lib/build/cli.nu [build-help]
 use ./lib/validate/cli.nu [validate-help]
 use ./lib/test/cli.nu [test-help]
 use ./lib/inspect/cli.nu [inspect-help]
+use ./lib/core/version.nu [assert-nushell-version]
 
 def show-help [] {
   print "dockypody - DockyPody unified CLI"
@@ -41,8 +42,8 @@ def show-help [] {
   print "  inspect <subcommand> Inspect guard-owned effective config"
   print "  tls <subcommand>   Manage TLS certificates (ca, certs, clean)"
   print "  ssh <subcommand>   Manage SSH keypair (key)"
-  print "  ci <subcommand>    CI helper operations (list-deps, load-deps, images, ghcr-purge, etc.)"
-  print "  docs <subcommand>  Documentation tools (lint)"
+  print "  ci <subcommand>    CI helper operations (list-deps, prepare-node-deps, images, ghcr-purge, etc.)"
+  print "  docs <subcommand>  Documentation tools (lint, lint-refs)"
   print ""
   print "Examples:"
   print "  nu scripts/dockypody.nu build --service gaia"
@@ -53,6 +54,7 @@ def show-help [] {
   print "  nu scripts/dockypody.nu ssh key --force"
   print "  nu scripts/dockypody.nu ci list-deps --service nextcloud"
   print "  nu scripts/dockypody.nu docs lint"
+  print "  nu scripts/dockypody.nu docs lint-refs"
   print ""
   print "Run with <command> help for command-specific options."
 }
@@ -86,7 +88,6 @@ def main [
   --tag-deps,
   --fail-fast,
   --pull: string = "",
-  --cache-match: string = "",
   --disk-monitor: string = "off",
   --prune-cache-mounts,
   # Test flags
@@ -102,8 +103,6 @@ def main [
   --keep-empty-dirs,
   --force,
   --target: string = "",
-  --ref: string = "",
-  --sha: string = "",
   --dependencies: string = "",
   --transitive,
   --debug,
@@ -115,6 +114,8 @@ def main [
   --max-deletes: int = 0,
   --verbose
 ] {
+  assert-nushell-version
+
   # Top-level help: positional "help" or no command. `--help`/`-h` never reach
   # here because Nushell's auto-help intercepts them before main runs.
   if $command == null or $command == "help" {
@@ -154,7 +155,6 @@ def main [
         tag_deps: $tag_deps
         fail_fast: $fail_fast
         pull: $pull
-        cache_match: $cache_match
         disk_monitor: $disk_monitor
         prune_cache_mounts: $prune_cache_mounts,
         plane: $plane
@@ -192,7 +192,7 @@ def main [
     "ci" => {
       # Default missing subcommand to "help"; ci-cli handles it internally.
       let subcmd = if $subcommand == null { "help" } else { $subcommand }
-      run-ci-command $subcmd $service $version $platform $dependencies $target $ref $sha $transitive $debug $dry_run $max_deletes $force $partial_success $plane
+      run-ci-command $subcmd $service $version $platform $dependencies $target $transitive $debug $dry_run $max_deletes $force $partial_success $plane
     }
     "docs" => {
       # Default missing subcommand to "help"; docs-cli handles it internally.
@@ -213,7 +213,7 @@ def main [
 def run-build-command [flags: record] {
   use ./lib/build/cli.nu [build-cli]
   
-  build-cli --service $flags.service --all-services=$flags.all_services --push=$flags.push --latest=$flags.latest --extra-tag $flags.extra_tag --provenance=$flags.provenance --version $flags.version --all-versions=$flags.all_versions --versions $flags.versions --latest-only=$flags.latest_only --platform $flags.platform --matrix-json=$flags.matrix_json --progress $flags.progress --cache-bust $flags.cache_bust --no-cache=$flags.no_cache --show-build-order=$flags.show_build_order --dep-cache $flags.dep_cache --push-deps=$flags.push_deps --tag-deps=$flags.tag_deps --fail-fast=$flags.fail_fast --pull $flags.pull --cache-match $flags.cache_match --disk-monitor $flags.disk_monitor --prune-cache-mounts=$flags.prune_cache_mounts --plane $flags.plane
+  build-cli --service $flags.service --all-services=$flags.all_services --push=$flags.push --latest=$flags.latest --extra-tag $flags.extra_tag --provenance=$flags.provenance --version $flags.version --all-versions=$flags.all_versions --versions $flags.versions --latest-only=$flags.latest_only --platform $flags.platform --matrix-json=$flags.matrix_json --progress $flags.progress --cache-bust $flags.cache_bust --no-cache=$flags.no_cache --show-build-order=$flags.show_build_order --dep-cache $flags.dep_cache --push-deps=$flags.push_deps --tag-deps=$flags.tag_deps --fail-fast=$flags.fail_fast --pull $flags.pull --disk-monitor $flags.disk_monitor --prune-cache-mounts=$flags.prune_cache_mounts --plane $flags.plane
 }
 
 def run-test-command [suite: string, verbose: bool] {
@@ -288,8 +288,6 @@ def run-ci-command [
   platform: string,
   dependencies: string,
   target: string,
-  ref: string,
-  sha: string,
   transitive: bool,
   debug: bool,
   dry_run: bool,
@@ -305,8 +303,6 @@ def run-ci-command [
     platform: $platform,
     dependencies: $dependencies,
     target: $target,
-    ref: $ref,
-    sha: $sha,
     transitive: $transitive,
     debug: $debug,
     dry_run: $dry_run,

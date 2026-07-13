@@ -103,19 +103,25 @@ export def validate_mode [] {
   $raw
 }
 
-def ensure_logfile [] {
-  ^touch /var/log/opencloudmesh-go.log
-}
-
 def start_ocm_go [origin: string, mode: string, admin_user: string, admin_pass: string] {
-  mut command = $"/app/bin/opencloudmesh-go --config /configs/config.toml --public-origin \"($origin)\""
-  $command = $command + $" --admin-username \"($admin_user)\" --admin-password \"($admin_pass)\""
+  # Foreground argv list: no shell, no redirect, no background. Exit code propagates.
+  mut args = [
+    "--config"
+    "/configs/config.toml"
+    "--public-origin"
+    $origin
+    "--admin-username"
+    $admin_user
+    "--admin-password"
+    $admin_pass
+  ]
   if ($mode | str length) > 0 {
-    $command = $command + $" --mode \"($mode)\""
+    $args = ($args | append ["--mode" $mode])
   }
-  $command = $command + " >> /var/log/opencloudmesh-go.log 2>&1 &"
 
-  ^sh -c $command
+  print $"Starting opencloudmesh-go in foreground origin=($origin)..."
+  let cmd = "/app/bin/opencloudmesh-go"
+  run-external $cmd ...$args
 }
 
 # Resolve route intent envs and, if present, write the runtime SSRF partial
@@ -199,8 +205,6 @@ def --wrapped main [...args] {
   if ($admin_pass | str length) == 0 {
     error make { msg: "OCM_GO_ADMIN_PASSWORD must be set" }
   }
-
-  ensure_logfile
 
   let origin = (resolve_public_origin $validated_host)
   let mode = (validate_mode)

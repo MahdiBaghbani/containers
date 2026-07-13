@@ -39,6 +39,8 @@ nu scripts/dockypody.nu build --service firefox --version v150.0.0
   The `local` image tag is **not** a tracked manifest version; it lives only
   in the off-git local plane.
 
+<!-- dockypody-docs-allow: nextcloud-contacts:local -->
+
   1. Create the local plane root (once):
 
 ```bash

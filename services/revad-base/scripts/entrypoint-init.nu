@@ -19,7 +19,7 @@
 
 # Main entrypoint script - validates mode and routes to appropriate init script
 
-use ./lib/shared.nu [init_shared, start_reva_daemon]
+use ./lib/shared.nu [init_shared, start_reva_daemon, start_log_tailing]
 use ./lib/utils.nu [get_env_or_default]
 # sshd module is staged flat into the image at /usr/bin/lib/sshd.nu during Docker build.
 use ./lib/sshd.nu [start-sshd-if-enabled]
@@ -116,9 +116,8 @@ def --wrapped main [...args] {
     error make { msg: $"Unhandled container mode: ($container_mode)" }
   }
   
-  # Start Reva daemon with specific config file
+  # Stream file logs to container stdout, then start Reva in foreground (last statement)
   # Uses -c flag to load only the specified config file (not --dev-dir which loads all configs)
+  start_log_tailing
   start_reva_daemon $config_file
-  
-  print "Initialization complete, Reva daemon started"
 }

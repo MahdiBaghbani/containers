@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# DockyPody: container build scripts and images
+# Copyright (C) 2025 Mahdi Baghbani <mahdi-baghbani@azadehafzar.io>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# GitHub pull-request signal workflow for static validation (no image builds)
+
+name: PR Signal
+
+on:
+  pull_request:
+    paths:
+      - '.forgejo/workflows/**'
+      - '.github/workflows/**'
+      - 'Makefile'
+      - 'README.md'
+      - 'docs/**'
+      - 'schemas/**'
+      - 'services/**/Dockerfile*'
+      - 'services/**/scripts/**'
+      - 'services/**/*.nuon'
+      - 'scripts/**'
+
+concurrency:
+  group: pr-signal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  signal:
+    name: PR signal validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Nushell
+        env:
+          NU_VERSION: 0.113.1
+        run: |
+          curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/nu
+          tar -xzf /tmp/nu.tar.gz -C /tmp/nu --strip-components=1
+          sudo mv /tmp/nu/nu /usr/local/bin/nu
+          nu --version
+
+      - name: Validate all services
+        run: nu scripts/dockypody.nu validate --all-services
+
+      - name: Check build matrix JSON
+        run: nu scripts/dockypody.nu build --all-services --matrix-json --latest-only | jq . >/dev/null
+
+      - name: Dry-run CI workflow generation
+        run: nu scripts/dockypody.nu ci workflow --target all --dry-run >/dev/null
+
+      - name: Run CI test suite
+        run: nu scripts/dockypody.nu test --suite ci
+
+      - name: Lint docs
+        run: nu scripts/dockypody.nu docs lint

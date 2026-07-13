@@ -20,7 +20,6 @@
 # CI cache shard helpers for per-node image tarballs
 # See docs/concepts/build-system.md for dep-cache and CI caching overview
 
-use ../build/cache.nu [get-owner-cache-dir get-image-tarball-path get-manifest-path write-manifest]
 use ../build/pull.nu [compute-canonical-image-ref]
 use ../registries/info.nu [get-registry-info]
 
@@ -160,95 +159,4 @@ export def create-node-shard [
   $shard_manifest | to nuon | save -f $layout.manifest_path
 
   $layout
-}
-
-# Merge all node shards under base_dir into the owner cache for a service
-# and write a final manifest.nuon compatible with cache.nu
-export def merge-node-shards [
-  service: string,
-  base_dir: string
-] {
-  if ($service | str length) == 0 {
-    error make {
-      msg: "merge-node-shards requires non-empty service"
-    }
-  }
-
-  if not ($base_dir | path exists) {
-    error make {
-      msg: $"Shard directory does not exist: ($base_dir)"
-    }
-  }
-
-  let manifest_files = (ls $base_dir | where {|f| $f.type == "file" and ($f.name | str ends-with $SHARD_MANIFEST_EXTENSION)} | get name)
-
-  if ($manifest_files | is-empty) {
-    error make {
-      msg: $"No shard manifests found under directory: ($base_dir)"
-    }
-  }
-
-  mut nodes = {}
-  mut images = {}
-
-  for path in $manifest_files {
-    let shard = (open $path)
-    let node_key = (try { $shard.node_key } catch { "" })
-    let image_id = (try { $shard.image_id } catch { "" })
-    let refs = (try { $shard.refs } catch { [] })
-
-    if ($node_key | str length) == 0 or ($image_id | str length) == 0 {
-      continue
-    }
-
-    # Update node -> image mapping
-    $nodes = ($nodes | upsert $node_key $image_id)
-
-    # Update image -> refs mapping using dep-cache style schema
-    let existing = (try { $images | get $image_id } catch { null })
-    let owner_service = $service
-    let merged_refs = (if $existing == null {
-      $refs
-    } else {
-      let current = (try { $existing.refs } catch { [] })
-      ($current | append $refs) | uniq
-    })
-
-    $images = ($images | upsert $image_id {
-      refs: $merged_refs,
-      owner_service: $owner_service
-    })
-  }
-
-  let owner_cache_dir = (get-owner-cache-dir $service)
-
-  if not ($owner_cache_dir | path exists) {
-    mkdir $owner_cache_dir
-  }
-
-  # Move shard tarballs into owner cache using cache.nu naming
-  let shard_tarballs = (ls $base_dir | where {|f| $f.type == "file" and ($f.name | str ends-with ".tar.zst")} | get name)
-
-  for shard_tar in $shard_tarballs {
-    # Derive image_id from filename (strip extension and optional directory)
-    let filename = ($shard_tar | path basename)
-    let image_id_no_prefix = ($filename | str replace ".tar.zst" "")
-    let target_path = (get-image-tarball-path $service $image_id_no_prefix)
-
-    # Ensure target directory exists
-    let target_dir = ($target_path | path dirname)
-    if not ($target_dir | path exists) {
-      mkdir $target_dir
-    }
-
-    mv $shard_tar $target_path
-  }
-
-  # Write final manifest for owner cache using existing helper
-  write-manifest $service {nodes: $nodes, images: $images}
-
-  {
-    nodes: $nodes,
-    images: $images
-  }
 }

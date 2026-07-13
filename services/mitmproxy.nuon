@@ -2,6 +2,12 @@
   "name": "mitmproxy",
   "context": "services/mitmproxy",
   "dockerfile": "services/mitmproxy/Dockerfile",
+  "external_images": {
+    "runtime": {
+      "name": "mitmproxy/mitmproxy",
+      "build_arg": "MITMPROXY_UPSTREAM_IMAGE"
+    }
+  },
   "dependencies": {
     "common-tools": {
       "build_arg": "COMMON_TOOLS_IMAGE"
