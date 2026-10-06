@@ -3,7 +3,7 @@
   "defaults": {
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-alpine"
+        "version": "v1.1.0-alpine"
       }
     },
     "external_images": {

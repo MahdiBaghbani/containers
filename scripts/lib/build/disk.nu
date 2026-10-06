@@ -131,7 +131,7 @@ def run-df-summary [] {
 # Parse size string (e.g., "5.2G", "500M", "100K") to GB
 export def parse-size-to-gb [size_str: string] {
   let size_str = ($size_str | str trim)
-  let last_char = ($size_str | str substring (-1..-1) | str upcase)
+  let last_char = ($size_str | str substring (-1..-1) | str uppercase)
   let num_str = ($size_str | str substring 0..-2)
   let num = (try { $num_str | into float } catch { 0.0 })
   

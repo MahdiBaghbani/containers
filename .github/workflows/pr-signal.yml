@@ -44,14 +44,14 @@ jobs:
   signal:
     name: PR signal validation
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
       - name: Install Nushell
         env:
-          NU_VERSION: 0.113.1
+          NU_VERSION: 0.116.0
         run: |
           curl -fsSL -o /tmp/nu.tar.gz "https://github.com/nushell/nushell/releases/download/${{ env.NU_VERSION }}/nu-${{ env.NU_VERSION }}-x86_64-unknown-linux-gnu.tar.gz"
           mkdir -p /tmp/nu
@@ -70,6 +70,21 @@ jobs:
 
       - name: Run CI test suite
         run: nu scripts/dockypody.nu test --suite ci
+
+      - name: Run services test suite
+        run: nu scripts/dockypody.nu test --suite services
+
+      - name: Run revad-base service tests
+        run: nu services/revad-base/tests/test-runner.nu --suite all
+
+      - name: Run nextcloud-base service tests
+        run: nu services/nextcloud-base/tests/test-runner.nu --suite all
+
+      - name: Run ocis service tests
+        run: nu services/ocis/tests/test-runner.nu --suite all
+
+      - name: Run opencloud service tests
+        run: nu services/opencloud/tests/test-runner.nu --suite all
 
       - name: Lint docs
         run: nu scripts/dockypody.nu docs lint

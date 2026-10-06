@@ -35,7 +35,7 @@ export def dockerfile-drift-tests [verbose: bool] {
         (run-test "Dockerfile drift: server-family uses correct SSH build-time gate" {
             let repo_root = (get-repo-root)
             let gate = 'if [ "$SSH_ENABLED" = "true" ] && { [ "$SSH_MODE" = "server" ] || [ "$SSH_MODE" = "client-and-server" ]; }; then'
-            let missing = ($dockerfiles | filter {|rel|
+            let missing = ($dockerfiles | where {|rel|
                 let path = ($repo_root | path join $rel)
                 if not ($path | path exists) {
                     true
@@ -53,7 +53,7 @@ export def dockerfile-drift-tests [verbose: bool] {
         (run-test "Dockerfile drift: server-family has no 'chmod 600 /opt/dockypody/ssh/ssh.json'" {
             let repo_root = (get-repo-root)
             let forbidden = 'chmod 600 /opt/dockypody/ssh/ssh.json'
-            let offenders = ($dockerfiles | filter {|rel|
+            let offenders = ($dockerfiles | where {|rel|
                 let path = ($repo_root | path join $rel)
                 if not ($path | path exists) {
                     false

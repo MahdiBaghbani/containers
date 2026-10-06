@@ -87,7 +87,7 @@ export def init_authprovider [authprovider_type: string] {
   # Get authprovider-specific environment variables
   # Environment variable names are constructed using uppercase type (e.g., REVAD_AUTHPROVIDER_OIDC_HOST)
   # Defaults use generic names (ports match common patterns: 9158=OIDC, 9166=Machine, 9160=Public Shares, 9278=OCM Shares)
-  let type_upper = ($authprovider_type | str upcase)
+  let type_upper = ($authprovider_type | str uppercase)
   let authprovider_host = (get_env_or_default $"REVAD_AUTHPROVIDER_($type_upper)_HOST" $"revad-authprovider-($authprovider_type)")
   
   let authprovider_grpc_port = (resolve-authprovider-grpc-port $authprovider_type)

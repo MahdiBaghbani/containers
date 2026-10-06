@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 ARG BASE_RUNTIME_IMAGE="php:8.3-apache-trixie"
 
 ARG TLS_ENABLED="false"

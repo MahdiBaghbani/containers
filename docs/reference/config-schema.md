@@ -685,8 +685,8 @@ Service depending on multiple services with different versions:
 ### Dependency Resolution
 
 - `revad-base` resolves to `revad-base:v3.10.1` (version from overrides)
-- `common-tools-builder` resolves to `common-tools:v1.0.0-debian` (version from overrides)
-- `common-tools-runtime` resolves to `common-tools:v1.0.0-alpine` (version from overrides)
+- `common-tools-builder` resolves to `common-tools:v1.1.0-debian` (version from overrides)
+- `common-tools-runtime` resolves to `common-tools:v1.1.0-alpine` (version from overrides)
 
 ## See Also
 

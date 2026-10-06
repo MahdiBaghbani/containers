@@ -15,14 +15,14 @@
         },
         "dependencies": {
           "common-tools": {
-            "version": "v1.0.0-debian"
+            "version": "v1.1.0-debian"
           }
         }
       },
       "dev": {
         "dependencies": {
           "common-tools": {
-            "version": "v1.0.0-debian"
+            "version": "v1.1.0-debian"
           },
           "kasm-base": {
             "version": "v1.4.1-debian"

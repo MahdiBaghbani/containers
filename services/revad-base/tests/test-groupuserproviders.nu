@@ -97,7 +97,7 @@ groups = "{{placeholder:config-dir}}/groups.demo.json"
     print "  [PASS] Config copy: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Config copy: FAILED (" + $failed_str + " errors)"
+    print ("  [FAIL] Config copy: FAILED (" + $failed_str + " errors)")
   }
   
   rm -rf $test_config_dir $test_source_dir
@@ -167,8 +167,8 @@ groups = "{{placeholder:config-dir}}/groups.demo.json"
     print "  [PASS] Placeholder processing: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Placeholder processing: FAILED (" + $failed_str + " errors)"
-    print "    Result: " + $result
+    print ("  [FAIL] Placeholder processing: FAILED (" + $failed_str + " errors)")
+    print ("    Result: " + $result)
   }
   
   rm $test_file
@@ -210,7 +210,7 @@ def test_groupuserproviders_gateway_address_construction [] {
     print "  [PASS] Gateway address construction: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Gateway address construction: FAILED (" + $failed_str + " errors)"
+    print ("  [FAIL] Gateway address construction: FAILED (" + $failed_str + " errors)")
   }
   
   return {passed: $passed, failed: $failed}
@@ -250,8 +250,8 @@ keyfile = "/tls/server.key"
     print "  [PASS] TLS disabling: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] TLS disabling: FAILED (" + $failed_str + " errors)"
-    print "    Result: " + $result
+    print ("  [FAIL] TLS disabling: FAILED (" + $failed_str + " errors)")
+    print ("    Result: " + $result)
   }
   
   rm $test_file

@@ -101,7 +101,7 @@ export def materialize-env-only-sources [
   mut effective = $sources
 
   for source_key in ($sources | columns) {
-    let env_key = $"($source_key | str upcase)_PATH"
+    let env_key = $"($source_key | str uppercase)_PATH"
     let env_path = (try { ($env | get -o $env_key) } catch { null })
     if ($env_path != null) and ($env_path | str length) > 0 {
       let path_validation = (validate-local-path $env_path $repo_root)

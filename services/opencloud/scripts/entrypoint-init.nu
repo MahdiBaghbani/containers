@@ -72,7 +72,7 @@ def resolve-opencloud-admin-password [] {
 # Only runs when the flag is explicitly "true"; unset or any other value is a
 # no-op so existing deployments are unaffected.
 def maybe-bootstrap-opencloud [] {
-    let flag = ($env.OPENCLOUD_INIT? | default "" | str downcase | str trim)
+    let flag = ($env.OPENCLOUD_INIT? | default "" | str lowercase | str trim)
     if $flag != "true" { return }
     if ($OPENCLOUD_CONFIG_FILE | path exists) {
         print $"[entrypoint-init] OPENCLOUD_INIT=true: config already exists at ($OPENCLOUD_CONFIG_FILE), skipping init"

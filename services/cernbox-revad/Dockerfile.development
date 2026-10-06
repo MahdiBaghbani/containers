@@ -20,7 +20,7 @@
 ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
 ARG REVAD_BASE_IMAGE="revad-base:v3.3.3-development"
 ARG GAIA_IMAGE="gaia:master"
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 ################################
 ###  Import Gaia image       ###

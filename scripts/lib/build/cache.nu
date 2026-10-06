@@ -62,7 +62,7 @@ export def parse-dep-cache-mode [raw: string, is_local: bool] {
         # CI builds default to "soft" (hash-based skip + auto-build)
         if $is_local { "off" } else { "soft" }
     } else {
-        let mode = ($raw | str trim | str downcase)
+        let mode = ($raw | str trim | str lowercase)
         if not ($mode in $DEP_CACHE_MODES) {
             let valid_list = ($DEP_CACHE_MODES | str join ", ")
             error make {

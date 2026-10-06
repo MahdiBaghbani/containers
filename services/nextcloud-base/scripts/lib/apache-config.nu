@@ -59,7 +59,7 @@ def configure_https_mode [] {
   let mode = if $https_mode == null {
     "off"
   } else {
-    $https_mode | str trim | str downcase
+    $https_mode | str trim | str lowercase
   }
   
   # Validate mode

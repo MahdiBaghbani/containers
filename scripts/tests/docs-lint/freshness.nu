@@ -182,16 +182,16 @@ export def freshness-tests [verbose: bool] {
       true
     } $verbose)
     (run-test "freshness nushell: machine pin must be exact" {
-      let ok = (check-nushell-ref "nushell-machine" "0.113.1")
+      let ok = (check-nushell-ref "nushell-machine" "0.116.0")
       let bad = (check-nushell-ref "nushell-machine" "0.108.0")
-      if not $ok.ok { error make {msg: "expected 0.113.1 machine pin to pass"} }
+      if not $ok.ok { error make {msg: "expected 0.116.0 machine pin to pass"} }
       if $bad.ok { error make {msg: "expected 0.108.0 machine pin to fail"} }
       true
     } $verbose)
-    (run-test "freshness nushell: prose allows 0.113 floor" {
-      let ok = (check-nushell-ref "nushell-prose" "0.113")
+    (run-test "freshness nushell: prose allows 0.116 floor" {
+      let ok = (check-nushell-ref "nushell-prose" "0.116")
       let bad = (check-nushell-ref "nushell-prose" "0.80")
-      if not $ok.ok { error make {msg: "expected prose 0.113 to pass"} }
+      if not $ok.ok { error make {msg: "expected prose 0.116 to pass"} }
       if $bad.ok { error make {msg: "expected prose 0.80 to fail"} }
       true
     } $verbose)

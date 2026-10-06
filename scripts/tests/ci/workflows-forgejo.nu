@@ -19,6 +19,7 @@
 
 # Forgejo workflow contract tests
 
+use ../../lib/ci/workflow/constants.nu [NU_VERSION]
 use ../lib.nu [run-test]
 
 export def test-forgejo-workflows [verbose: bool] {
@@ -164,6 +165,25 @@ export def test-forgejo-workflows [verbose: bool] {
     if $build_nu_version != $github_nu_version {
       error make {
         msg: $"NU_VERSION mismatch: ($build_wf)=($build_nu_version) ($github_build_wf)=($github_nu_version)"
+      }
+    }
+    if $build_nu_version != $NU_VERSION {
+      error make {
+        msg: $"Forgejo NU_VERSION mismatch. workflow=($build_nu_version) constants=($NU_VERSION)"
+      }
+    }
+
+    let validate_nu_steps = (
+      ($wf_data.jobs?.validate?.steps? | default [])
+      | where {|s| ($s.name? | default "") == "Install Nushell"}
+    )
+    if ($validate_nu_steps | is-empty) {
+      error make {msg: $"($validate_wf) missing 'Install Nushell' step"}
+    }
+    let validate_nu_version = (($validate_nu_steps | first).env?.NU_VERSION? | default "")
+    if $validate_nu_version != $NU_VERSION {
+      error make {
+        msg: $"($validate_wf) NU_VERSION mismatch. got=($validate_nu_version) expected=($NU_VERSION)"
       }
     }
 

@@ -1,6 +1,5 @@
 {
   "default": "v1.1.0",
-
   "defaults": {
     "build_args": {
       "GO_BUILD_GOPROXY": "https://proxy.golang.org|direct"
@@ -12,7 +11,7 @@
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       }
     },
     "external_images": {
@@ -30,7 +29,6 @@
       }
     }
   },
-
   "versions": [
     {
       "name": "master",

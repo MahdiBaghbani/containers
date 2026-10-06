@@ -83,7 +83,7 @@ export def test-cli [
 
   # Run suites and collect results using reduce to avoid mutable variable scope issues
   let results = ($test_suites | reduce --fold {passed: 0, failed: 0, skipped: 0} {|suite_name, acc|
-    print $"=== ($suite_name | str upcase) ==="
+    print $"=== ($suite_name | str uppercase) ==="
 
     let result = (if $verbose {
       nu $"scripts/tests/($suite_name)/mod.nu" "--verbose" | complete

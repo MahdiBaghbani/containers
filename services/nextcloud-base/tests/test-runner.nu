@@ -50,7 +50,7 @@ def main [
   mut suites_failed = 0
   
   for suite_name in $test_suites {
-    print $"=== ($suite_name | str upcase) ==="
+    print $"=== ($suite_name | str uppercase) ==="
     
     let test_file = $"($test_dir)/test-($suite_name).nu"
     

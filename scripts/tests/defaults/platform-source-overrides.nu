@@ -134,7 +134,7 @@ export def test-mixed-global-and-platform-specific-source-overrides [verbose: bo
           },
           nushell: {
             url: "https://github.com/nushell/nushell",
-            ref: "0.113.1"
+            ref: "0.116.0"
           }
         }
       },

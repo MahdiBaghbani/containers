@@ -146,7 +146,7 @@ export def extract-source-ref-kinds [
             (try { $source_types | get $source_key } catch { "git" })
         })
         let kind = (classify-source-ref-kind $source $source_type)
-        let kind_key = ($"($source_key | str upcase)_REF_KIND")
+        let kind_key = ($"($source_key | str uppercase)_REF_KIND")
         $acc | upsert $kind_key $kind
     })
 }
@@ -166,7 +166,7 @@ export def extract-source-shas [
         # we still skip SHA extraction for sources with path field
         if "path" in ($source | columns) {
             # Local source - skip SHA extraction, return empty SHA
-            let sha_key = ($"($source_key | str upcase)_SHA")
+            let sha_key = ($"($source_key | str uppercase)_SHA")
             {
                 shas: ($acc.shas | upsert $sha_key ""),
                 cache: $acc.cache
@@ -178,7 +178,7 @@ export def extract-source-shas [
 
             if ($url | str length) > 0 and ($ref | str length) > 0 {
                 let sha_result = (extract-source-sha $url $ref $service $source_key $acc.cache)
-                let sha_key = ($"($source_key | str upcase)_SHA")
+                let sha_key = ($"($source_key | str uppercase)_SHA")
                 {
                     shas: ($acc.shas | upsert $sha_key $sha_result.sha),
                     cache: $sha_result.cache
@@ -186,7 +186,7 @@ export def extract-source-shas [
             } else {
                 let ref_display = (if ($ref | str length) > 0 { $ref } else { "unknown" })
                 print $"WARNING: [($service)] Source '($source_key)' missing url or ref. Skipping SHA extraction."
-                let sha_key = ($"($source_key | str upcase)_SHA")
+                let sha_key = ($"($source_key | str uppercase)_SHA")
                 {
                     shas: ($acc.shas | upsert $sha_key ""),
                     cache: $acc.cache

@@ -34,8 +34,8 @@ use ../platforms/core.nu [
 ]
 use ../core/version.nu [NU_PIN]
 
-# Prose floor: major.minor "0.113" (patch optional). Machine pin is NU_PIN.
-const NU_PROSE_MIN = "0.113"
+# Prose floor: major.minor "0.116" (patch optional). Machine pin is NU_PIN.
+const NU_PROSE_MIN = "0.116"
 
 # Tracked markdown only (no untracked / local-plane). Differs from ASCII lint
 # discovery, which may include untracked exclude-standard paths.

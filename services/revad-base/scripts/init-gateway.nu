@@ -136,7 +136,7 @@ export def init_gateway [] {
   } else {
     $oc_insecure_env
   })
-  let sciencemesh_ocm_client_insecure = (if (($sciencemesh_ocm_client_insecure_raw | str downcase) == "true") {
+  let sciencemesh_ocm_client_insecure = (if (($sciencemesh_ocm_client_insecure_raw | str lowercase) == "true") {
     "true"
   } else {
     "false"
@@ -177,7 +177,7 @@ export def init_gateway [] {
   
   # Get OCM code-flow configuration
   let enable_code_flow_raw = (get_env_or_default "OCM_ENABLE_CODE_FLOW" "false" | str trim)
-  let enable_code_flow = (if (($enable_code_flow_raw | str downcase) == "true") { "true" } else { "false" })
+  let enable_code_flow = (if (($enable_code_flow_raw | str lowercase) == "true") { "true" } else { "false" })
   let jwt_expire = (get_env_or_default "REVAD_JWT_EXPIRE" "86400")
 
   # Get share providers and user/group providers addresses

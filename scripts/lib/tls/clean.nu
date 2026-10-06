@@ -198,7 +198,7 @@ export def clean-certs [
                 try {
                     (ls $service_ca_dir | where {|f| 
                         let name = ($f.name | path basename)
-                        $name | str ends-with ".crt" or $name | str ends-with ".key" or $name == "ca.json"
+                        (($name | str ends-with ".crt") or ($name | str ends-with ".key") or $name == "ca.json")
                     } | get name)
                 } catch {
                     []

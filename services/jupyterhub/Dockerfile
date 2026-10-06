@@ -33,7 +33,7 @@
 # default local ConfigurableHTTPProxy cannot start there.
 
 ARG BASE_HUB_IMAGE="quay.io/jupyterhub/jupyterhub:5.3.0"
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"

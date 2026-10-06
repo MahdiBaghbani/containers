@@ -121,7 +121,7 @@ def get-default-private-key [] {
 }
 
 def main [] {
-    let enabled = ($env.OCM_SSH_ENABLED? | default "false" | str downcase | str trim)
+    let enabled = ($env.OCM_SSH_ENABLED? | default "false" | str lowercase | str trim)
     if $enabled != "true" {
         print "[ocm-ssh-client-env] SSH client setup disabled (OCM_SSH_ENABLED != true)"
         return

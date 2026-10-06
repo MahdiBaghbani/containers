@@ -1,6 +1,5 @@
 {
   "default": "v8.7.2-nc-master",
-
   "defaults": {
     "sources": {
       "contacts": {
@@ -14,14 +13,13 @@
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       },
       "nextcloud": {
         "version": "master-debian"
       }
     }
   },
-
   "versions": [
     {
       "name": "main-nc-master",

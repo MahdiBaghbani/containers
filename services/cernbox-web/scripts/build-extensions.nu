@@ -33,7 +33,7 @@ def last-lines [n: int] {
 
 # Check if string contains EAGAIN error (case-insensitive)
 def has-eagain-error [] {
-  let text = ($in | str downcase)
+  let text = ($in | str lowercase)
   ($text | str contains "eagain") or ($text | str contains "err_pnpm_eagain")
 }
 
@@ -162,7 +162,7 @@ def retry-pnpm-install [package_dir: string, max_retries: int] {
         $encountered_eagain = true
         print $"EAGAIN error detected on attempt ($attempt)/($max_retries)"
 
-        let error_preview = ($output_text | lines | where {|l| ($l | str downcase | str contains "eagain")} | last 3 | str join "\n")
+        let error_preview = ($output_text | lines | where {|l| ($l | str lowercase | str contains "eagain")} | last 3 | str join "\n")
         if ($error_preview | str length) > 0 {
           print $error_preview
         }

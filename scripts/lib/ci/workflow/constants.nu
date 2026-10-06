@@ -17,7 +17,7 @@
 
 # Constants and shared definitions for workflow generation
 
-export const NU_VERSION = "0.113.1"
+export const NU_VERSION = "0.116.0"
 
 export const ORCHESTRATOR_PATH = ".github/workflows/build-orchestrator.yml"
 export const BUILD_PATH = ".github/workflows/build.yml"

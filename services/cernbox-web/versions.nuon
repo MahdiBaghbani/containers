@@ -1,6 +1,5 @@
 {
   "default": "master",
-
   "defaults": {
     "sources": {
       "web": {
@@ -17,17 +16,16 @@
     },
     "dependencies": {
       "common-tools-builder": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       },
       "common-tools-runtime": {
-        "version": "v1.0.0-alpine"
+        "version": "v1.1.0-alpine"
       }
     },
     "build_args": {
       "PNPM_RETRY_COUNT": "10"
     }
   },
-
   "versions": [
     {
       "name": "master",

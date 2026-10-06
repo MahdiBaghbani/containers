@@ -421,7 +421,7 @@ export def detect-clone-source-requirements [
             if ($stripped | is-empty) or ($stripped | str starts-with "#") {
                 false
             } else {
-                (($stripped | str upcase | str starts-with "COPY")
+                (($stripped | str uppercase | str starts-with "COPY")
                     and ($line | str contains $helper_path))
             }
         }

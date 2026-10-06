@@ -349,7 +349,7 @@ When multiple versions share the same configuration values, you can use the opti
           "build": { "tag": "1.25-trixie" }
         },
         "dependencies": {
-          "common-tools": { "version": "v1.0.0-debian" }
+          "common-tools": { "version": "v1.1.0-debian" }
         }
       }
     },
@@ -360,7 +360,7 @@ When multiple versions share the same configuration values, you can use the opti
           "build": { "tag": "1.25-trixie" }
         },
         "dependencies": {
-          "common-tools": { "version": "v1.0.0-debian" }
+          "common-tools": { "version": "v1.1.0-debian" }
         }
       }
     }
@@ -378,7 +378,7 @@ When multiple versions share the same configuration values, you can use the opti
       "build": { "tag": "1.25-trixie" }
     },
     "dependencies": {
-      "common-tools": { "version": "v1.0.0-debian" }
+      "common-tools": { "version": "v1.1.0-debian" }
     }
   },
   "versions": [

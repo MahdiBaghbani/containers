@@ -39,7 +39,7 @@ around them.
 
 ## Quick start
 
-Prerequisites: Nushell 0.113 or later, GNU Make, OpenSSL, and Docker Engine.
+Prerequisites: Nushell 0.116 or later, GNU Make, OpenSSL, and Docker Engine.
 
 ```bash
 # Generate shared TLS material (first time only; required for most services)

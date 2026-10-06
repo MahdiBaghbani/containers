@@ -29,7 +29,7 @@ def parse_bool [name: string, default: bool] {
   if ($raw | str length) == 0 {
     $default
   } else {
-    (($raw | str downcase) in ["1", "true", "yes", "on"])
+    (($raw | str lowercase) in ["1", "true", "yes", "on"])
   }
 }
 
@@ -39,7 +39,7 @@ def parse_optional_bool [name: string] {
   if ($raw | str length) == 0 {
     null
   } else {
-    (($raw | str downcase) in ["1", "true", "yes", "on"])
+    (($raw | str lowercase) in ["1", "true", "yes", "on"])
   }
 }
 
@@ -78,7 +78,7 @@ def set_string [user: string, key: string, value: string] {
 
 def main [] {
   let enable = (parse_bool "CONTACTS_ENABLE_OCM_INVITES" false)
-  let mode = (get_env_or_default "CONTACTS_OCM_INVITES_MODE" "" | str downcase)
+  let mode = (get_env_or_default "CONTACTS_OCM_INVITES_MODE" "" | str lowercase)
   let mesh = (get_env_or_default "CONTACTS_MESH_PROVIDERS_SERVICE" "")
   let optional_mail_override = (parse_optional_bool "CONTACTS_OCM_INVITES_OPTIONAL_MAIL")
   let encoded_copy_override = (parse_optional_bool "CONTACTS_OCM_INVITES_ENCODED_COPY_BUTTON")

@@ -1,6 +1,5 @@
 {
   "default": "8.3-apache",
-
   "defaults": {
     "sources": {
       "composer": {
@@ -15,11 +14,10 @@
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       }
     }
   },
-
   "versions": [
     {
       "name": "8.3-apache",

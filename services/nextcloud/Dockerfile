@@ -18,7 +18,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ARG NEXTCLOUD_BASE_IMAGE="nextcloud-base:v1.0.0-debian"
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 ################################
 ###  Source Preparation      ###

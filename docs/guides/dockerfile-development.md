@@ -134,7 +134,7 @@ Dockerfile ordering is not just style. It affects:
 # SPDX header...
 
 # Global args (used by FROM)
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
 
 # Global pins (versions, refs)
@@ -352,7 +352,7 @@ Use `common-tools` as a base image for any stage that needs:
 
 ```dockerfile
 # Declare ARG at top of Dockerfile
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 # Use as base image for stages needing Debian + common tools
 FROM ${COMMON_TOOLS_IMAGE} AS source-prepare

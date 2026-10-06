@@ -109,7 +109,7 @@ def build-graph-recursive-mock [
 
   mut visited = ($visited | append $node_key)
 
-  mut merged_cfg = null
+  mut merged_cfg: any = null
   mut config_cache = $config_cache
 
   if $node_key in ($config_cache | columns) {

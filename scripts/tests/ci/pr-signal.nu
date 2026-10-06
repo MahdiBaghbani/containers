@@ -66,9 +66,9 @@ export def test-pr-signal-workflow [verbose: bool] {
       error make {msg: $"($wf) missing jobs.signal"}
     }
     let timeout_minutes = ($signal_job | get --optional "timeout-minutes") | default null
-    if $timeout_minutes != 10 {
+    if $timeout_minutes != 20 {
       error make {
-        msg: $"($wf) jobs.signal.timeout-minutes mismatch. got=($timeout_minutes) expected=10"
+        msg: $"($wf) jobs.signal.timeout-minutes mismatch. got=($timeout_minutes) expected=20"
       }
     }
 
@@ -93,23 +93,36 @@ export def test-pr-signal-workflow [verbose: bool] {
       error make {msg: $"($wf) missing 'Install Nushell' step"}
     }
     let nu_version = (($nu_steps | first).env?.NU_VERSION? | default "")
-    if $nu_version != "0.113.1" {
+    if $nu_version != "0.116.0" {
       error make {
-        msg: $"($wf) Install Nushell NU_VERSION mismatch. got=($nu_version) expected=0.113.1"
+        msg: $"($wf) Install Nushell NU_VERSION mismatch. got=($nu_version) expected=0.116.0"
       }
     }
 
+    const service_runner_commands = [
+      "nu services/revad-base/tests/test-runner.nu --suite all"
+      "nu services/nextcloud-base/tests/test-runner.nu --suite all"
+      "nu services/ocis/tests/test-runner.nu --suite all"
+      "nu services/opencloud/tests/test-runner.nu --suite all"
+    ]
     let expected_commands = [
       "nu scripts/dockypody.nu validate --all-services"
       "nu scripts/dockypody.nu build --all-services --matrix-json --latest-only | jq . >/dev/null"
       "nu scripts/dockypody.nu ci workflow --target all --dry-run >/dev/null"
       "nu scripts/dockypody.nu test --suite ci"
+      "nu scripts/dockypody.nu test --suite services"
+      "nu services/revad-base/tests/test-runner.nu --suite all"
+      "nu services/nextcloud-base/tests/test-runner.nu --suite all"
+      "nu services/ocis/tests/test-runner.nu --suite all"
+      "nu services/opencloud/tests/test-runner.nu --suite all"
       "nu scripts/dockypody.nu docs lint"
     ]
     let dockypody_runs = (
       $steps
       | each {|s| ($s.run? | default "") | str trim}
-      | where {|r| $r | str contains "scripts/dockypody.nu"}
+      | where {|r|
+        (($r | str contains "scripts/dockypody.nu") or ($r in $service_runner_commands))
+      }
     )
     if $dockypody_runs != $expected_commands {
       error make {

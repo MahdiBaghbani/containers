@@ -34,7 +34,7 @@ export def parse-bool-flag [value: any] {
         return $value
     }
     
-    let value_str = ($value | into string | str downcase)
+    let value_str = ($value | into string | str lowercase)
     $value_str in ["true", "1", "yes"]
 }
 
@@ -106,7 +106,7 @@ export def detect-source-type [
     plane: string = "tracked"
 ] {
     if $plane != $PLANE_LOCAL {
-        let env_path_key = $"($source_key | str upcase)_PATH"
+        let env_path_key = $"($source_key | str uppercase)_PATH"
         let env_path = (try { ($env | get -o $env_path_key) } catch { null })
         if ($env_path != null) and ($env_path | str length) > 0 {
             return "local"
@@ -155,7 +155,7 @@ export def process-sources-to-build-args [
         let source_type = (try { $detected_types | get $source_key } catch { "git" })
         let source_type = (if ($source_type | str length) == 0 { "git" } else { $source_type })
         
-        let source_key_upper = ($source_key | str upcase)
+        let source_key_upper = ($source_key | str uppercase)
         mut result = $acc
 
         if $source_type == "local" {

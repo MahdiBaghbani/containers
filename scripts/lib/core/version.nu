@@ -18,8 +18,8 @@
 # Nushell interpreter version requirements
 # Part of scripts/lib/core/ - cross-cutting helpers with no domain knowledge
 
-export const NU_PIN = "0.113.1"
-export const NU_MIN = "0.113.1"
+export const NU_PIN = "0.116.0"
+export const NU_MIN = "0.116.0"
 
 def version-below-min [current: string, minimum: string] {
   let sorted = ([$current, $minimum] | sort -n)

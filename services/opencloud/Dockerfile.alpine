@@ -19,7 +19,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-alpine"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-alpine"
 ARG BASE_NODE_IMAGE="node:24.15.0-trixie-slim"
 ARG BASE_GO_IMAGE="golang:1.25-alpine"
 ARG BASE_RUNTIME_IMAGE="alpine:3.22"

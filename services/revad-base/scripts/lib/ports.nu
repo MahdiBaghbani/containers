@@ -93,7 +93,7 @@ export def resolve-grpc-port-for-mode [mode: string] {
         optional-env-or-default "REVAD_GROUPUSERPROVIDERS_GRPC_PORT" (default-grpc-port-for-mode $mode)
     } else if ($mode | str starts-with "authprovider-") {
         let ap_type = ($mode | str substring 13..)
-        let type_upper = ($ap_type | str upcase)
+        let type_upper = ($ap_type | str uppercase)
         optional-env-or-default $"REVAD_AUTHPROVIDER_($type_upper)_GRPC_PORT" (default-grpc-port-for-mode $mode)
     } else {
         default-grpc-port-for-mode $mode
@@ -103,7 +103,7 @@ export def resolve-grpc-port-for-mode [mode: string] {
 
 # Dataprovider init: explicit env required (no invented default on the container).
 export def require-dataprovider-grpc-port [dataprovider_type: string] {
-    let type_upper = ($dataprovider_type | str upcase)
+    let type_upper = ($dataprovider_type | str uppercase)
     let port = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_GRPC_PORT" "" | str trim)
     if ($port | str length) == 0 {
         error make {
@@ -115,7 +115,7 @@ export def require-dataprovider-grpc-port [dataprovider_type: string] {
 
 # Gateway registry wiring: env override with cookbook-friendly defaults.
 export def resolve-dataprovider-registry-grpc-port [dataprovider_type: string] {
-    let type_upper = ($dataprovider_type | str upcase)
+    let type_upper = ($dataprovider_type | str uppercase)
     let port = (optional-env-or-default $"REVAD_DATAPROVIDER_($type_upper)_GRPC_PORT" (default-dataprovider-registry-grpc-port $dataprovider_type))
     validate-grpc-port $port
 }
@@ -126,7 +126,7 @@ export def resolve-gateway-grpc-port [] {
 
 export def resolve-authprovider-grpc-port [authprovider_type: string] {
     let mode = $"authprovider-($authprovider_type)"
-    let type_upper = ($authprovider_type | str upcase)
+    let type_upper = ($authprovider_type | str uppercase)
     let port = (optional-env-or-default $"REVAD_AUTHPROVIDER_($type_upper)_GRPC_PORT" (default-grpc-port-for-mode $mode))
     validate-grpc-port $port
 }

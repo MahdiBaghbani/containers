@@ -12,7 +12,7 @@
         "version": "8.3-apache-debian"
       },
       "common-tools": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       }
     }
   },

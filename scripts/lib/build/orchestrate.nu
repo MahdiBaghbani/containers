@@ -550,7 +550,7 @@ def run-single-service-build [ctx: record] {
   }
   
   # Handle version suffix detection for platform services
-  mut version_suffix_info = null
+  mut version_suffix_info: any = null
   if $has_platforms_manifest and ($f.version | str length) > 0 {
     let stripped = (try {
       strip-platform-suffix $f.version $platforms_manifest

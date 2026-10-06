@@ -110,7 +110,7 @@ def collect-env-keys-used [
 ] {
   mut used = []
   for source_key in ($sources | columns) {
-    let env_key = $"($source_key | str upcase)_PATH"
+    let env_key = $"($source_key | str uppercase)_PATH"
     let env_path = (try { ($env | get -o $env_key) } catch { null })
     if ($env_path != null) and ($env_path | str length) > 0 {
       let effective_path = (try { ($sources | get $source_key).path } catch { "" })
@@ -133,7 +133,7 @@ def build-source-origin [
 ] {
   ($sources | columns | reduce --fold {} {|source_key, acc|
     let source = ($sources | get $source_key)
-    let env_key = $"($source_key | str upcase)_PATH"
+    let env_key = $"($source_key | str uppercase)_PATH"
     let origin = (if ($env_key in $env_keys_used) {
       "env-only"
     } else if ($source_key in $fragment_keys) {

@@ -89,7 +89,7 @@ export def init_dataprovider [
   
   # Get dataprovider-specific environment variables
   # Environment variable names are constructed using uppercase type (e.g., REVAD_DATAPROVIDER_LOCALHOME_HOST)
-  let type_upper = ($dataprovider_type | str upcase)
+  let type_upper = ($dataprovider_type | str uppercase)
   let dataprovider_host = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_HOST" $"revad-dataprovider-($dataprovider_type)")
   let dataprovider_port = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PORT" "80")
   let dataprovider_protocol = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PROTOCOL" "http")
@@ -113,7 +113,7 @@ export def init_dataprovider [
   # Get OCM receiver client configuration (used by sciencemesh dataprovider)
   let ocm_timeout = (get_env_or_default "OCM_TIMEOUT" "10")
   let ocm_insecure_raw = (get_env_or_default "OCM_CLIENT_INSECURE" "false" | str trim)
-  let ocm_insecure = (if (($ocm_insecure_raw | str downcase) == "true") { "true" } else { "false" })
+  let ocm_insecure = (if (($ocm_insecure_raw | str lowercase) == "true") { "true" } else { "false" })
 
   # Build placeholder map
   let placeholder_map = {

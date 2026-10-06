@@ -121,7 +121,7 @@ Version Overrides (with version defaults already merged)
           "build": { "tag": "1.25-trixie" }
         },
         "dependencies": {
-          "common-tools": { "version": "v1.0.0-debian" }
+          "common-tools": { "version": "v1.1.0-debian" }
         },
         "platforms": {
           "production": {
@@ -139,7 +139,7 @@ Version Overrides (with version defaults already merged)
           "build": { "tag": "1.25-trixie" }
         },
         "dependencies": {
-          "common-tools": { "version": "v1.0.0-debian" }
+          "common-tools": { "version": "v1.1.0-debian" }
         },
         "platforms": {
           "production": {
@@ -164,7 +164,7 @@ Version Overrides (with version defaults already merged)
       "build": { "tag": "1.25-trixie" }
     },
     "dependencies": {
-      "common-tools": { "version": "v1.0.0-debian" }
+      "common-tools": { "version": "v1.1.0-debian" }
     },
     "platforms": {
       "production": {
