@@ -50,10 +50,10 @@ export def ensure_hosts [] {
   ($content | append $line) | save -f /etc/hosts
 }
 
-# Ensure Reva log file exists at /var/log/revad.log
-# Creates the file if it does not exist
-export def ensure_logfile [] {
-  touch /var/log/revad.log
+# Ensure the Reva log file exists at log_path (default /var/log/revad.log)
+# Creates the file if it does not exist. Production callers omit log_path.
+export def ensure_logfile [log_path: string = "/var/log/revad.log"] {
+  touch $log_path
 }
 
 # Create directory if it does not exist

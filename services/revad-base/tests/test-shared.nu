@@ -187,23 +187,34 @@ def test_disable_config_files [] {
 }
 
 # Test ensure_logfile function
-# Verifies log file creation (may require appropriate permissions)
+# Verifies the function creates a log file at a writable path
 def test_ensure_logfile [] {
   print "Testing ensure_logfile..."
-  
-  let test_log = "/tmp/test_revad.log"
+
+  let test_log = ($nu.temp-dir | path join "test_revad.log")
   if ($test_log | path exists) { rm $test_log }
-  
-  # We can't easily mock /var/log/revad.log, so we test the function exists
-  # In a real scenario, this would require root or proper permissions
-  try {
-    ensure_logfile
-    print "  [PASS] ensure_logfile: PASSED (function executed)"
+
+  let outcome = (try {
+    ensure_logfile $test_log
+    if ($test_log | path exists) { "ok" } else { "missing" }
+  } catch {|err|
+    $err.msg
+  })
+
+  if ($test_log | path exists) { rm $test_log }
+
+  if $outcome == "ok" {
+    print "  [PASS] ensure_logfile: PASSED"
     return true
-  } catch {
-    print $"  [FAIL] ensure_logfile: FAILED \(error: ($in)\)"
+  }
+
+  if $outcome == "missing" {
+    print "  [FAIL] ensure_logfile: FAILED (file was not created)"
     return false
   }
+
+  print $"  [FAIL] ensure_logfile: FAILED \(error: ($outcome)\)"
+  return false
 }
 
 # Main test runner

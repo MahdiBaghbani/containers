@@ -20,6 +20,11 @@
 # Unit tests for post-install.nu functions
 # Tests custom post-installation logic
 
+# Locate repo root from the repo root or from the tests directory.
+def detect_repo_root [] {
+  if ("./services/nextcloud-base" | path exists) { "." } else { "../../.." }
+}
+
 # Test OCC command construction
 # Verifies correct command format for Nextcloud occ operations
 def test_occ_command_construction [] {
@@ -86,7 +91,8 @@ def test_no_direct_config_mutation [] {
   mut passed = 0
   mut failed = 0
 
-  let post_install_src = (open --raw "../scripts/lib/post-install.nu")
+  let repo_root = (detect_repo_root)
+  let post_install_src = (open --raw $"($repo_root)/services/nextcloud-base/scripts/lib/post-install.nu")
 
   # Test 1: post-install.nu must not contain a sed invocation for allow_local_remote_servers
   if not ($post_install_src | str contains "allow_local_remote_servers") {
