@@ -70,6 +70,11 @@ Each mode-specific init script:
    - Disables TLS cert/key lines if TLS disabled
    - Processes TLS-related placeholders if TLS enabled
 
+5. **Applies runtime settings** (final step, all modes):
+   - Reads registry and federation env vars via `runtime-config.nu`
+   - Writes the `[shared.registry]` block and typed network controls
+   - Fails with a fixed summary error on invalid input, before the daemon starts
+
 ### 6. Service Startup
 
 After initialization, the script starts the Reva daemon:
@@ -150,6 +155,7 @@ process_placeholders $config_path $placeholder_map
 
 - `lib/shared.nu` - Shared initialization functions
 - `lib/utils.nu` - Utility functions (placeholder processing, env vars)
+- `lib/runtime-config.nu` - Shared service registry and federation network settings
 
 ### Mode-Specific Scripts
 

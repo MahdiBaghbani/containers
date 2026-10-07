@@ -20,7 +20,7 @@
 # Test runner for revad-base scripts unit tests
 
 def main [
-  --suite: string = "all"       # Which test suite to run (all, utils, shared, gateway, dataprovider, authprovider, shareproviders, groupuserproviders, entrypoint, merge-partials, ports, healthcheck, contracts)
+  --suite: string = "all"       # Which test suite to run (all, utils, shared, gateway, dataprovider, authprovider, shareproviders, groupuserproviders, entrypoint, merge-partials, ports, healthcheck, contracts, runtime-config)
   --verbose                      # Show detailed output
 ] {
   print "Running Reva Base Scripts Test Suite\n"
@@ -39,7 +39,7 @@ def main [
   })
   
   let test_suites = if $suite == "all" {
-    ["utils", "shared", "gateway", "dataprovider", "authprovider", "shareproviders", "groupuserproviders", "entrypoint", "merge-partials", "ports", "healthcheck", "contracts"]
+    ["utils", "shared", "gateway", "dataprovider", "authprovider", "shareproviders", "groupuserproviders", "entrypoint", "merge-partials", "ports", "healthcheck", "contracts", "runtime-config"]
   } else {
     [$suite]
   }

@@ -147,6 +147,72 @@ OCM_CLIENT_INSECURE=false
 
 **Note**: `directory_service_urls` and `mesh_directory_url` are independent fields. Both can be set simultaneously. The `directory_service_urls` field supports multiple space-separated URLs, while `mesh_directory_url` is a single URL.
 
+## Shared Service Registry
+
+Every init script applies runtime registry settings to the rendered config as
+its final step (see `scripts/lib/runtime-config.nu`). Multi-container
+deployments must share a registry backend so processes can resolve their
+peers; a Reva build from August 2026 onward exits by design when the gateway
+stays unresolvable, so the old static `gatewaysvc`-only wiring is not enough
+for split-process stacks.
+
+### Registry Variables
+
+```bash
+# Registry backend: "memory" (default, single process) or "nats" (shared)
+REVAD_REGISTRY_DRIVER=nats
+
+# Required when the driver is nats; no silent fallback to memory
+REVAD_NATS_ADDRESS=nats://receiver-revad-registry:4222
+
+# Optional auth token; omitted from the config when empty
+REVAD_NATS_TOKEN=
+
+# KV bucket name (letters, digits, underscore, hyphen)
+REVAD_NATS_BUCKET=reva_registry
+
+# Key TTL, at least REVAD_REGISTRY_OFFLINE_AFTER
+REVAD_NATS_TTL=30s
+
+# Liveness thresholds; must satisfy heartbeat < degraded < offline < reap
+REVAD_REGISTRY_HEARTBEAT_INTERVAL=5s
+REVAD_REGISTRY_DEGRADED_AFTER=15s
+REVAD_REGISTRY_OFFLINE_AFTER=30s
+REVAD_REGISTRY_REAP_AFTER=5m
+```
+
+The resulting `[shared.registry]` TOML block is written once per config;
+repeated application is idempotent. An empty token is omitted, never written
+as an empty string. Invalid input fails startup with a fixed summary error;
+the raw value is never echoed back.
+
+### Typed Network Controls
+
+Gateway and sciencemesh dataprovider containers additionally accept:
+
+```bash
+# Compact JSON array of allowed federation CIDRs (default: [])
+OCM_ALLOWED_FEDERATION_CIDRS=["10.197.228.0/24"]
+
+# OCM client timeout in seconds (default: 10)
+OCM_TIMEOUT=10
+
+# Skip TLS verification for federation clients (default: false;
+# OCM_CLIENT_INSECURE keeps the OC_INSECURE fallback from the section above)
+OCM_CLIENT_INSECURE=false
+
+# Route federation traffic through HTTP(S)_PROXY (default: false)
+OCM_USE_ENV_PROXY=false
+
+# Allow loopback/private federation targets (default: false)
+OCM_ALLOW_LOOPBACK_FEDERATION=false
+```
+
+These land on the OCM/ScienceMesh HTTP services, the open provider
+authorizer, and both `ocmreceived` drivers with the deployment's `DOMAIN` as
+`provider_domain`. Production defaults stay false/empty; lab stacks opt in
+explicitly.
+
 ## Configuration Directory Structure
 
 ### Source Layout (Build Time)

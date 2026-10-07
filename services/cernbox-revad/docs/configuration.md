@@ -116,6 +116,24 @@ REVAD_DATAPROVIDER_SCIENCEMESH_GRPC_PORT=9147
 REVAD_DATAPROVIDER_SCIENCEMESH_PORT=80
 ```
 
+### Shared Service Registry Variables
+
+Multi-process deployments point every Reva container at the same JetStream
+NATS server so the modes can discover each other:
+
+```bash
+REVAD_REGISTRY_DRIVER=nats
+REVAD_NATS_ADDRESS=nats://cernbox-1-test-revad-registry:4222
+REVAD_NATS_BUCKET=reva_registry
+REVAD_NATS_TTL=30s
+```
+
+Gateway and ScienceMesh dataprovider additionally accept typed federation
+network controls (`OCM_ALLOWED_FEDERATION_CIDRS`, `OCM_TIMEOUT`,
+`OCM_CLIENT_INSECURE`, `OCM_USE_ENV_PROXY`, `OCM_ALLOW_LOOPBACK_FEDERATION`).
+Default values, validation rules, and the exact TOML result are documented in
+[Reva Base Configuration](../../revad-base/docs/configuration.md).
+
 ## Placeholder System
 
 > **Generic Documentation**: For details on the placeholder system, placeholder syntax, and processing, see [Reva Base Configuration Documentation](../../revad-base/docs/configuration.md).

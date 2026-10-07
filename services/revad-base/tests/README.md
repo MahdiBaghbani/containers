@@ -48,6 +48,7 @@ All test files follow a consistent structure:
 - `test-shared.nu` - Tests `shared.nu` functions (DNS, hosts, directories, JSON copy, TLS)
 - `test-utils.nu` - Tests `utils.nu` functions (file replacement, placeholder validation, env vars, placeholder processing)
 - `test-merge-partials.nu` - Tests `merge-partials.nu` functions (partial config parsing, merging, ordering, marker system)
+- `test-runtime-config.nu` - Tests `runtime-config.nu` (registry env parsing, TOML transform, network controls, error handling)
 
 ## Test Coverage
 
@@ -119,6 +120,14 @@ All test files follow a consistent structure:
 - Build-time merge without markers (baked into image)
 - Directory scanning (multiple partial directories with priority)
 
+### Runtime Config Tests
+
+- All 12 modes on the effective master tree (memory default, stock NATS schema, idempotent double application)
+- Registry env parsing (driver, address, bucket, TTL, liveness thresholds, ordering constraints)
+- Typed network controls (OCM/ScienceMesh/open authorizer/received drivers, alternate domain and subnet)
+- Fixed error summaries without input echo (bad driver, address, bucket, durations, bools, timeout, CIDR JSON)
+- Token handling (empty omitted, non-empty safely escaped, never printed)
+
 ## Test Runner
 
 The `test-runner.nu` script:
@@ -130,7 +139,7 @@ The `test-runner.nu` script:
 - Handles missing test files gracefully
 - Supports verbose output mode
 
-Available test suites: `utils`, `shared`, `gateway`, `dataprovider`, `authprovider`, `shareproviders`, `groupuserproviders`, `entrypoint`, `merge-partials`
+Available test suites: `utils`, `shared`, `gateway`, `dataprovider`, `authprovider`, `shareproviders`, `groupuserproviders`, `entrypoint`, `merge-partials`, `ports`, `healthcheck`, `contracts`, `runtime-config`
 
 ## Notes
 

@@ -23,6 +23,7 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders, validate-and-filter-urls]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/runtime-config.nu [write-runtime-settings]
 use ./lib/ports.nu [
     resolve-gateway-grpc-port
     resolve-dataprovider-registry-grpc-port
@@ -260,5 +261,6 @@ export def init_gateway [] {
   
   # Remove any config files listed in DISABLED_CONFIGS
   disable_config_files
+  write-runtime-settings $config_path "gateway"
   print "Gateway configuration initialized"
 }

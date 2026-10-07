@@ -7,7 +7,7 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "fix/ocm-incoming-share-user-id-normalization"
+        "ref": "7b7d60bbef0a1f337f2c95eddac76f224276301f"
       }
     },
     "external_images": {
@@ -44,7 +44,12 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "fix/ocm-incoming-share-user-id-normalization"
+            "ref": "7b7d60bbef0a1f337f2c95eddac76f224276301f"
+          }
+        },
+        "external_images": {
+          "build": {
+            "tag": "1.27.1-trixie"
           }
         },
         "build_args": {
@@ -58,7 +63,12 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "sta-milestone-8/ocm-webapp-open-in-app"
+            "ref": "7b7d60bbef0a1f337f2c95eddac76f224276301f"
+          }
+        },
+        "external_images": {
+          "build": {
+            "tag": "1.27.1-trixie"
           }
         },
         "build_args": {
