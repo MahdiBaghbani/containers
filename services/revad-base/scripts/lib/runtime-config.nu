@@ -313,6 +313,7 @@ def with-http-sciencemesh [svc: record, settings: record] {
     | upsert ocm_client_timeout $network.timeout
     | upsert ocm_client_insecure $network.insecure
     | upsert allowed_federation_cidrs $network.allowed_federation_cidrs
+    | upsert ocm_client_use_env_proxy $network.use_env_proxy
 }
 
 def with-open-driver [svc: record, settings: record] {
@@ -331,6 +332,7 @@ def with-open-driver [svc: record, settings: record] {
     let open = ($existing | merge {
         insecure: $network.insecure
         allowed_federation_cidrs: $network.allowed_federation_cidrs
+        ocm_client_use_env_proxy: $network.use_env_proxy
     })
     $svc | upsert drivers ($drivers | upsert open $open)
 }

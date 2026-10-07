@@ -201,7 +201,9 @@ OCM_TIMEOUT=10
 # OCM_CLIENT_INSECURE keeps the OC_INSECURE fallback from the section above)
 OCM_CLIENT_INSECURE=false
 
-# Route federation traffic through HTTP(S)_PROXY (default: false)
+# Route federation traffic through HTTP(S)_PROXY (default: false).
+# ScienceMesh HTTP and the grpc ocmproviderauthorizer open driver render
+# ocm_client_use_env_proxy, same as the OCM service.
 OCM_USE_ENV_PROXY=false
 
 # Allow loopback/private federation targets (default: false)
