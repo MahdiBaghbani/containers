@@ -35,7 +35,7 @@ use ./_helpers.nu [
 
 export def service-drift-early-tests [verbose: bool] {
   [
-    (run-test "Test 39j: Real manifest - cernbox-revad v3.10.1 production mixed REF_KIND build args" {
+    (run-test "Test 39j: Real manifest - cernbox-revad v3.10.1 production tag REF_KIND build args" {
       let svc = "cernbox-revad"
       let version = "v3.10.1"
       let platform = "production"
@@ -48,8 +48,8 @@ export def service-drift-early-tests [verbose: bool] {
         error make {msg: $"Expected revad ref 'v3.10.1' from tracked manifest, got: ($revad_ref)"}
       }
       let plugins_ref = (try { $cfg.sources.revad_plugins.ref } catch { "" })
-      if $plugins_ref != "39c4d38a5761629473fe553524f4c2bbb27c0b1b" {
-        error make {msg: $"Expected revad_plugins pinned SHA from tracked manifest, got: ($plugins_ref)"}
+      if $plugins_ref != "v0.0.43" {
+        error make {msg: $"Expected revad_plugins ref 'v0.0.43' from tracked manifest, got: ($plugins_ref)"}
       }
       let source_types = (detect-all-source-types $cfg.sources)
       let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
@@ -68,8 +68,8 @@ export def service-drift-early-tests [verbose: bool] {
       if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "ref" {
         error make {msg: $"Expected REVAD_REF_KIND=ref for tag v3.10.1, got: ($build_args.REVAD_REF_KIND?)"}
       }
-      if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
-        error make {msg: $"Expected REVAD_PLUGINS_REF_KIND=sha for pinned commit, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+      if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "ref" {
+        error make {msg: $"Expected REVAD_PLUGINS_REF_KIND=ref for tag v0.0.43, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
       }
       if $verbose {
         print $"    REVAD_REF_KIND=($build_args.REVAD_REF_KIND), REVAD_PLUGINS_REF_KIND=($build_args.REVAD_PLUGINS_REF_KIND)"
@@ -110,8 +110,8 @@ export def service-drift-early-tests [verbose: bool] {
         if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "sha" {
           error make {msg: $"Expected REVAD_REF_KIND=sha after env SHA override, got: ($build_args.REVAD_REF_KIND?)"}
         }
-        if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
-          error make {msg: $"Expected REVAD_PLUGINS_REF_KIND unchanged at sha, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+        if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "ref" {
+          error make {msg: $"Expected REVAD_PLUGINS_REF_KIND unchanged at ref, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
         }
         if $verbose {
           print $"    REVAD_REF=($build_args.REVAD_REF), REVAD_REF_KIND=($build_args.REVAD_REF_KIND)"

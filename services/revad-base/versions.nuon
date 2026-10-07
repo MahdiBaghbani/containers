@@ -7,12 +7,12 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "7b7d60bbef0a1f337f2c95eddac76f224276301f"
+        "ref": "ocm-token-client-id-claim"
       }
     },
     "external_images": {
       "build": {
-        "tag": "1.25-trixie"
+        "tag": "1.27.1-trixie"
       }
     },
     "dependencies": {
@@ -44,12 +44,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "7b7d60bbef0a1f337f2c95eddac76f224276301f"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "1.27.1-trixie"
+            "ref": "ocm-token-client-id-claim"
           }
         },
         "build_args": {
@@ -63,12 +58,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "7b7d60bbef0a1f337f2c95eddac76f224276301f"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "1.27.1-trixie"
+            "ref": "ocm-token-client-id-claim"
           }
         },
         "build_args": {
@@ -83,6 +73,11 @@
         "sources": {
           "revad": {
             "ref": "v3.10.1"
+          }
+        },
+        "external_images": {
+          "build": {
+            "tag": "1.25-trixie"
           }
         },
         "build_args": {
