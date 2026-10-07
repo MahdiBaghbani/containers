@@ -93,7 +93,7 @@
             "ref": "v3.10.1"
           },
           "revad_plugins": {
-            "ref": "v0.0.43"
+            "ref": "39c4d38a5761629473fe553524f4c2bbb27c0b1b"
           }
         },
         "external_images": {
