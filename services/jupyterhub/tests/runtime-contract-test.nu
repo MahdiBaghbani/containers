@@ -905,13 +905,13 @@ def test_jupyter_lab_news_defaults [] {
     assert_eq "frontend fetchNews string" $plugin.fetchNews "false"
     assert_eq "frontend external update check" $plugin.checkForUpdates false
     let dockerfile = (open --raw (dockerfile_path))
-    assert_contains "baked application settings" $dockerfile "COPY config/lab-settings/overrides.json /usr/local/etc/jupyter/lab-settings/overrides.json"
+    assert_contains "baked application settings" $dockerfile "COPY --chmod=644 config/lab-settings/overrides.json /usr/local/etc/jupyter/lab-settings/overrides.json"
 }
 
 def test_dockerfile_ocm_sync_contract [] {
     let content = (open --raw (dockerfile_path))
     assert_contains "dockerfile ocm-sync copy" $content "COPY --chmod=755 scripts/ocm-sync /usr/local/bin/ocm-sync"
-    assert_contains "dockerfile jupyter_server_config copy" $content "COPY config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py"
+    assert_contains "dockerfile jupyter_server_config copy" $content "COPY --chmod=644 config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py"
     assert_contains "dockerfile REQUESTS_CA_BUNDLE" $content "REQUESTS_CA_BUNDLE"
     assert_contains "dockerfile ocm-sync py_compile" $content "py_compile /usr/local/bin/ocm-sync"
 }
