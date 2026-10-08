@@ -30,10 +30,11 @@
       "overrides": {
         "sources": {
           "integration_jupyterhub": {
-            "ref": "sta-milestone-8/webapp-share-folder-webdav-discovery"
+            "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub",
+            "ref": "main"
           },
           "ocmremotewebapp": {
-            "ref": "main"
+            "ref": "50e99b14c937c850367401ee7d593e1b1d78f17c"
           }
         }
       }

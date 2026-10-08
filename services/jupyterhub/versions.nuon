@@ -24,7 +24,8 @@
       "overrides": {
         "sources": {
           "integration_jupyterhub": {
-            "ref": "sta-milestone-8/webapp-share-folder-webdav-discovery"
+            "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub",
+            "ref": "main"
           }
         }
       }

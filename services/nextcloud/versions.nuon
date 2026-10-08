@@ -80,8 +80,8 @@
       "overrides": {
         "sources": {
           "nextcloud": {
-            "url": "https://github.com/MahdiBaghbani/server.git",
-            "ref": "sta-milestone-8/webapp-contacts-server-rebase"
+            "url": "https://github.com/nextcloud/server",
+            "ref": "505ceff9fa66cc67c78d41eb79fbd70ba79b61f6"
           }
         }
       }

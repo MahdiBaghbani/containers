@@ -55,7 +55,7 @@
         "sources": {
           "contacts": {
             "url": "https://github.com/sara-nl/nextcloud-contacts",
-            "ref": "invite-for-cloudid-exchange"
+            "ref": "286de13e5eb6bcbb2cb18931948fe86a3f0f8187"
           }
         },
         "dependencies": {
@@ -72,7 +72,7 @@
         "sources": {
           "contacts": {
             "url": "https://github.com/sara-nl/nextcloud-contacts",
-            "ref": "invite-for-cloudid-exchange"
+            "ref": "286de13e5eb6bcbb2cb18931948fe86a3f0f8187"
           }
         },
         "dependencies": {
