@@ -34,6 +34,11 @@
       "name": "master",
       "latest": false,
       "overrides": {
+        "external_images": {
+          "build": {
+            "tag": "1.26-trixie"
+          }
+        },
         "sources": {
           "ocm_go": {
             "ref": "master"
