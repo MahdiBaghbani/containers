@@ -100,7 +100,7 @@ export def freshness-fixture-allow-comment [stale_tag: string = "v3.3.3"] {
 }
 
 export def freshness-fixture-nushell-machine-ok [] {
-    "Pin with `NUSHELL_REF=0.113.1` and `\"ref\": \"0.113.1\"`.\n"
+    "Pin with `NUSHELL_REF=0.116.0` and `\"ref\": \"0.116.0\"`.\n"
 }
 
 export def freshness-fixture-nushell-machine-stale [] {
@@ -108,7 +108,7 @@ export def freshness-fixture-nushell-machine-stale [] {
 }
 
 export def freshness-fixture-nushell-prose-ok [] {
-    "Requires Nushell 0.113 or later.\n"
+    "Requires Nushell 0.116 or later.\n"
 }
 
 export def freshness-fixture-nushell-prose-stale [] {

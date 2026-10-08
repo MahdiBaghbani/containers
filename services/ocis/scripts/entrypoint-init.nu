@@ -71,7 +71,7 @@ def resolve-ocis-admin-password [] {
 # Only runs when the flag is explicitly "true"; unset or any other value is a
 # no-op so existing deployments are unaffected.
 def maybe-bootstrap-ocis [] {
-    let flag = ($env.OCIS_INIT? | default "" | str downcase | str trim)
+    let flag = ($env.OCIS_INIT? | default "" | str lowercase | str trim)
     if $flag != "true" { return }
     if ($OCIS_CONFIG_FILE | path exists) {
         print $"[entrypoint-init] OCIS_INIT=true: config already exists at ($OCIS_CONFIG_FILE), skipping init"

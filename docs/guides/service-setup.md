@@ -346,9 +346,9 @@ This example demonstrates the advanced pattern of having multiple dependencies f
 
 **Dependency resolution:**
 
-- `common-tools-builder` resolves to: `common-tools:v1.0.0-debian`
-- `common-tools-runtime` resolves to: `common-tools:v1.0.0-alpine`
-- Build args: `COMMON_TOOLS_BUILDER_IMAGE=common-tools:v1.0.0-debian` and `COMMON_TOOLS_RUNTIME_IMAGE=common-tools:v1.0.0-alpine`
+- `common-tools-builder` resolves to: `common-tools:v1.1.0-debian`
+- `common-tools-runtime` resolves to: `common-tools:v1.1.0-alpine`
+- Build args: `COMMON_TOOLS_BUILDER_IMAGE=common-tools:v1.1.0-debian` and `COMMON_TOOLS_RUNTIME_IMAGE=common-tools:v1.1.0-alpine`
 
 ## Supporting Local Sources in Dockerfiles
 

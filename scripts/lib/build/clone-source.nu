@@ -44,7 +44,7 @@ def strip-quotes [value: string] {
 }
 
 def normalize-bool [value: string, param_name: string] {
-    let normalized = (strip-quotes $value | str downcase)
+    let normalized = (strip-quotes $value | str lowercase)
     if $normalized == "true" {
         return true
     }
@@ -187,8 +187,8 @@ export def run-clone-source [
     --dest: string,
     --submodules: string = "true",
 ] {
-    let mode_norm = (strip-quotes $mode | str downcase)
-    let ref_kind_raw = (strip-quotes $ref_kind | str downcase)
+    let mode_norm = (strip-quotes $mode | str lowercase)
+    let ref_kind_raw = (strip-quotes $ref_kind | str lowercase)
     let url_norm = (strip-quotes $url)
     let ref_norm = (strip-quotes $ref)
     let local_dir_norm = (strip-quotes $local_dir)

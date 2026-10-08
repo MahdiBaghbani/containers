@@ -22,6 +22,11 @@
 
 use ../scripts/lib/nextcloud-init.nu [version_greater]
 
+# Locate repo root from the repo root or from the tests directory.
+def detect_repo_root [] {
+  if ("./services/nextcloud-base" | path exists) { "." } else { "../../.." }
+}
+
 # Test command argument parsing logic
 # Verifies correct detection of apache/php-fpm commands
 def test_command_detection [] {
@@ -332,7 +337,8 @@ def test_allow_local_config_placement [] {
   mut passed = 0
   mut failed = 0
 
-  let content = (open --raw "../scripts/entrypoint-init.nu")
+  let repo_root = (detect_repo_root)
+  let content = (open --raw $"($repo_root)/services/nextcloud-base/scripts/entrypoint-init.nu")
   let sync_idx = ($content | str index-of "\n    sync_source $user_info.user $user_info.group\n")
   let apply_idx = ($content | str index-of "\n  apply_allow_local_config\n")
   let seed_idx = ($content | str index-of "\n  seed_users $user_info.user\n")
@@ -382,7 +388,7 @@ def test_wrapper_file_audit [] {
   mut failed = 0
 
   # Locate repo root regardless of whether test is run from repo root or tests dir
-  let repo_root = if ("./services/nextcloud-base" | path exists) { "." } else { "../../.." }
+  let repo_root = (detect_repo_root)
   let wrapper_files = (glob $"($repo_root)/services/*/scripts/entrypoint.sh")
 
   if ($wrapper_files | length) == 0 {

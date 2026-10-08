@@ -1,6 +1,5 @@
 {
-  "default": "v8.7.2-nc-master",
-
+  "default": "v8.9.1-nc-master",
   "defaults": {
     "sources": {
       "contacts": {
@@ -14,14 +13,13 @@
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       },
       "nextcloud": {
         "version": "master-debian"
       }
     }
   },
-
   "versions": [
     {
       "name": "main-nc-master",
@@ -40,29 +38,12 @@
       }
     },
     {
-      "name": "v8.7.2-nc-master",
+      "name": "v8.9.1-nc-master",
       "latest": true,
       "overrides": {
         "sources": {
           "contacts": {
-            "ref": "v8.7.2"
-          }
-        }
-      }
-    },
-    {
-      "name": "ocm-contacts-app",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "contacts": {
-            "url": "https://github.com/sara-nl/nextcloud-contacts",
-            "ref": "invite-for-cloudid-exchange"
-          }
-        },
-        "dependencies": {
-          "nextcloud": {
-            "version": "ocm-contacts-app-debian"
+            "ref": "v8.9.1"
           }
         }
       }
@@ -74,12 +55,12 @@
         "sources": {
           "contacts": {
             "url": "https://github.com/sara-nl/nextcloud-contacts",
-            "ref": "invite-for-cloudid-exchange"
+            "ref": "fix-undefined-group-ocm-invites-routes"
           }
         },
         "dependencies": {
           "nextcloud": {
-            "version": "ocm-webapp-share-debian"
+            "version": "v35.0.1-debian"
           }
         }
       }

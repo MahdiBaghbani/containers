@@ -152,7 +152,7 @@ Multi-stage builds require ARG re-declaration after each `FROM`:
 ```dockerfile
 ARG BASE_BUILD_IMAGE="golang:1.25-trixie"
 ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
-ARG COMMON_TOOLS_RUNTIME_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_RUNTIME_IMAGE="common-tools:v1.1.0-debian"
 
 # TLS build args (declared at top level)
 ARG TLS_ENABLED="false"

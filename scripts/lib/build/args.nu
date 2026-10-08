@@ -55,7 +55,7 @@ export def generate-build-args [
             ($source_args | columns | reduce --fold $source_args {|arg_key, acc|
                 if ($arg_key | str ends-with "_PATH") {
                     # Extract source key from arg key (e.g., REVAD_PATH -> revad)
-                    let source_key = ($arg_key | str replace "_PATH" "" | str downcase)
+                    let source_key = ($arg_key | str replace "_PATH" "" | str lowercase)
                     if $source_key in ($local_source_paths | columns) {
                         $acc | upsert $arg_key ($local_source_paths | get $source_key)
                     } else {
@@ -116,7 +116,7 @@ export def generate-build-args [
             } else {
                 (try { $source_types | get $source_key } catch { "git" })
             })
-            let source_key_upper = ($source_key | str upcase)
+            let source_key_upper = ($source_key | str uppercase)
             let ref_kind_key = $"($source_key_upper)_REF_KIND"
 
             if $source_type == "local" {
@@ -221,7 +221,7 @@ export def generate-build-args [
                     let cache_bust_parts = ($source_keys_sorted | reduce --fold [] {|key, acc|
                         let source = ($cfg_sources | get $key)
                         let ref = (try { $source.ref } catch { "" })
-                        let sha_key = $"($key | str upcase)_SHA"
+                        let sha_key = $"($key | str uppercase)_SHA"
                         let sha = (try { $source_shas | get $sha_key } catch { "" })
 
                         # Use SHA if available, fallback to ref

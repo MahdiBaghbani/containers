@@ -18,7 +18,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"

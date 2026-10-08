@@ -134,7 +134,7 @@ Dockerfile ordering is not just style. It affects:
 # SPDX header...
 
 # Global args (used by FROM)
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 ARG BASE_RUNTIME_IMAGE="debian:trixie-slim"
 
 # Global pins (versions, refs)
@@ -312,7 +312,7 @@ In `versions.nuon`, define tags:
 ARG BASE_BUILD_IMAGE="node:24-trixie-slim"
 
 # Runtime image (dependency)
-ARG NEXTCLOUD_IMAGE="nextcloud:v32.0.12-debian"
+ARG NEXTCLOUD_IMAGE="nextcloud:v35.0.1-debian"
 
 # Stage 1: Build
 FROM ${BASE_BUILD_IMAGE} AS builder
@@ -352,7 +352,7 @@ Use `common-tools` as a base image for any stage that needs:
 
 ```dockerfile
 # Declare ARG at top of Dockerfile
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 # Use as base image for stages needing Debian + common tools
 FROM ${COMMON_TOOLS_IMAGE} AS source-prepare

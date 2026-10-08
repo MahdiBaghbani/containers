@@ -147,6 +147,74 @@ OCM_CLIENT_INSECURE=false
 
 **Note**: `directory_service_urls` and `mesh_directory_url` are independent fields. Both can be set simultaneously. The `directory_service_urls` field supports multiple space-separated URLs, while `mesh_directory_url` is a single URL.
 
+## Shared Service Registry
+
+Every init script applies runtime registry settings to the rendered config as
+its final step (see `scripts/lib/runtime-config.nu`). Multi-container
+deployments must share a registry backend so processes can resolve their
+peers; a Reva build from August 2026 onward exits by design when the gateway
+stays unresolvable, so the old static `gatewaysvc`-only wiring is not enough
+for split-process stacks.
+
+### Registry Variables
+
+```bash
+# Registry backend: "memory" (default, single process) or "nats" (shared)
+REVAD_REGISTRY_DRIVER=nats
+
+# Required when the driver is nats; no silent fallback to memory
+REVAD_NATS_ADDRESS=nats://receiver-revad-registry:4222
+
+# Optional auth token; omitted from the config when empty
+REVAD_NATS_TOKEN=
+
+# KV bucket name (letters, digits, underscore, hyphen)
+REVAD_NATS_BUCKET=reva_registry
+
+# Key TTL, at least REVAD_REGISTRY_OFFLINE_AFTER
+REVAD_NATS_TTL=30s
+
+# Liveness thresholds; must satisfy heartbeat < degraded < offline < reap
+REVAD_REGISTRY_HEARTBEAT_INTERVAL=5s
+REVAD_REGISTRY_DEGRADED_AFTER=15s
+REVAD_REGISTRY_OFFLINE_AFTER=30s
+REVAD_REGISTRY_REAP_AFTER=5m
+```
+
+The resulting `[shared.registry]` TOML block is written once per config;
+repeated application is idempotent. An empty token is omitted, never written
+as an empty string. Invalid input fails startup with a fixed summary error;
+the raw value is never echoed back.
+
+### Typed Network Controls
+
+Gateway and sciencemesh dataprovider containers additionally accept:
+
+```bash
+# Compact JSON array of allowed federation CIDRs (default: [])
+OCM_ALLOWED_FEDERATION_CIDRS=["10.197.228.0/24"]
+
+# OCM client timeout in seconds (default: 10)
+OCM_TIMEOUT=10
+
+# Skip TLS verification for federation clients (default: false;
+# OCM_CLIENT_INSECURE keeps the OC_INSECURE fallback from the section above)
+OCM_CLIENT_INSECURE=false
+
+# Route federation traffic through HTTP(S)_PROXY (default: false).
+# ScienceMesh HTTP and the grpc ocmproviderauthorizer open driver render
+# ocm_client_use_env_proxy, same as the OCM service.
+OCM_USE_ENV_PROXY=false
+
+# Allow loopback/private federation targets (default: false)
+OCM_ALLOW_LOOPBACK_FEDERATION=false
+```
+
+These land on the OCM/ScienceMesh HTTP services, the open provider
+authorizer, and both `ocmreceived` drivers with the deployment's `DOMAIN` as
+`provider_domain`. Production defaults stay false/empty; lab stacks opt in
+explicitly.
+
 ## Configuration Directory Structure
 
 ### Source Layout (Build Time)
@@ -248,20 +316,21 @@ During the development image build, `resolve_configs` (see
    the core copies (whole-file replacement, not field merge).
 3. **Empty band string** (`""`): error `Config overlay band must not be
    empty`.
-4. **Core-only band** (listed in `CORE_ONLY_BANDS`, currently `v3.10.1`)
+4. **Core-only band** (listed in `CORE_ONLY_BANDS`, currently `v3.13.1`)
    with no overlay directory: allowed; core files only.
 5. **Any other band** with no overlay directory: error
    `Unknown or missing config overlay band: <band> ...`.
 
 The development image build arg `REVA_CONFIG_BAND` selects the band.
 `versions.nuon` sets it per published `revad-base` version (`master` or
-`v3.10.1`). Production image builds do not invoke `resolve_configs`.
+`v3.13.1`). Production image builds do not invoke `resolve_configs`.
 
-### Example: master vs v3.10.1
+### Example: master vs v3.13.1
 
-Core `shareproviders.toml` uses `webapp_template`. The `master` overlay
-replaces that file with `webapp_endpoint` instead. The `v3.10.1` band has no
-overlay directory, so it keeps `webapp_template` from core.
+Core `shareproviders.toml` uses `webapp_endpoint`. The `master` overlay
+ships the same `webapp_endpoint` key with a band-specific placeholder. The
+`v3.13.1` band has no overlay directory, so it keeps `webapp_endpoint` from
+core.
 
 Core `gateway.toml` already sets `enable_webapp = true` and
 `enable_code_flow` via a placeholder defaulting to `false`. The `master`

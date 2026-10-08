@@ -229,14 +229,14 @@ export def build-single-version [
     
     if ($git_sources | is-empty) {
       let local_shas = ($cfg_sources | columns | reduce --fold {} {|k, acc|
-        let sha_key = ($"($k | str upcase)_SHA")
+        let sha_key = ($"($k | str uppercase)_SHA")
         $acc | upsert $sha_key ""
       })
       {shas: $local_shas, cache: $current_cache}
     } else {
       let git_shas_result = (extract-source-shas $git_sources $service $current_cache)
       let local_shas = ($cfg_sources | columns | where {|k| ($source_types | get $k | default "git") == "local"} | reduce --fold {} {|k, acc|
-        let sha_key = ($"($k | str upcase)_SHA")
+        let sha_key = ($"($k | str uppercase)_SHA")
         $acc | upsert $sha_key ""
       })
       {

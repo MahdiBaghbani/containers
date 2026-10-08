@@ -896,10 +896,22 @@ def test_jupyter_server_config_ocm_sync_contract [] {
     assert_contains "jupyter_server_config ocm-sync invoke" $content 'os.system("/usr/local/bin/ocm-sync")'
 }
 
+def test_jupyter_lab_news_defaults [] {
+    let content = (open --raw (jupyter_server_config_path))
+    assert_contains "Lab app settings directory" $content 'c.LabApp.app_settings_dir = "/usr/local/etc/jupyter/lab-settings"'
+    let overrides_path = (helpers_config_dir | path join "lab-settings/overrides.json")
+    let settings = (open $overrides_path)
+    let plugin = ($settings | get "@jupyterlab/apputils-extension:notification")
+    assert_eq "frontend fetchNews string" $plugin.fetchNews "false"
+    assert_eq "frontend external update check" $plugin.checkForUpdates false
+    let dockerfile = (open --raw (dockerfile_path))
+    assert_contains "baked application settings" $dockerfile "COPY --chmod=644 config/lab-settings/overrides.json /usr/local/etc/jupyter/lab-settings/overrides.json"
+}
+
 def test_dockerfile_ocm_sync_contract [] {
     let content = (open --raw (dockerfile_path))
     assert_contains "dockerfile ocm-sync copy" $content "COPY --chmod=755 scripts/ocm-sync /usr/local/bin/ocm-sync"
-    assert_contains "dockerfile jupyter_server_config copy" $content "COPY config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py"
+    assert_contains "dockerfile jupyter_server_config copy" $content "COPY --chmod=644 config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py"
     assert_contains "dockerfile REQUESTS_CA_BUNDLE" $content "REQUESTS_CA_BUNDLE"
     assert_contains "dockerfile ocm-sync py_compile" $content "py_compile /usr/local/bin/ocm-sync"
 }
@@ -1051,6 +1063,7 @@ def main [] {
     test_ocm_sync_script_contract
     test_jupyter_server_config_ocm_sync_contract
     test_dockerfile_ocm_sync_contract
+    test_jupyter_lab_news_defaults
     test_jupyterhub_config_ocm_env_keep_contract
     test_resolve_oauth_client_from_file
     test_resolve_oauth_client_env_wins

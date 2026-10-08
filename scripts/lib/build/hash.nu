@@ -92,7 +92,7 @@ def extract-definition-inputs [
                 {type: "local", sentinel: "local"}
             } else {
                 # Git sources use SHA for cache-busting and ref for identity
-                let sha_key = $"($source_key | str upcase)_SHA"
+                let sha_key = $"($source_key | str uppercase)_SHA"
                 let sha = (try { $source_shas | get $sha_key } catch { "" })
                 let ref = (try { $source.ref } catch { "" })
                 let url = (try { $source.url } catch { "" })

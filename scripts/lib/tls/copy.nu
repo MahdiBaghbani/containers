@@ -43,7 +43,7 @@ def strip-quotes [value: string] {
 # Normalize a boolean string value. Handles quoted and case variations.
 # Returns "true" or "false", or errors if invalid.
 def normalize-bool [value: string, param_name: string] {
-    let normalized = (strip-quotes $value | str downcase)
+    let normalized = (strip-quotes $value | str lowercase)
     if $normalized == "true" {
         return "true"
     }
@@ -56,7 +56,7 @@ def normalize-bool [value: string, param_name: string] {
 # Normalize and validate mode string. Handles quoted values.
 # Valid modes: ca-and-cert, cert-only, disabled, ca-only
 def normalize-mode [value: string] {
-    let normalized = (strip-quotes $value | str downcase)
+    let normalized = (strip-quotes $value | str lowercase)
     let valid_modes = ["ca-and-cert", "cert-only", "disabled", "ca-only"]
     if $normalized in $valid_modes {
         return $normalized

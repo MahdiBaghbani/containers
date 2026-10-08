@@ -80,7 +80,7 @@ export def test-source-preservation-omitted-sources-preserved-from-defaults [ver
           },
           nushell: {
             url: "https://github.com/nushell/nushell",
-            ref: "0.113.1"
+            ref: "0.116.0"
           }
         }
       },

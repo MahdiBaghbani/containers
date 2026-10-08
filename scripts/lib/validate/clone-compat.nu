@@ -29,7 +29,7 @@ def source-ref-is-full-sha [source: record] {
 
 # Uppercase build-arg prefix for a manifest source key (foo_bar -> FOO_BAR).
 def source-build-arg-prefix [source_key: string] {
-  $source_key | str upcase
+  $source_key | str uppercase
 }
 
 # Read Dockerfile text and nearby service build override scripts for clone-surface checks.

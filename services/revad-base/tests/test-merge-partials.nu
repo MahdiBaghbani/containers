@@ -34,7 +34,7 @@ const SERVICE_ROOT = (path self | path dirname | path join '..' | path expand)
 
 const GATEWAY_ENABLE_CODE_FLOW_CORE = "enable_code_flow = {{placeholder:enable-code-flow:false}}"
 const GATEWAY_ENABLE_CODE_FLOW_MASTER = "enable_code_flow = true"
-const SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE = 'webapp_template = "{{placeholder:external-reva-endpoint}}/external/sciencemesh/{{.Token}}/{relative-path-to-shared-resource}"'
+const SHAREPROVIDERS_WEBAPP_ENDPOINT_CORE = 'webapp_endpoint = "{{placeholder:external-reva-endpoint}}/external/sciencemesh"'
 const SHAREPROVIDERS_WEBAPP_ENDPOINT_MASTER = 'webapp_endpoint = "{{placeholder:external-reva-endpoint}}/external/sciencemesh"'
 const SHAREPROVIDERS_PROVIDER_DOMAIN = 'provider_domain = "{{placeholder:provider-domain}}"'
 const SHAREPROVIDERS_WEBDAV_ENDPOINT = 'webdav_endpoint = "{{placeholder:external-reva-endpoint}}"'
@@ -57,7 +57,7 @@ def normalize_gateway_overlay_contract [content: string] {
 
 def normalize_shareproviders_overlay_contract [content: string] {
   $content
-  | str replace -a $SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE "WEBAPP_SLOT"
+  | str replace -a $SHAREPROVIDERS_WEBAPP_ENDPOINT_CORE "WEBAPP_SLOT"
   | str replace -a $SHAREPROVIDERS_WEBAPP_ENDPOINT_MASTER "WEBAPP_SLOT"
 }
 
@@ -409,7 +409,7 @@ def test_overlay_shareproviders_contract [] {
     return false
   }
 
-  let core_has_template = ((extract_assignment_line $core "webapp_template") == $SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE)
+  let core_has_endpoint = ((extract_assignment_line $core "webapp_endpoint") == $SHAREPROVIDERS_WEBAPP_ENDPOINT_CORE)
   let overlay_has_endpoint = ((extract_assignment_line $overlay "webapp_endpoint") == $SHAREPROVIDERS_WEBAPP_ENDPOINT_MASTER)
   let preserved = (
     (extract_assignment_line $core "provider_domain") == $SHAREPROVIDERS_PROVIDER_DOMAIN
@@ -418,7 +418,7 @@ def test_overlay_shareproviders_contract [] {
     and (extract_assignment_line $overlay "webdav_endpoint") == $SHAREPROVIDERS_WEBDAV_ENDPOINT
   )
 
-  if $core_has_template and $overlay_has_endpoint and $preserved {
+  if $core_has_endpoint and $overlay_has_endpoint and $preserved {
     print "  [PASS] master shareproviders overlay contract: PASSED"
     return true
   } else {
@@ -427,16 +427,16 @@ def test_overlay_shareproviders_contract [] {
   }
 }
 
-def test_resolve_configs_v3_10_1_core_only [] {
-  print "Testing resolve_configs v3.10.1 band uses core only..."
+def test_resolve_configs_v3_13_1_core_only [] {
+  print "Testing resolve_configs v3.13.1 band uses core only..."
 
   let root = $SERVICE_ROOT
   let core_dir = ($root | path join "configs")
   let overlays_root = ($root | path join "configs-overlays")
-  let dest = "/tmp/test-resolve-configs-v3-10-1"
+  let dest = "/tmp/test-resolve-configs-v3-13-1"
   rm -rf $dest
 
-  resolve_configs $core_dir $overlays_root "v3.10.1" $dest
+  resolve_configs $core_dir $overlays_root "v3.13.1" $dest
 
   let shareproviders = (open --raw ($dest | path join "shareproviders.toml"))
   let gateway = (open --raw ($dest | path join "gateway.toml"))
@@ -444,8 +444,8 @@ def test_resolve_configs_v3_10_1_core_only [] {
   let resolved_groupuserproviders = (open --raw ($dest | path join "groupuserproviders.toml"))
 
   let share_ok = (
-    (extract_assignment_line $shareproviders "webapp_template") == $SHAREPROVIDERS_WEBAPP_TEMPLATE_CORE
-    and (extract_assignment_line $shareproviders "webapp_endpoint" | is-empty)
+    (extract_assignment_line $shareproviders "webapp_endpoint") == $SHAREPROVIDERS_WEBAPP_ENDPOINT_CORE
+    and (extract_assignment_line $shareproviders "webapp_template" | is-empty)
     and (extract_assignment_line $shareproviders "provider_domain") == $SHAREPROVIDERS_PROVIDER_DOMAIN
     and (extract_assignment_line $shareproviders "webdav_endpoint") == $SHAREPROVIDERS_WEBDAV_ENDPOINT
   )
@@ -458,10 +458,10 @@ def test_resolve_configs_v3_10_1_core_only [] {
   rm -rf $dest
 
   if $share_ok and $gateway_ok and $copied_ok {
-    print "  [PASS] resolve_configs v3.10.1 core only: PASSED"
+    print "  [PASS] resolve_configs v3.13.1 core only: PASSED"
     return true
   } else {
-    print "  [FAIL] resolve_configs v3.10.1 core only: FAILED"
+    print "  [FAIL] resolve_configs v3.13.1 core only: FAILED"
     return false
   }
 }
@@ -545,7 +545,7 @@ def main [--verbose] {
   $results = ($results | append (test_resolve_configs_empty_band))
   $results = ($results | append (test_overlay_gateway_contract))
   $results = ($results | append (test_overlay_shareproviders_contract))
-  $results = ($results | append (test_resolve_configs_v3_10_1_core_only))
+  $results = ($results | append (test_resolve_configs_v3_13_1_core_only))
   $results = ($results | append (test_resolve_configs_master_shareproviders_webapp_endpoint))
   $results = ($results | append (test_resolve_configs_master_gateway_enable_code_flow))
 

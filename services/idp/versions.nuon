@@ -1,6 +1,5 @@
 {
   "default": "v26.4.2",
-
   "defaults": {
     "external_images": {
       "runtime": {
@@ -9,11 +8,10 @@
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-rhel"
+        "version": "v1.1.0-rhel"
       }
     }
   },
-
   "versions": [
     {
       "name": "v26.4.2",

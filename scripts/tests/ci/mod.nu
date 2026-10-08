@@ -28,6 +28,7 @@ use ./deps-resolution.nu [
 use ./workflows-github.nu [test-generated-workflows-match]
 use ./workflows-forgejo.nu [test-forgejo-workflows]
 use ./pr-signal.nu [test-pr-signal-workflow]
+use ./nushell-pin-parity.nu [test-nushell-pin-parity]
 use ./dep-nodes.nu [
     test-dep-nodes-common-tools-all-platforms test-dep-nodes-common-tools-debian
     test-dep-nodes-common-tools-unknown-target test-dep-nodes-shards-default-platform
@@ -53,6 +54,7 @@ def main [--verbose] {
     (test-generated-workflows-match $verbose)
     (test-forgejo-workflows $verbose)
     (test-pr-signal-workflow $verbose)
+    (test-nushell-pin-parity $verbose)
     (test-dep-nodes-common-tools-all-platforms $verbose)
     (test-dep-nodes-common-tools-debian $verbose)
     (test-dep-nodes-common-tools-unknown-target $verbose)

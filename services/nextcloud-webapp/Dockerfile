@@ -29,8 +29,8 @@
 # (@parcel/watcher, @unrs/resolver-binding) are absent as package nodes in the
 # committed lockfile and are hard-rejected by npm 11's stricter npm ci.
 ARG BASE_BUILD_IMAGE="node:20-trixie-slim"
-ARG NEXTCLOUD_CONTACTS_IMAGE="nextcloud-contacts:ocm-contacts-app-debian"
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG NEXTCLOUD_CONTACTS_IMAGE="nextcloud-contacts:ocm-webapp-share-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 ARG INTEGRATION_JUPYTERHUB_URL="https://github.com/SUNET/nextcloud-integration_jupyterhub"
 ARG INTEGRATION_JUPYTERHUB_REF="main"

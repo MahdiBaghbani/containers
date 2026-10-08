@@ -141,7 +141,7 @@ def seed-proxy-ca []: nothing -> nothing {
     let seed_flag = (
         $env.OCM_CYPRESS_SEED_PROXY_CA?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     if (is-falsy $seed_flag) { return }
@@ -211,7 +211,7 @@ def main [] {
     let autolaunch = (
         $env.OCM_CYPRESS_AUTOLAUNCH?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     if (is-falsy $autolaunch) {
@@ -234,7 +234,7 @@ def main [] {
     let maximize_raw = (
         $env.OCM_CYPRESS_MAXIMIZE?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     let maximize = not (is-falsy $maximize_raw)
@@ -266,7 +266,7 @@ def main [] {
     let mode = (
         $env.OCM_CYPRESS_AUTOLAUNCH_MODE?
         | default "once"
-        | str downcase
+        | str lowercase
         | str trim
     )
 

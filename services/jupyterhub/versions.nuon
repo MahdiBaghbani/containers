@@ -1,10 +1,9 @@
 {
   "default": "webapp-share",
-
   "defaults": {
     "sources": {
       "integration_jupyterhub": {
-        "url": "https://github.com/MahdiBaghbani/nextcloud-integration_jupyterhub"
+        "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub"
       }
     },
     "external_images": {
@@ -14,11 +13,10 @@
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       }
     }
   },
-
   "versions": [
     {
       "name": "webapp-share",
@@ -26,7 +24,8 @@
       "overrides": {
         "sources": {
           "integration_jupyterhub": {
-            "ref": "sta-milestone-8/webapp-share-folder-webdav-discovery"
+            "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub",
+            "ref": "main"
           }
         }
       }

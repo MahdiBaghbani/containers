@@ -23,6 +23,7 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders, validate-and-filter-urls]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/runtime-config.nu [write-runtime-settings]
 use ./lib/ports.nu [
     resolve-gateway-grpc-port
     resolve-dataprovider-registry-grpc-port
@@ -136,7 +137,7 @@ export def init_gateway [] {
   } else {
     $oc_insecure_env
   })
-  let sciencemesh_ocm_client_insecure = (if (($sciencemesh_ocm_client_insecure_raw | str downcase) == "true") {
+  let sciencemesh_ocm_client_insecure = (if (($sciencemesh_ocm_client_insecure_raw | str lowercase) == "true") {
     "true"
   } else {
     "false"
@@ -177,7 +178,7 @@ export def init_gateway [] {
   
   # Get OCM code-flow configuration
   let enable_code_flow_raw = (get_env_or_default "OCM_ENABLE_CODE_FLOW" "false" | str trim)
-  let enable_code_flow = (if (($enable_code_flow_raw | str downcase) == "true") { "true" } else { "false" })
+  let enable_code_flow = (if (($enable_code_flow_raw | str lowercase) == "true") { "true" } else { "false" })
   let jwt_expire = (get_env_or_default "REVAD_JWT_EXPIRE" "86400")
 
   # Get share providers and user/group providers addresses
@@ -260,5 +261,6 @@ export def init_gateway [] {
   
   # Remove any config files listed in DISABLED_CONFIGS
   disable_config_files
+  write-runtime-settings $config_path "gateway"
   print "Gateway configuration initialized"
 }

@@ -72,7 +72,7 @@ def main [...args: string] {
         setup_conf_dir $conf_dir $ca_dir $ca_name
         build_upstream_trust_bundle $conf_dir $ca_dir $ca_name
     } else {
-        let ca_required = ($env.MITM_CA_REQUIRED? | default "true" | str downcase)
+        let ca_required = ($env.MITM_CA_REQUIRED? | default "true" | str lowercase)
         if $ca_required != "false" {
             error make {
                 msg: "No CA keypair found. Set MITM_CA_NAME, TLS_CA_NAME, or mount a keypair. Set MITM_CA_REQUIRED=false to run without CA setup."
@@ -96,7 +96,7 @@ def main [...args: string] {
 
     # Start nginx TLS termination when mitmweb is the command and termination is enabled.
     if $cmd == "mitmweb" {
-        let ui_tls = ($env.MITM_UI_TLS_TERMINATION? | default "true" | str downcase)
+        let ui_tls = ($env.MITM_UI_TLS_TERMINATION? | default "true" | str lowercase)
         if $ui_tls == "true" {
             start_nginx_for_mitmweb $auth_header_block
         }
@@ -131,8 +131,8 @@ def main [...args: string] {
 
 # Return "mitmweb" when MITM_UI or MITM_WEB is "true", else "mitmdump".
 def resolve_default_cmd [] {
-    let ui = ($env.MITM_UI? | default "" | str downcase)
-    let web = ($env.MITM_WEB? | default "" | str downcase)
+    let ui = ($env.MITM_UI? | default "" | str lowercase)
+    let web = ($env.MITM_WEB? | default "" | str lowercase)
     if ($ui == "true") or ($web == "true") { "mitmweb" } else { "mitmdump" }
 }
 
@@ -307,7 +307,7 @@ def inject_upstream_trust_args [args: list<string>, bundle_path: any] {
         return $args
     }
 
-    let enable = ($env.MITM_UPSTREAM_TRUST_BUNDLE_ENABLE? | default "true" | str downcase)
+    let enable = ($env.MITM_UPSTREAM_TRUST_BUNDLE_ENABLE? | default "true" | str lowercase)
     if $enable == "false" {
         return $args
     }
@@ -346,11 +346,11 @@ def resolve_bearer_token [cmd: string, args: list<string>] {
     if $cmd != "mitmweb" {
         return {token: null, extra_args: []}
     }
-    let ui_tls = ($env.MITM_UI_TLS_TERMINATION? | default "true" | str downcase)
+    let ui_tls = ($env.MITM_UI_TLS_TERMINATION? | default "true" | str lowercase)
     if $ui_tls != "true" {
         return {token: null, extra_args: []}
     }
-    let auto_login = ($env.MITM_UI_AUTO_LOGIN? | default "true" | str downcase)
+    let auto_login = ($env.MITM_UI_AUTO_LOGIN? | default "true" | str lowercase)
     if $auto_login != "true" {
         return {token: null, extra_args: []}
     }
@@ -463,7 +463,7 @@ def validate_bearer_token_safety [token: string] {
 
 # Print the effective bearer token when MITM_UI_PRINT_BEARER_TOKEN is "true".
 def maybe_print_bearer_token [token: string] {
-    let print_it = ($env.MITM_UI_PRINT_BEARER_TOKEN? | default "false" | str downcase)
+    let print_it = ($env.MITM_UI_PRINT_BEARER_TOKEN? | default "false" | str lowercase)
     if $print_it == "true" {
         print $"mitmweb bearer token: ($token)"
     }

@@ -28,7 +28,7 @@ export const PLANE_LOCAL = "local"
 
 # Normalize and validate `--plane` values
 export def parse-plane [plane: string] {
-  let normalized = ($plane | str trim | str downcase)
+  let normalized = ($plane | str trim | str lowercase)
   if $normalized == "" or $normalized == $PLANE_TRACKED {
     $PLANE_TRACKED
   } else if $normalized == $PLANE_LOCAL {

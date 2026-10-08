@@ -13,9 +13,9 @@ Shared runtime asset provider for DockyPody services.
 
 ## Platform Variants
 
-- `common-tools:v1.0.0-debian` - Debian Trixie Slim base
-- `common-tools:v1.0.0-alpine` - Alpine 3.22 base
-- `common-tools:v1.0.0-rhel` - Red Hat UBI 9 Minimal base
+- `common-tools:v1.1.0-debian` - Debian Trixie Slim base
+- `common-tools:v1.1.0-alpine` - Alpine 3.22 base
+- `common-tools:v1.1.0-rhel` - Red Hat UBI 9 Minimal base
 
 ## Usage Pattern: COPY, Don't Install
 

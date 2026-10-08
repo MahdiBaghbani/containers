@@ -108,15 +108,22 @@ docker-compose logs -f cernbox-1-test-revad-gateway
 
 Services start in this order:
 
+0. **Registry** - Shared service registry (JetStream NATS; no dependencies)
 1. **IdP** - Identity Provider (no dependencies)
-2. **Gateway** - Depends on IdP
-3. **Share Providers** - Depends on Gateway
-4. **User/Group Providers** - Depends on Gateway
-5. **Auth Providers** - Depends on Gateway
-6. **Dataproviders** - Depends on Gateway
-7. **Web** - Depends on IdP, Gateway, and the three dataproviders
+2. **Gateway** - Depends on Registry and IdP
+3. **Share Providers** - Depends on Registry and Gateway
+4. **User/Group Providers** - Depends on Registry and Gateway
+5. **Auth Providers** - Depends on Registry and Gateway
+6. **Dataproviders** - Depends on Registry and Gateway
+7. **Web** - Depends on Registry, IdP, Gateway, and the three dataproviders
 
 Docker Compose handles dependencies automatically via `depends_on`.
+
+When the stack is split into one process per mode, every Reva process
+resolves its peers through the shared registry (`REVAD_REGISTRY_DRIVER=nats`
+plus a reachable `REVAD_NATS_ADDRESS`). A process that cannot resolve the
+gateway exits by design after about a minute, so the registry must be up
+first; the compose dependency order above encodes that.
 
 ## Runtime Checks
 

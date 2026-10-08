@@ -18,7 +18,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ARG KEYCLOAK_BASE_IMAGE="quay.io/keycloak/keycloak:26.4.2"
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-rhel"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-rhel"
 
 ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"

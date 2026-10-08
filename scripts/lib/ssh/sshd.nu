@@ -165,7 +165,7 @@ def run-sshd [] {
 # Start sshd iff OCM_SSH_ENABLED=true and mode is server or client-and-server.
 # Uses OCM_SSH_DEFAULT_USER, OCM_SSH_PORT, OCM_SSH_LISTEN. No-op otherwise.
 export def start-sshd-if-enabled [] {
-    let enabled = ($env.OCM_SSH_ENABLED? | default "false" | str downcase | str trim)
+    let enabled = ($env.OCM_SSH_ENABLED? | default "false" | str lowercase | str trim)
     if $enabled != "true" {
         print "[ocm-sshd] SSH server disabled (OCM_SSH_ENABLED != true)"
         return

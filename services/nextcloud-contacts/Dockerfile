@@ -19,7 +19,7 @@
 
 ARG BASE_BUILD_IMAGE="node:24-trixie-slim"
 ARG NEXTCLOUD_IMAGE="nextcloud:v32.0.2-debian"
-ARG COMMON_TOOLS_IMAGE="common-tools:v1.0.0-debian"
+ARG COMMON_TOOLS_IMAGE="common-tools:v1.1.0-debian"
 
 ARG CONTACTS_URL="https://github.com/nextcloud/contacts"
 ARG CONTACTS_REF="v8.1.0"

@@ -19,8 +19,8 @@
 
 ARG BASE_BUILD_IMAGE="node:20-trixie-slim"
 ARG BASE_RUNTIME_IMAGE="nginx:1.29-alpine3.22-slim"
-ARG COMMON_TOOLS_BUILDER_IMAGE="common-tools:v1.0.0-debian"
-ARG COMMON_TOOLS_RUNTIME_IMAGE="common-tools:v1.0.0-alpine"
+ARG COMMON_TOOLS_BUILDER_IMAGE="common-tools:v1.1.0-debian"
+ARG COMMON_TOOLS_RUNTIME_IMAGE="common-tools:v1.1.0-alpine"
 
 ARG TLS_ENABLED="false"
 ARG TLS_MODE="disabled"

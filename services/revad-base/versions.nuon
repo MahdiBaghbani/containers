@@ -1,6 +1,5 @@
 {
   "default": "master",
-
   "defaults": {
     "build_args": {
       "GO_BUILD_GOPROXY": "https://proxy.golang.org|direct"
@@ -8,17 +7,17 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "fix/ocm-incoming-share-user-id-normalization"
+        "ref": "ocm-token-client-id-claim"
       }
     },
     "external_images": {
       "build": {
-        "tag": "1.25-trixie"
+        "tag": "1.27.1-trixie"
       }
     },
     "dependencies": {
       "common-tools": {
-        "version": "v1.0.0-debian"
+        "version": "v1.1.0-debian"
       }
     },
     "platforms": {
@@ -38,7 +37,6 @@
       }
     }
   },
-
   "versions": [
     {
       "name": "master",
@@ -46,7 +44,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "fix/ocm-incoming-share-user-id-normalization"
+            "ref": "ocm-token-client-id-claim"
           }
         },
         "build_args": {
@@ -60,7 +58,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "sta-milestone-8/ocm-webapp-open-in-app"
+            "ref": "ocm-token-client-id-claim"
           }
         },
         "build_args": {
@@ -69,16 +67,16 @@
       }
     },
     {
-      "name": "v3.10.1",
+      "name": "v3.13.1",
       "latest": true,
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "v3.10.1"
+            "ref": "v3.13.1"
           }
         },
         "build_args": {
-          "REVA_CONFIG_BAND": "v3.10.1"
+          "REVA_CONFIG_BAND": "v3.13.1"
         }
       }
     }

@@ -7,6 +7,9 @@ import os
 
 c = get_config()  # noqa: F821 -- injected by jupyter_server
 
+# Testbed Lab defaults suppress news consent and external update notifications.
+c.LabApp.app_settings_dir = "/usr/local/etc/jupyter/lab-settings"
+
 # Allow the receiver EFSS to embed / cross-origin the launched Lab, matching
 # the upstream SUNET singleuser config.
 c.ServerApp.allow_origin = "*"

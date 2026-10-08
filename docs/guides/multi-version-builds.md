@@ -77,7 +77,7 @@ Create `services/{name}/versions.nuon`:
 ### 2. Build Specific Version
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v3.10.1
+nu scripts/dockypody.nu build --service revad-base --version v3.13.1
 ```
 
 ### 3. Build All Versions
@@ -349,7 +349,7 @@ When multiple versions share the same configuration values, you can use the opti
           "build": { "tag": "1.25-trixie" }
         },
         "dependencies": {
-          "common-tools": { "version": "v1.0.0-debian" }
+          "common-tools": { "version": "v1.1.0-debian" }
         }
       }
     },
@@ -360,7 +360,7 @@ When multiple versions share the same configuration values, you can use the opti
           "build": { "tag": "1.25-trixie" }
         },
         "dependencies": {
-          "common-tools": { "version": "v1.0.0-debian" }
+          "common-tools": { "version": "v1.1.0-debian" }
         }
       }
     }
@@ -378,7 +378,7 @@ When multiple versions share the same configuration values, you can use the opti
       "build": { "tag": "1.25-trixie" }
     },
     "dependencies": {
-      "common-tools": { "version": "v1.0.0-debian" }
+      "common-tools": { "version": "v1.1.0-debian" }
     }
   },
   "versions": [
@@ -503,7 +503,7 @@ Dependencies resolve their version in this order:
 nu scripts/dockypody.nu build --service revad-base
 
 # Build specific version from manifest
-nu scripts/dockypody.nu build --service revad-base --version v3.10.1
+nu scripts/dockypody.nu build --service revad-base --version v3.13.1
 
 # Missing manifest versions fail validation (v9.99.99 is not in the manifest)
 nu scripts/dockypody.nu build --service revad-base --version v9.99.99
@@ -517,7 +517,7 @@ nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Build specific versions (comma-separated list)
 # Note: --versions (plural) for multiple versions, --version (singular) for single version
-nu scripts/dockypody.nu build --service revad-base --versions v3.10.1,master
+nu scripts/dockypody.nu build --service revad-base --versions v3.13.1,master
 
 # Build only versions marked as "latest"
 nu scripts/dockypody.nu build --service revad-base --latest-only
@@ -558,7 +558,7 @@ nu scripts/dockypody.nu build --service revad-base --show-build-order
 nu scripts/dockypody.nu build --service revad-base --show-build-order --all-versions
 
 # Show build order for specific versions
-nu scripts/dockypody.nu build --service revad-base --show-build-order --versions v3.10.1,master
+nu scripts/dockypody.nu build --service revad-base --show-build-order --versions v3.13.1,master
 
 # Show build order for latest versions only
 nu scripts/dockypody.nu build --service revad-base --show-build-order --latest-only
@@ -574,8 +574,8 @@ For single-version:
 ```text
 === Build Order ===
 
-1. common-tools:v1.0.0
-2. revad-base:v3.10.1
+1. common-tools:v1.1.0
+2. revad-base:v3.13.1
 ```
 
 For multi-version:
@@ -584,11 +584,11 @@ For multi-version:
 === Build Order ===
 
 Version: v3.10.1
-1. common-tools:v1.0.0
-2. revad-base:v3.10.1
+1. common-tools:v1.1.0
+2. revad-base:v3.13.1
 
 Version: master
-1. common-tools:v1.0.0
+1. common-tools:v1.1.0
 2. revad-base:master
 ```
 
@@ -599,12 +599,12 @@ displayed separately:
 === Build Order ===
 
 Version: v3.10.1 (production)
-1. common-tools:v1.0.0:production
-2. revad-base:v3.10.1:production
+1. common-tools:v1.1.0:production
+2. revad-base:v3.13.1:production
 
 Version: v3.10.1 (development)
-1. common-tools:v1.0.0:development
-2. revad-base:v3.10.1:development
+1. common-tools:v1.1.0:development
+2. revad-base:v3.13.1:development
 ```
 
 **Use Cases:**
@@ -622,7 +622,7 @@ All standard build flags work with version manifests:
 
 ```bash
 # Build and push
-nu scripts/dockypody.nu build --service revad-base --version v3.10.1 --push
+nu scripts/dockypody.nu build --service revad-base --version v3.13.1 --push
 
 # Build with progress output
 nu scripts/dockypody.nu build --service revad-base --all-versions --progress plain
@@ -735,7 +735,7 @@ Build commands:
 nu scripts/dockypody.nu build --service revad-base --all-versions
 
 # Result:
-# - revad-base:v3.10.1, revad-base:latest
+# - revad-base:v3.13.1, revad-base:latest
 # - revad-base:master
 ```
 

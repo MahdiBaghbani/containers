@@ -55,7 +55,7 @@ def test_authprovider_type_validation [] {
     print "  [PASS] Type validation: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Type validation: FAILED (" + $failed_str + " errors)"
+    print ("  [FAIL] Type validation: FAILED (" + $failed_str + " errors)")
   }
   
   return {passed: $passed, failed: $failed}
@@ -105,7 +105,7 @@ def test_authprovider_config_copy [] {
     print "  [PASS] Config copy for all types: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Config copy: FAILED (" + $failed_str + " errors)"
+    print ("  [FAIL] Config copy: FAILED (" + $failed_str + " errors)")
   }
   
   rm -rf $test_config_dir $test_source_dir
@@ -162,8 +162,8 @@ machine_api_key = "{{placeholder:machine-api-key}}"
     print "  [PASS] Placeholder processing: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Placeholder processing: FAILED (" + $failed_str + " errors)"
-    print "    Result: " + $result
+    print ("  [FAIL] Placeholder processing: FAILED (" + $failed_str + " errors)")
+    print ("    Result: " + $result)
   }
   
   rm $test_file
@@ -206,7 +206,7 @@ def test_authprovider_gateway_address_construction [] {
     print "  [PASS] Gateway address construction: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] Gateway address construction: FAILED (" + $failed_str + " errors)"
+    print ("  [FAIL] Gateway address construction: FAILED (" + $failed_str + " errors)")
   }
   
   return {passed: $passed, failed: $failed}
@@ -246,8 +246,8 @@ keyfile = "/tls/server.key"
     print "  [PASS] TLS disabling: PASSED"
   } else {
     let failed_str = ($failed | into string)
-    print $"  [FAIL] TLS disabling: FAILED (" + $failed_str + " errors)"
-    print "    Result: " + $result
+    print ("  [FAIL] TLS disabling: FAILED (" + $failed_str + " errors)")
+    print ("    Result: " + $result)
   }
   
   rm $test_file

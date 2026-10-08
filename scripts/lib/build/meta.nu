@@ -18,7 +18,7 @@
 # Detect local platform architecture
 def detect-local-platform [] {
   let arch = (try {
-    (^uname -m | str trim | str downcase)
+    (^uname -m | str trim | str lowercase)
   } catch {
     "amd64"
   })

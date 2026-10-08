@@ -30,7 +30,7 @@ The gateway container runs multiple services:
 ### Config Band Note
 
 The `master` band overlay replaces whole `gateway.toml` (for example
-`enable_code_flow = true`); the `v3.10.1` core-only band keeps core defaults.
+`enable_code_flow = true`); the `v3.13.1` core-only band keeps core defaults.
 Band resolution runs during the development image build only. See
 [Configuration](configuration.md#config-band-resolver) and
 [Architecture](architecture.md#build-tuple-and-config-bands) for field-level
@@ -42,10 +42,10 @@ differences.
 
 ### Config Band Note
 
-The `master` band replaces whole `shareproviders.toml` (`webapp_endpoint` vs
-core `webapp_template`); `v3.10.1` keeps the core file. This is a band
-overlay difference, not a global field rename. See
-[Configuration](configuration.md#example-master-vs-v3101).
+The `master` and `v3.13.1` bands both use `webapp_endpoint` in
+`shareproviders.toml` (the `master` overlay ships a band-specific
+placeholder; `v3.13.1` keeps the core file). See
+[Configuration](configuration.md#example-master-vs-v3131).
 
 ### Share Provider Services
 

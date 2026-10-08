@@ -23,6 +23,7 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/runtime-config.nu [write-runtime-settings]
 use ./lib/ports.nu [resolve-authprovider-grpc-port resolve-gateway-grpc-port]
 
 const CONFIG_DIR = "/configs/revad"
@@ -87,7 +88,7 @@ export def init_authprovider [authprovider_type: string] {
   # Get authprovider-specific environment variables
   # Environment variable names are constructed using uppercase type (e.g., REVAD_AUTHPROVIDER_OIDC_HOST)
   # Defaults use generic names (ports match common patterns: 9158=OIDC, 9166=Machine, 9160=Public Shares, 9278=OCM Shares)
-  let type_upper = ($authprovider_type | str upcase)
+  let type_upper = ($authprovider_type | str uppercase)
   let authprovider_host = (get_env_or_default $"REVAD_AUTHPROVIDER_($type_upper)_HOST" $"revad-authprovider-($authprovider_type)")
   
   let authprovider_grpc_port = (resolve-authprovider-grpc-port $authprovider_type)
@@ -173,5 +174,6 @@ export def init_authprovider [authprovider_type: string] {
   
   # Remove any config files listed in DISABLED_CONFIGS
   disable_config_files
+  write-runtime-settings $config_path $"authprovider-($authprovider_type)"
   print $"Authprovider ($authprovider_type) configuration initialized"
 }

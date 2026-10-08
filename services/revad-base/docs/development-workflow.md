@@ -159,7 +159,7 @@ Update docker-compose to use production images:
 ```yaml
 services:
   gateway:
-    image: "revad-base:v3.10.1-production" # Production image
+    image: "revad-base:v3.13.1-production" # Production image
     # Same volumes (configs already populated)
     volumes:
       - "${PWD}/volumes/config/reva-gateway:/etc/revad"

@@ -420,7 +420,7 @@ nu scripts/dockypody.nu build --all-services --show-build-order
 Build a specific version from the manifest:
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v3.10.1
+nu scripts/dockypody.nu build --service revad-base --version v3.13.1
 ```
 
 ### `--all-versions`
@@ -444,7 +444,7 @@ nu scripts/dockypody.nu build --service revad-base --latest-only
 Build multiple specific versions (comma-separated list):
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --versions v3.10.1,master
+nu scripts/dockypody.nu build --service revad-base --versions v3.13.1,master
 ```
 
 **Note:** `--version` (singular) for single version, `--versions` (plural) for multiple versions.
@@ -678,8 +678,8 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order --latest-
 ```text
 === Build Order ===
 
-1. revad-base:v3.10.1
-2. cernbox-revad:v3.10.1
+1. revad-base:v3.13.1
+2. cernbox-revad:v3.13.1
 3. cernbox-web:v1.0.25
 ```
 
@@ -689,8 +689,8 @@ nu scripts/dockypody.nu build --service cernbox-web --show-build-order --latest-
 === Build Order ===
 
 Version: v1.0.25
-1. revad-base:v3.10.1
-2. cernbox-revad:v3.10.1
+1. revad-base:v3.13.1
+2. cernbox-revad:v3.13.1
 3. cernbox-web:v1.0.25
 
 Version: ocm-webapp-share
@@ -708,13 +708,13 @@ displayed separately:
 === Build Order ===
 
 Version: v1.0.25 (production)
-1. revad-base:v3.10.1:production
-2. cernbox-revad:v3.10.1:production
+1. revad-base:v3.13.1:production
+2. cernbox-revad:v3.13.1:production
 3. cernbox-web:v1.0.25:production
 
 Version: v1.0.25 (development)
-1. revad-base:v3.10.1:development
-2. cernbox-revad:v3.10.1:development
+1. revad-base:v3.13.1:development
+2. cernbox-revad:v3.13.1:development
 3. cernbox-web:v1.0.25:development
 ```
 
@@ -762,7 +762,7 @@ nu scripts/dockypody.nu build --service revad-base --all-versions --fail-fast
 Push built images to registry:
 
 ```bash
-nu scripts/dockypody.nu build --service revad-base --version v3.10.1 --push
+nu scripts/dockypody.nu build --service revad-base --version v3.13.1 --push
 ```
 
 ### `--progress <string>`

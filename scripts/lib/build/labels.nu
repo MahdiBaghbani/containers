@@ -67,7 +67,7 @@ export def generate-labels [
             # Use reduce instead of for loop (for loops don't work with mut variables in Nushell)
             $base_labels = ($git_source_keys | reduce --fold $base_labels {|source_key, acc|
             let source = ($cfg_sources | get $source_key)
-            let sha = (try { $source_shas | get $"($source_key | str upcase)_SHA" } catch { "" })
+            let sha = (try { $source_shas | get $"($source_key | str uppercase)_SHA" } catch { "" })
             let ref = (try { $source.ref } catch { "" })
             let url = (try { $source.url } catch { "" })
 

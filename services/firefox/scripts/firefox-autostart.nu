@@ -410,7 +410,7 @@ def main [] {
     let autolaunch = (
         $env.OCM_FIREFOX_AUTOLAUNCH?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     if (is-falsy $autolaunch) {
@@ -435,7 +435,7 @@ def main [] {
     let suppress_first_run_raw = (
         $env.OCM_FIREFOX_SUPPRESS_FIRST_RUN?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     let suppress_first_run = not (is-falsy $suppress_first_run_raw)
@@ -443,7 +443,7 @@ def main [] {
     let dark_mode_raw = (
         $env.OCM_FIREFOX_DARK_MODE?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     let dark_mode = not (is-falsy $dark_mode_raw)
@@ -451,7 +451,7 @@ def main [] {
     let set_default_raw = (
         $env.OCM_FIREFOX_SET_DEFAULT_BROWSER?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     let set_default = not (is-falsy $set_default_raw)
@@ -459,7 +459,7 @@ def main [] {
     let maximize_raw = (
         $env.OCM_FIREFOX_MAXIMIZE?
         | default "true"
-        | str downcase
+        | str lowercase
         | str trim
     )
     let maximize = not (is-falsy $maximize_raw)
@@ -477,7 +477,7 @@ def main [] {
     let mode = (
         $env.OCM_FIREFOX_AUTOLAUNCH_MODE?
         | default "once"
-        | str downcase
+        | str lowercase
         | str trim
     )
 

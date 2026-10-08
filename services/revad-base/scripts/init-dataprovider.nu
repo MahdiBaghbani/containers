@@ -23,6 +23,7 @@
 use ./lib/shared.nu [create_directory, disable_config_files, copy_json_files]
 use ./lib/utils.nu [replace_in_file, get_env_or_default, process_placeholders]
 use ./lib/merge-partials.nu [merge_partial_configs]
+use ./lib/runtime-config.nu [write-runtime-settings]
 use ./lib/ports.nu [require-dataprovider-grpc-port resolve-gateway-grpc-port]
 
 const CONFIG_DIR = "/configs/revad"
@@ -89,7 +90,7 @@ export def init_dataprovider [
   
   # Get dataprovider-specific environment variables
   # Environment variable names are constructed using uppercase type (e.g., REVAD_DATAPROVIDER_LOCALHOME_HOST)
-  let type_upper = ($dataprovider_type | str upcase)
+  let type_upper = ($dataprovider_type | str uppercase)
   let dataprovider_host = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_HOST" $"revad-dataprovider-($dataprovider_type)")
   let dataprovider_port = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PORT" "80")
   let dataprovider_protocol = (get_env_or_default $"REVAD_DATAPROVIDER_($type_upper)_PROTOCOL" "http")
@@ -113,7 +114,7 @@ export def init_dataprovider [
   # Get OCM receiver client configuration (used by sciencemesh dataprovider)
   let ocm_timeout = (get_env_or_default "OCM_TIMEOUT" "10")
   let ocm_insecure_raw = (get_env_or_default "OCM_CLIENT_INSECURE" "false" | str trim)
-  let ocm_insecure = (if (($ocm_insecure_raw | str downcase) == "true") { "true" } else { "false" })
+  let ocm_insecure = (if (($ocm_insecure_raw | str lowercase) == "true") { "true" } else { "false" })
 
   # Build placeholder map
   let placeholder_map = {
@@ -150,5 +151,6 @@ export def init_dataprovider [
   
   # Remove any config files listed in DISABLED_CONFIGS
   disable_config_files
+  write-runtime-settings $config_path $"dataprovider-($dataprovider_type)"
   print $"Dataprovider ($dataprovider_type) configuration initialized"
 }

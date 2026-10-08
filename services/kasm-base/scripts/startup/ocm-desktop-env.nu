@@ -13,7 +13,7 @@
 
 # Map a short browser name to its .desktop application id.
 def browser-desktop-id [name: string]: nothing -> string {
-    match ($name | str downcase | str trim) {
+    match ($name | str lowercase | str trim) {
         "firefox"       => "firefox.desktop"
         "chrome"        => "google-chrome.desktop"
         "google-chrome" => "google-chrome.desktop"
@@ -89,7 +89,7 @@ def apply-icon-theme [theme: string]: nothing -> nothing {
 }
 
 def setup-ssh-client-env [] {
-    let ssh_enabled = ($env.OCM_SSH_ENABLED? | default "false" | str downcase | str trim)
+    let ssh_enabled = ($env.OCM_SSH_ENABLED? | default "false" | str lowercase | str trim)
     if $ssh_enabled == "true" {
         print "[ocm-desktop-env] SSH client enabled, running ocm-ssh-client-env.nu..."
         try {
