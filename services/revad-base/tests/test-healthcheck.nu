@@ -181,9 +181,13 @@ def test_probe_listening [] {
 
     let port = "59143"
     let handle = (try { start-tcp-listener $port } catch {|e|
+        print --stderr $"  [diag] start-tcp-listener failed: ($e.msg)"
         print $"  [FAIL] ($e.msg)"
         return {passed: 0, failed: 1}
     })
+    print --stderr $"  [diag] listener started; pidfile exists: ($handle.pidfile | path exists)"
+    let raw = (^ss -ltn $"sport = :($port)" | complete)
+    print --stderr $"  [diag] ss filtered exit=($raw.exit_code) stdout=($raw.stdout | str trim) stderr=($raw.stderr | str trim)"
     let result = (try {
         run-healthcheck {
             REVAD_CONTAINER_MODE: "gateway"
@@ -193,6 +197,7 @@ def test_probe_listening [] {
         stop-tcp-listener $handle
         error make {msg: $"healthcheck subprocess error: ($e.msg)"}
     })
+    print --stderr $"  [diag] healthcheck exit=($result.exit_code) stdout=($result.stdout | str trim)"
     stop-tcp-listener $handle
 
     if $result.exit_code == 0 {
