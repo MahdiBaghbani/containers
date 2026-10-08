@@ -30,6 +30,24 @@ def wait-for-listener [pidfile: string, max_ms: int = 5000] {
     }
 }
 
+# Poll ss until it reports a listener on the port, or timeout. The kernel
+# can take a moment to surface a freshly bound socket to ss, so wait
+# rather than racing the healthcheck probe.
+def wait-for-ss-listener [port: string, max_ms: int = 5000] {
+    mut elapsed = 0
+    loop {
+        let probe = (^ss -ltn $"sport = :($port)" | complete)
+        let has = ($probe.stdout | lines | where { |line|
+            let trimmed = ($line | str trim)
+            ($trimmed | str length) > 0 and not ($trimmed | str starts-with "State")
+        } | length) > 0
+        if $has { return true }
+        if $elapsed >= $max_ms { return false }
+        sleep 100ms
+        $elapsed = ($elapsed + 100)
+    }
+}
+
 def start-tcp-listener [port: string] {
     let script = (^mktemp --suffix=.py | str trim)
     let pidfile = (^mktemp | str trim)
@@ -181,13 +199,14 @@ def test_probe_listening [] {
 
     let port = "59143"
     let handle = (try { start-tcp-listener $port } catch {|e|
-        print --stderr $"  [diag] start-tcp-listener failed: ($e.msg)"
         print $"  [FAIL] ($e.msg)"
         return {passed: 0, failed: 1}
     })
-    print --stderr $"  [diag] listener started; pidfile exists: ($handle.pidfile | path exists)"
-    let raw = (^ss -ltn $"sport = :($port)" | complete)
-    print --stderr $"  [diag] ss filtered exit=($raw.exit_code) stdout=($raw.stdout | str trim) stderr=($raw.stderr | str trim)"
+    if not (wait-for-ss-listener $port) {
+        stop-tcp-listener $handle
+        print $"  [FAIL] ss never reported listener on ($port)"
+        return {passed: 0, failed: 1}
+    }
     let result = (try {
         run-healthcheck {
             REVAD_CONTAINER_MODE: "gateway"
@@ -197,7 +216,6 @@ def test_probe_listening [] {
         stop-tcp-listener $handle
         error make {msg: $"healthcheck subprocess error: ($e.msg)"}
     })
-    print --stderr $"  [diag] healthcheck exit=($result.exit_code) stdout=($result.stdout | str trim)"
     stop-tcp-listener $handle
 
     if $result.exit_code == 0 {
