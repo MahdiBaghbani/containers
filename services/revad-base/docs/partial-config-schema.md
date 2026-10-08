@@ -56,8 +56,8 @@ Partial configs allow you to:
 Partials append content to an existing target file. They do not replace whole
 files and they do not switch fields between Reva version lines.
 
-**Version and band structural differences** (for example `webapp_template` in
-core vs `webapp_endpoint` on the `master` overlay) are resolved during the
+**Version and band structural differences** (for example `enable_code_flow` in
+core vs `true` on the `master` overlay) are resolved during the
 development image build by `resolve_configs`: core files from `configs/` plus
 whole-file overlays from `configs-overlays/<band>/`. See
 [configuration.md](configuration.md#config-band-resolver).

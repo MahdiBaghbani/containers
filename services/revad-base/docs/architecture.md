@@ -7,13 +7,13 @@ This document describes the generic Reva service architecture and multi-containe
 DockyPody images for CERNBox-style stacks are built from a version-aligned
 tuple:
 
-- **reva** (`revad` source ref, for example `master` or `v3.10.1`)
+- **reva** (`revad` source ref, for example `master` or `v3.13.1`)
 - **reva-plugins** (CERNBox plugin tree; pinned per release band)
 - **revad-base** (generic Reva configs, init scripts, and image layers)
 
-`revad-base` publishes `master` and `v3.10.1` image versions. Downstream
+`revad-base` publishes `master` and `v3.13.1` image versions. Downstream
 services such as `cernbox-revad` depend on matching `revad-base` platform
-tags (for example `v3.10.1-production`) and matching source refs.
+tags (for example `v3.13.1-production`) and matching source refs.
 
 During the development image build (`Dockerfile.development`), config shape
 is selected by the `REVA_CONFIG_BAND` build arg via `resolve_configs`,
@@ -27,9 +27,9 @@ Neither image type re-runs band resolution at runtime.
 |-----------|--------------------------|--------------------------------------|
 | `master`  | `configs-overlays/master`| Latest Reva line; overlay replaces   |
 |           |                          | core files (e.g. `webapp_endpoint`)  |
-| `v3.10.1` | none (core-only)         | Released line; core `configs/` only  |
+| `v3.13.1` | none (core-only)         | Released line; core `configs/` only  |
 
-The legacy `v3.3.3` version line is no longer published. Use `v3.10.1` for
+The legacy `v3.3.3` version line is no longer published. Use `v3.13.1` for
 the stable release band or `master` for the development line.
 
 ## Architecture Overview

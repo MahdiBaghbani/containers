@@ -316,20 +316,21 @@ During the development image build, `resolve_configs` (see
    the core copies (whole-file replacement, not field merge).
 3. **Empty band string** (`""`): error `Config overlay band must not be
    empty`.
-4. **Core-only band** (listed in `CORE_ONLY_BANDS`, currently `v3.10.1`)
+4. **Core-only band** (listed in `CORE_ONLY_BANDS`, currently `v3.13.1`)
    with no overlay directory: allowed; core files only.
 5. **Any other band** with no overlay directory: error
    `Unknown or missing config overlay band: <band> ...`.
 
 The development image build arg `REVA_CONFIG_BAND` selects the band.
 `versions.nuon` sets it per published `revad-base` version (`master` or
-`v3.10.1`). Production image builds do not invoke `resolve_configs`.
+`v3.13.1`). Production image builds do not invoke `resolve_configs`.
 
-### Example: master vs v3.10.1
+### Example: master vs v3.13.1
 
-Core `shareproviders.toml` uses `webapp_template`. The `master` overlay
-replaces that file with `webapp_endpoint` instead. The `v3.10.1` band has no
-overlay directory, so it keeps `webapp_template` from core.
+Core `shareproviders.toml` uses `webapp_endpoint`. The `master` overlay
+ships the same `webapp_endpoint` key with a band-specific placeholder. The
+`v3.13.1` band has no overlay directory, so it keeps `webapp_endpoint` from
+core.
 
 Core `gateway.toml` already sets `enable_webapp = true` and
 `enable_code_flow` via a placeholder defaulting to `false`. The `master`
