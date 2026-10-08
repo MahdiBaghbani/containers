@@ -574,7 +574,7 @@ For single-version:
 ```text
 === Build Order ===
 
-1. common-tools:v1.0.0
+1. common-tools:v1.1.0
 2. revad-base:v3.10.1
 ```
 
@@ -584,11 +584,11 @@ For multi-version:
 === Build Order ===
 
 Version: v3.10.1
-1. common-tools:v1.0.0
+1. common-tools:v1.1.0
 2. revad-base:v3.10.1
 
 Version: master
-1. common-tools:v1.0.0
+1. common-tools:v1.1.0
 2. revad-base:master
 ```
 
@@ -599,11 +599,11 @@ displayed separately:
 === Build Order ===
 
 Version: v3.10.1 (production)
-1. common-tools:v1.0.0:production
+1. common-tools:v1.1.0:production
 2. revad-base:v3.10.1:production
 
 Version: v3.10.1 (development)
-1. common-tools:v1.0.0:development
+1. common-tools:v1.1.0:development
 2. revad-base:v3.10.1:development
 ```
 

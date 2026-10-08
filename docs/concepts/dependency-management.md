@@ -452,7 +452,7 @@ Service `app` (multi-platform: debian, alpine) depends on `base-service` (multi-
       // Inherits version and platform from parent
     },
     "common-tools": {
-      "version": "v1.0.0",
+      "version": "v1.1.0",
       "single_platform": true,
       "build_arg": "COMMON_TOOLS_IMAGE"
     }
@@ -464,10 +464,10 @@ Service `app` (multi-platform: debian, alpine) depends on `base-service` (multi-
 
 - Building `app:v2.0.0-debian`:
   - `base-service` resolves to `base-service:v2.0.0-debian` (inherits version + platform)
-  - `common-tools` resolves to `common-tools:v1.0.0` (single-platform dependency)
+  - `common-tools` resolves to `common-tools:v1.1.0` (single-platform dependency)
 - Building `app:v2.0.0-alpine`:
   - `base-service` resolves to `base-service:v2.0.0-alpine` (inherits version + platform)
-  - `common-tools` resolves to `common-tools:v1.0.0` (same single-platform dependency)
+  - `common-tools` resolves to `common-tools:v1.1.0` (same single-platform dependency)
 
 **Note:** Since `common-tools` is single-platform, it does not inherit the
 platform from `app`. That is allowed and normally reported as informational.
