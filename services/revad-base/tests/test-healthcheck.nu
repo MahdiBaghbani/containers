@@ -209,25 +209,16 @@ def test_probe_listening [] {
 }
 
 def main [--verbose] {
-    let ss_path = (try { which ss | first | get path } catch { 'ss: not found' })
-    let ss_version = (try { (^ss --version | lines | first) } catch { 'ss --version: failed' })
-    let python3_path = (try { which python3 | first | get path } catch { 'python3: not found' })
-    print --stderr $"[healthcheck-env] ss path: ($ss_path)"
-    print --stderr $"[healthcheck-env] ss version: ($ss_version)"
-    print --stderr $"[healthcheck-env] python3 path: ($python3_path)"
-
     mut total_passed = 0
     mut total_failed = 0
 
-    for entry in [
-        {name: "missing_container_mode", run: {|| test_missing_container_mode}}
-        {name: "port_resolution_failure", run: {|| test_port_resolution_failure}}
-        {name: "probe_no_listener", run: {|| test_probe_no_listener}}
-        {name: "ss_probe_failure", run: {|| test_ss_probe_failure}}
-        {name: "probe_listening", run: {|| test_probe_listening}}
+    for result in [
+        (test_missing_container_mode)
+        (test_port_resolution_failure)
+        (test_probe_no_listener)
+        (test_ss_probe_failure)
+        (test_probe_listening)
     ] {
-        let result = (do $entry.run)
-        print --stderr $"[healthcheck] ($entry.name): passed=($result.passed) failed=($result.failed)"
         $total_passed = ($total_passed + $result.passed)
         $total_failed = ($total_failed + $result.failed)
     }

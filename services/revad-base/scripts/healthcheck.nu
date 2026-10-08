@@ -9,14 +9,18 @@
 use ./lib/utils.nu [get_env_or_default]
 use ./lib/ports.nu [resolve-grpc-port-for-mode]
 
-# ss prints a header even when no sockets match; require a LISTEN data row.
+# ss prints a header even when no sockets match; the sport filter already
+# scopes to listening TCP on the port, so any non-header data row means a
+# listener. Skip the header (starts with "State") and do not depend on the
+# state label, which differs across iproute2 versions (LISTEN vs UNCONN).
 def ss-has-listener [stdout: string] {
-    $stdout
+    ($stdout
     | lines
-    | any {|line|
+    | where { |line|
         let trimmed = ($line | str trim)
-        ($trimmed | str length) > 0 and ($trimmed | str starts-with "LISTEN")
+        ($trimmed | str length) > 0 and not ($trimmed | str starts-with "State")
     }
+    | length) > 0
 }
 
 def main [] {
