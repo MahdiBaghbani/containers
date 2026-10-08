@@ -152,7 +152,9 @@ COPY config/jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
 # System-wide single-user config: runs ocm-sync at Lab startup for OCM shares.
 # Read only by spawned jupyter_server processes, never by the hub itself.
 COPY config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py
-RUN python3 -m py_compile /usr/local/etc/jupyter/jupyter_server_config.py
+COPY config/lab-settings/overrides.json /usr/local/etc/jupyter/lab-settings/overrides.json
+RUN python3 -m py_compile /usr/local/etc/jupyter/jupyter_server_config.py && \
+    python3 -c "import json; p='/usr/local/etc/jupyter/lab-settings/overrides.json'; d=json.load(open(p)); assert d['@jupyterlab/apputils-extension:notification']['fetchNews'] == 'false'"
 
 RUN mkdir -p /etc/ssl/certs /tmp /tls
 COPY --from=common-tools /etc/ssl/certs/ca-certificates.crt /tmp/ca-bundle.crt
