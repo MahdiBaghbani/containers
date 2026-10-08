@@ -36,6 +36,11 @@
         "build_args": {
           "EDITION": "rolling"
         },
+        "external_images": {
+          "go": {
+            "tag": "1.26-alpine"
+          }
+        },
         "sources": {
           "opencloud": {
             "ref": "main"
