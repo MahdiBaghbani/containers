@@ -7,7 +7,7 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "ocm-token-client-id-claim"
+        "ref": "a330ea44996d60a57ae100e93278b00596aca181"
       },
       "revad_plugins": {
         "url": "https://github.com/cernbox/reva-plugins",
@@ -36,7 +36,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "ocm-token-client-id-claim"
+            "ref": "a330ea44996d60a57ae100e93278b00596aca181"
           }
         },
         "platforms": {
@@ -63,7 +63,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "ocm-token-client-id-claim"
+            "ref": "a330ea44996d60a57ae100e93278b00596aca181"
           }
         },
         "platforms": {
@@ -85,34 +85,26 @@
       }
     },
     {
-      "name": "v3.10.1",
+      "name": "v3.13.1",
       "latest": true,
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "v3.10.1"
-          },
-          "revad_plugins": {
-            "ref": "39c4d38a5761629473fe553524f4c2bbb27c0b1b"
-          }
-        },
-        "external_images": {
-          "build": {
-            "tag": "1.25-trixie"
+            "ref": "v3.13.1"
           }
         },
         "platforms": {
           "production": {
             "dependencies": {
               "revad-base": {
-                "version": "v3.10.1-production"
+                "version": "v3.13.1-production"
               }
             }
           },
           "development": {
             "dependencies": {
               "revad-base": {
-                "version": "v3.10.1-development"
+                "version": "v3.13.1-development"
               }
             }
           }

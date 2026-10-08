@@ -23,7 +23,7 @@
 # - Bands in CORE_ONLY_BANDS may omit an overlay directory (core files only).
 # - Any other band without an overlay directory is a configuration error.
 
-const CORE_ONLY_BANDS = ["v3.10.1"]
+const CORE_ONLY_BANDS = ["v3.13.1"]
 
 export def resolve_configs [
   core_dir: string
