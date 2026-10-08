@@ -7,7 +7,7 @@
     "sources": {
       "revad": {
         "url": "https://github.com/cs3org/reva",
-        "ref": "a330ea44996d60a57ae100e93278b00596aca181"
+        "ref": "ocm-token-client-id-claim"
       },
       "revad_plugins": {
         "url": "https://github.com/cernbox/reva-plugins",
@@ -36,7 +36,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "a330ea44996d60a57ae100e93278b00596aca181"
+            "ref": "ocm-token-client-id-claim"
           }
         },
         "platforms": {
@@ -63,7 +63,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "a330ea44996d60a57ae100e93278b00596aca181"
+            "ref": "ocm-token-client-id-claim"
           }
         },
         "platforms": {

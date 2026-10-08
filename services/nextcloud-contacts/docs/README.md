@@ -123,16 +123,16 @@ for:
 
 ### Standard Version
 
-- **Default**: `v8.7.2-nc-master`
+- **Default**: `v8.9.1-nc-master`
 - **Source**: `https://github.com/nextcloud/contacts`
-- **Ref**: `v8.7.2`
+- **Ref**: `v8.9.1`
 - **Features**: Standard Contacts app, no OCM Invites
 
 ### OCM Variant
 
-- **Name**: `ocm-contacts-app`
+- **Name**: `ocm-webapp-share`
 - **Source**: `https://github.com/sara-nl/nextcloud-contacts`
-- **Ref**: `invite-for-cloudid-exchange`
+- **Ref**: `fix-undefined-group-ocm-invites-routes`
 - **Features**: Contacts app with OCM Invites feature
 - **Usage**: Set `CONTACTS_ENABLE_OCM_INVITES=true` to enable OCM
   functionality
@@ -176,7 +176,7 @@ workflow:
 ### Enabling OCM Invites
 
 1. Use an OCM-capable version, for example
-   `nextcloud-contacts:ocm-contacts-app`
+   `nextcloud-contacts:ocm-webapp-share`
 2. Set environment variable: `CONTACTS_ENABLE_OCM_INVITES=true`
 3. Optionally set mode: `CONTACTS_OCM_INVITES_MODE=basic` or `advanced`
 4. Optionally configure mesh providers service:
@@ -204,7 +204,7 @@ docker run -d \
   -e CONTACTS_ENABLE_OCM_INVITES=true \
   -e CONTACTS_OCM_INVITES_MODE=advanced \
   -e CONTACTS_MESH_PROVIDERS_SERVICE=https://example.com/providers.json \
-  nextcloud-contacts:ocm-contacts-app
+  nextcloud-contacts:ocm-webapp-share
 ```
 
 ### Manual Configuration
@@ -255,7 +255,7 @@ Hooks execute alphabetically:
 nu scripts/dockypody.nu build --service nextcloud-contacts
 
 # Build specific OCM-enabled version
-nu scripts/dockypody.nu build --service nextcloud-contacts --version ocm-contacts-app
+nu scripts/dockypody.nu build --service nextcloud-contacts --version ocm-webapp-share
 
 # Build local-plane dev version (requires off-git fragment; see Versions)
 nu scripts/dockypody.nu build --plane local --service nextcloud-contacts --version local

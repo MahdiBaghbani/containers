@@ -3,7 +3,7 @@
   "defaults": {
     "sources": {
       "integration_jupyterhub": {
-        "url": "https://github.com/MahdiBaghbani/nextcloud-integration_jupyterhub"
+        "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub"
       },
       "ocmremotewebapp": {
         "url": "https://github.com/SUNET/ocmremotewebapp"
@@ -34,7 +34,7 @@
             "ref": "main"
           },
           "ocmremotewebapp": {
-            "ref": "50e99b14c937c850367401ee7d593e1b1d78f17c"
+            "ref": "main"
           }
         }
       }

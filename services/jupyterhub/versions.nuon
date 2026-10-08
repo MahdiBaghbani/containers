@@ -3,7 +3,7 @@
   "defaults": {
     "sources": {
       "integration_jupyterhub": {
-        "url": "https://github.com/MahdiBaghbani/nextcloud-integration_jupyterhub"
+        "url": "https://github.com/SUNET/nextcloud-integration_jupyterhub"
       }
     },
     "external_images": {

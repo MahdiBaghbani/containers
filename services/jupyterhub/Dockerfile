@@ -146,13 +146,13 @@ COPY --chmod=755 scripts/ocm-sync /usr/local/bin/ocm-sync
 RUN python3 -c "import requests" && python3 -m py_compile /usr/local/bin/ocm-sync
 
 # Baked reference config. Operators/compose can override by mounting their own.
-COPY config/jupyterhub_helpers.py /srv/jupyterhub/jupyterhub_helpers.py
-COPY config/jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
+COPY --chown=1000:1000 --chmod=644 config/jupyterhub_helpers.py /srv/jupyterhub/jupyterhub_helpers.py
+COPY --chown=1000:1000 --chmod=644 config/jupyterhub_config.py /srv/jupyterhub/jupyterhub_config.py
 
 # System-wide single-user config: runs ocm-sync at Lab startup for OCM shares.
 # Read only by spawned jupyter_server processes, never by the hub itself.
-COPY config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py
-COPY config/lab-settings/overrides.json /usr/local/etc/jupyter/lab-settings/overrides.json
+COPY --chmod=644 config/jupyter_server_config.py /usr/local/etc/jupyter/jupyter_server_config.py
+COPY --chmod=644 config/lab-settings/overrides.json /usr/local/etc/jupyter/lab-settings/overrides.json
 RUN python3 -m py_compile /usr/local/etc/jupyter/jupyter_server_config.py && \
     python3 -c "import json; p='/usr/local/etc/jupyter/lab-settings/overrides.json'; d=json.load(open(p)); assert d['@jupyterlab/apputils-extension:notification']['fetchNews'] == 'false'"
 

@@ -1,5 +1,5 @@
 {
-  "default": "v34.0.1",
+  "default": "v35.0.1",
 
   "defaults": {
     "sources": {
@@ -30,58 +30,34 @@
       }
     },
     {
-      "name": "v34.0.1",
+      "name": "v35.0.1",
       "latest": true,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "ref": "v34.0.1"
+            "ref": "v35.0.1"
           }
         }
       }
     },
     {
-      "name": "v33.0.6",
+      "name": "v34.0.4",
       "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "ref": "v33.0.6"
+            "ref": "v34.0.4"
           }
         }
       }
     },
     {
-      "name": "v32.0.12",
+      "name": "v33.0.9",
       "latest": false,
       "overrides": {
         "sources": {
           "nextcloud": {
-            "ref": "v32.0.12"
-          }
-        }
-      }
-    },
-    {
-      "name": "ocm-contacts-app",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "nextcloud": {
-            "url": "https://github.com/redblom/nextcloud-server.git",
-            "ref": "move-ocm-invite-accepted-route-impl-to-contacts-app"
-          }
-        }
-      }
-    },
-    {
-      "name": "ocm-webapp-share",
-      "latest": false,
-      "overrides": {
-        "sources": {
-          "nextcloud": {
-            "url": "https://github.com/nextcloud/server",
-            "ref": "505ceff9fa66cc67c78d41eb79fbd70ba79b61f6"
+            "ref": "v33.0.9"
           }
         }
       }
