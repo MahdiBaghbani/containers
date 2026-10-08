@@ -35,21 +35,21 @@ use ./_helpers.nu [
 
 export def service-drift-early-tests [verbose: bool] {
   [
-    (run-test "Test 39j: Real manifest - cernbox-revad v3.10.1 production mixed REF_KIND build args" {
+    (run-test "Test 39j: Real manifest - cernbox-revad v3.13.1 production REF_KIND build args" {
       let svc = "cernbox-revad"
-      let version = "v3.10.1"
+      let version = "v3.13.1"
       let platform = "production"
       let vm = (load-versions-manifest $svc)
       let pm = (load-platforms-manifest $svc)
       let vspec = (get-version-or-null $vm $version)
       let cfg = (load-service-config $svc $vspec $platform $pm)
       let revad_ref = (try { $cfg.sources.revad.ref } catch { "" })
-      if $revad_ref != "v3.10.1" {
-        error make {msg: $"Expected revad ref 'v3.10.1' from tracked manifest, got: ($revad_ref)"}
+      if $revad_ref != "v3.13.1" {
+        error make {msg: $"Expected revad ref 'v3.13.1' from tracked manifest, got: ($revad_ref)"}
       }
       let plugins_ref = (try { $cfg.sources.revad_plugins.ref } catch { "" })
-      if $plugins_ref != "39c4d38a5761629473fe553524f4c2bbb27c0b1b" {
-        error make {msg: $"Expected revad_plugins pinned SHA from tracked manifest, got: ($plugins_ref)"}
+      if $plugins_ref != "v0.0.43" {
+        error make {msg: $"Expected revad_plugins ref tag from tracked manifest, got: ($plugins_ref)"}
       }
       let source_types = (detect-all-source-types $cfg.sources)
       let source_ref_kinds = (extract-source-ref-kinds $cfg.sources $source_types)
@@ -66,10 +66,10 @@ export def service-drift-early-tests [verbose: bool] {
         generate-build-args $version $cfg $meta {} $tls_meta $ssh_meta "" false {} $source_types {} "tracked" $source_ref_kinds
       )
       if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "ref" {
-        error make {msg: $"Expected REVAD_REF_KIND=ref for tag v3.10.1, got: ($build_args.REVAD_REF_KIND?)"}
+        error make {msg: $"Expected REVAD_REF_KIND=ref for tag v3.13.1, got: ($build_args.REVAD_REF_KIND?)"}
       }
-      if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
-        error make {msg: $"Expected REVAD_PLUGINS_REF_KIND=sha for pinned commit, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+      if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "ref" {
+        error make {msg: $"Expected REVAD_PLUGINS_REF_KIND=ref for tag v0.0.43, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
       }
       if $verbose {
         print $"    REVAD_REF_KIND=($build_args.REVAD_REF_KIND), REVAD_PLUGINS_REF_KIND=($build_args.REVAD_PLUGINS_REF_KIND)"
@@ -78,7 +78,7 @@ export def service-drift-early-tests [verbose: bool] {
     } $verbose)
     (run-test "Test 39k: env REVAD_REF override recomputes REVAD_REF_KIND to sha" {
       let svc = "cernbox-revad"
-      let version = "v3.10.1"
+      let version = "v3.13.1"
       let platform = "production"
       let vm = (load-versions-manifest $svc)
       let pm = (load-platforms-manifest $svc)
@@ -110,8 +110,8 @@ export def service-drift-early-tests [verbose: bool] {
         if (try { $build_args.REVAD_REF_KIND } catch { "" }) != "sha" {
           error make {msg: $"Expected REVAD_REF_KIND=sha after env SHA override, got: ($build_args.REVAD_REF_KIND?)"}
         }
-        if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "sha" {
-          error make {msg: $"Expected REVAD_PLUGINS_REF_KIND unchanged at sha, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
+        if (try { $build_args.REVAD_PLUGINS_REF_KIND } catch { "" }) != "ref" {
+          error make {msg: $"Expected REVAD_PLUGINS_REF_KIND unchanged at ref, got: ($build_args.REVAD_PLUGINS_REF_KIND?)"}
         }
         if $verbose {
           print $"    REVAD_REF=($build_args.REVAD_REF), REVAD_REF_KIND=($build_args.REVAD_REF_KIND)"
@@ -295,7 +295,7 @@ export def service-drift-late-tests [verbose: bool] {
     } $verbose)
     (run-test "Test 39m: env REVAD_REF_KIND=ref with SHA REVAD_REF recomputes to sha" {
       let svc = "cernbox-revad"
-      let version = "v3.10.1"
+      let version = "v3.13.1"
       let platform = "production"
       let vm = (load-versions-manifest $svc)
       let pm = (load-platforms-manifest $svc)
