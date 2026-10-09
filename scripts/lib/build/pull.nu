@@ -27,6 +27,192 @@ use ../platforms/core.nu [check-platforms-manifest-exists load-platforms-manifes
 # Valid pull modes
 const VALID_PULL_MODES = ["deps", "externals"]
 
+# Retry policy for pull-image. Constants, not env knobs.
+const PULL_MAX_ATTEMPTS = 4
+const PULL_BACKOFF_BASE_MS = 1000
+const PULL_BACKOFF_CAP_MS = 30000
+const PULL_TIMEOUT_SEC = 300
+const PULL_BACKOFF_JITTER_MS = 250
+
+# Exported for testing. Returns the in-file retry constants.
+export def parse-pull-retry-config [] {
+  let max_attempts = (if $PULL_MAX_ATTEMPTS < 1 { 1 } else { $PULL_MAX_ATTEMPTS })
+  let base_ms = (if $PULL_BACKOFF_BASE_MS < 0 { 0 } else { $PULL_BACKOFF_BASE_MS })
+  let cap_ms = (if $PULL_BACKOFF_CAP_MS < 0 { 0 } else { $PULL_BACKOFF_CAP_MS })
+  let timeout_sec = (if $PULL_TIMEOUT_SEC < 1 { 1 } else { $PULL_TIMEOUT_SEC })
+  let jitter_ms = (if $PULL_BACKOFF_JITTER_MS < 0 { 0 } else { $PULL_BACKOFF_JITTER_MS })
+  {
+    max_attempts: $max_attempts
+    backoff_base_ms: $base_ms
+    backoff_cap_ms: $cap_ms
+    pull_timeout_sec: $timeout_sec
+    backoff_jitter_ms: $jitter_ms
+  }
+}
+
+def contains-any [text: string, needles: list<string>] {
+  $needles | any {|p| $text | str contains -i $p}
+}
+
+export def is-tag-image-ref [image_ref: string] {
+  not ($image_ref | str contains "@")
+}
+
+const PULL_PERMANENT_NEEDLES = [
+  ": 404 not found" ": 400 bad request" ": 405 method not allowed"
+  ": 409 conflict" ": 410 gone" "manifest unknown" "manifest for"
+  "unauthorized" "authentication required" "pull access denied"
+  "forbidden" "denied" "invalid reference format"
+  "repository name must be lowercase" "no matching manifest for"
+  "x509:" "context canceled" "no space left on device"
+  "connect to the docker" "is the docker daemon running"
+  "external command failed"
+]
+
+const PULL_TRANSIENT_NEEDLES = [
+  "received unexpected http status: 5"
+  "unexpected status from head request" "unexpected status from get request"
+  "i/o timeout" "context deadline exceeded" "tls handshake timeout"
+  "connection reset" "connection refused" "unexpected eof" ": eof"
+  "dial tcp" "goaway" "rate limit exceeded" "toomanyrequests"
+  "timed out after"
+]
+
+export def is-pull-retryable [stderr: string, stdout: string, is_tag_ref: bool] {
+  let text = $"($stderr)\n($stdout)"
+  if (contains-any $text $PULL_PERMANENT_NEEDLES) { return false }
+  if $is_tag_ref and ($text | str contains -i ": not found") { return true }
+  contains-any $text $PULL_TRANSIENT_NEEDLES
+}
+
+export def classify-pull-error [error: string, image_ref: string] {
+  if ($error | str contains -i "timed out after") {
+    return {retryable: true, class: "timeout"}
+  }
+  let is_tag_ref = (is-tag-image-ref $image_ref)
+  if (contains-any $error $PULL_PERMANENT_NEEDLES) {
+    return {retryable: false, class: "permanent"}
+  }
+  if ($error | str contains -i ": not found") {
+    if $is_tag_ref {
+      return {retryable: true, class: "not_found_tag"}
+    }
+    return {retryable: false, class: "permanent"}
+  }
+  if ($error | str contains -i "pull rate limit") {
+    return {retryable: false, class: "rate_limit_quota"}
+  }
+  if (is-pull-retryable $error "" $is_tag_ref) {
+    return {retryable: true, class: "transient"}
+  }
+  {retryable: false, class: "unknown"}
+}
+
+export def parse-429-retry-after [stderr: string] {
+  if ($stderr | str contains -i "pull rate limit") {
+    return null
+  }
+  let parsed = (
+    $stderr
+    | parse -r '(?i)retry-after:\s*([0-9.]+)\s*(us|ms|s|m)?'
+  )
+  if ($parsed | is-empty) { return null }
+  let row = ($parsed | first)
+  let n = ($row.capture0 | into float)
+  let unit = ($row.capture1? | default "s")
+  let ms = (if $unit == "us" { $n / 1000.0 } else if $unit == "ms" { $n }
+    else if $unit == "m" { $n * 60000.0 } else { $n * 1000.0 })
+  if $ms < 1000.0 or $ms > 90000.0 { return null }
+  ($ms | math round | into int) | into duration --unit ms
+}
+
+# wait_index is 0-based (0 after failed try 1). Returns a duration.
+export def pull-backoff-delay [
+  wait_index: int
+  --base-ms: int = -1
+  --cap-ms: int = -1
+  --jitter-ms: int = -1
+] {
+  let cfg = (parse-pull-retry-config)
+  let base = (if $base_ms < 0 { $cfg.backoff_base_ms } else { $base_ms })
+  let cap = (if $cap_ms < 0 { $cfg.backoff_cap_ms } else { $cap_ms })
+  let jitter_bound = (if $jitter_ms < 0 { $cfg.backoff_jitter_ms } else { $jitter_ms })
+  let idx = (if $wait_index < 0 { 0 } else { $wait_index })
+  let expo = $base * (2 ** $idx)
+  let capped = ([$cap $expo] | math min)
+  let jitter_span = (if $jitter_bound < 0 { 0 } else { $jitter_bound })
+  let jitter = (random int 0..$jitter_span)
+  ($capped + $jitter) | into duration --unit ms
+}
+
+# One docker pull, optionally deadline-wrapped. Private.
+def docker-pull-once [image_ref: string] {
+  let cfg = (parse-pull-retry-config)
+  let timeout_sec = $cfg.pull_timeout_sec
+  try {
+    let cmd_result = (if (which timeout | is-empty) {
+      ^docker pull $image_ref | complete
+    } else {
+      ^timeout $timeout_sec docker pull $image_ref | complete
+    })
+    if $cmd_result.exit_code == 0 {
+      {success: true, error: ""}
+    } else if $cmd_result.exit_code == 124 {
+      {success: false, error: $"timed out after ($timeout_sec)s pulling ($image_ref)"}
+    } else {
+      let stderr = ($cmd_result.stderr? | default "")
+      let error = (if ($stderr | is-empty) { "Unknown error" } else { $stderr })
+      {success: false, error: $error}
+    }
+  } catch {|err|
+    {success: false, error: (try { $err.msg } catch { "Command execution failed" })}
+  }
+}
+
+# Exported for testing. Production caller: pull-image.
+export def retry-pull [
+  image_ref: string
+  pull_once: closure
+  --max-attempts: int = 0
+  --backoff-ms: int = 0
+] {
+  let cfg = (parse-pull-retry-config)
+  let requested = (if $max_attempts >= 1 { $max_attempts } else { $cfg.max_attempts })
+  let max = (if $requested < 1 { 1 } else { $requested })
+  mut outcome = {success: false, error: "not attempted"}
+  mut attempts_used = 0
+  for attempt in 1..$max {
+    $attempts_used = $attempt
+    let raw = (try {
+      do $pull_once $image_ref $attempt
+    } catch {|err|
+      {success: false, error: (try { $err.msg } catch { "Command execution failed" })}
+    })
+    $outcome = {success: ($raw.success? | default false), error: ($raw.error? | default "")}
+    if $outcome.success { break }
+    let classified = (classify-pull-error $outcome.error $image_ref)
+    let retryable = ($classified.retryable? | default false)
+    let class = ($classified.class? | default "unknown")
+    let quota_exhausted = ($class == "rate_limit_quota") and ($attempt >= 2)
+    let tag_exhausted = ($class == "not_found_tag") and ($attempt >= 2)
+    if (not $retryable) or $quota_exhausted or $tag_exhausted or ($attempt >= $max) {
+      break
+    }
+    print $"WARNING: Pull attempt ($attempt)/($max) failed for ($image_ref)"
+    print $"  error: ($outcome.error)"
+    if $backoff_ms > 0 {
+      let parsed_wait = (parse-429-retry-after $outcome.error)
+      if $parsed_wait == null {
+        sleep (pull-backoff-delay ($attempt - 1) --base-ms $backoff_ms)
+      } else {
+        sleep $parsed_wait
+      }
+    }
+  }
+  {success: $outcome.success, error: $outcome.error, attempts: $attempts_used}
+}
+
+
 # Parse and validate --pull flag value
 # Returns list of validated modes or errors on invalid input
 export def parse-pull-modes [raw: string = ""] {
@@ -349,19 +535,10 @@ def aggregate-external-images [
 # (both dev and CI use docker driver with shared daemon)
 # Returns {success: bool, error: string}
 def pull-image [image_ref: string] {
-  let result = (try {
-    let cmd_result = (^docker pull $image_ref | complete)
-    if $cmd_result.exit_code == 0 {
-      {success: true, error: ""}
-    } else {
-      let stderr = (try { $cmd_result.stderr } catch { "Unknown error" })
-      {success: false, error: $stderr}
-    }
-  } catch {|err|
-    {success: false, error: (try { $err.msg } catch { "Command execution failed" })}
-  })
-  
-  $result
+  let result = (
+    retry-pull $image_ref {|ref, _n| docker-pull-once $ref} --backoff-ms $PULL_BACKOFF_BASE_MS
+  )
+  {success: $result.success, error: $result.error}
 }
 
 # Print pull summary (follows print-build-summary style from build.nu)

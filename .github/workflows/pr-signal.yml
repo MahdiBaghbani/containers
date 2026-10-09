@@ -74,6 +74,9 @@ jobs:
       - name: Run services test suite
         run: nu scripts/dockypody.nu test --suite services
 
+      - name: Run pull test suite
+        run: nu scripts/dockypody.nu test --suite pull
+
       - name: Run revad-base service tests
         run: nu services/revad-base/tests/test-runner.nu --suite all
 

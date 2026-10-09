@@ -23,6 +23,7 @@ use ../lib.nu [print-test-summary]
 use ./parse-pull-modes.nu [parse-pull-modes-tests]
 use ./canonical-image-ref.nu [canonical-image-ref-tests]
 use ./build-order-dedup.nu [build-order-dedup-tests]
+use ./retry-pull.nu [retry-pull-tests]
 
 def main [--verbose] {
     let verbose_flag = (try { $verbose } catch { false })
@@ -31,6 +32,7 @@ def main [--verbose] {
     $results = ($results | append (parse-pull-modes-tests $verbose_flag))
     $results = ($results | append (canonical-image-ref-tests $verbose_flag))
     $results = ($results | append (build-order-dedup-tests $verbose_flag))
+    $results = ($results | append (retry-pull-tests $verbose_flag))
 
     print-test-summary $results
 
