@@ -32,8 +32,11 @@ ocm_insecure = {{placeholder:ocm-insecure:false}}
 
 ### HTTP DATAPROVIDER ###
 
+# The mount_id lets storageproviders resolve this data server through the
+# service registry. Required since reva v3.13 replaced data_server_url.
 [[http.services.dataprovider]]
 driver = "ocmreceived"
+mount_id = "ocm-received"
 
 [http.services.dataprovider.drivers.ocmreceived]
 ocm_timeout = {{placeholder:ocm-timeout:10}}
