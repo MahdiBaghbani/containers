@@ -111,6 +111,7 @@ export def test-pr-signal-workflow [verbose: bool] {
       "nu scripts/dockypody.nu ci workflow --target all --dry-run >/dev/null"
       "nu scripts/dockypody.nu test --suite ci"
       "nu scripts/dockypody.nu test --suite services"
+      "nu scripts/dockypody.nu test --suite pull"
       "nu services/revad-base/tests/test-runner.nu --suite all"
       "nu services/nextcloud-base/tests/test-runner.nu --suite all"
       "nu services/ocis/tests/test-runner.nu --suite all"

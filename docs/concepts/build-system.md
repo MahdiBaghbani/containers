@@ -595,6 +595,7 @@ When `--pull=externals` is specified:
 3. Resolve each external image to its effective reference (with env var overrides)
 4. Aggregate and deduplicate across all nodes
 5. Attempt `docker pull` for each unique external image
+   (retry transient registry errors; see below)
 6. If any fail: report all failures and exit non-zero
 
 **External image resolution:**
@@ -616,6 +617,30 @@ ERROR: External image preflight failed
     Required by: revad-base:v3.13.1-production
     Error: unauthorized
 ```
+
+### Transient pull retries
+
+Each unique image pull retries transient registry failures inside the
+pull helper. Callers still see one final success or failure per image.
+
+Transient (retry until attempts are exhausted): HTTP 5xx (including
+`received unexpected HTTP status: 502 Bad Gateway`), timeouts,
+connection reset or refused, and HTTP 429 abuse limits.
+
+Permanent (no retry): `manifest unknown`, `unauthorized`, denied,
+invalid reference. These fail on the first attempt.
+
+Retries do not change mode semantics:
+
+- `externals` remains fatal: after retries are exhausted, report all
+  remaining failures and exit non-zero
+- `deps` remains non-fatal: after retries are exhausted, log a warning
+  and continue to the build
+
+Policy is four attempts per unique image, with exponential backoff
+between tries and no wait after the last failed try. It is not
+configurable (in-file constants; no CLI flag and no env var). A
+per-pull 300s deadline bounds hung `docker pull` calls.
 
 ### Pull Summary
 
@@ -645,7 +670,10 @@ The `--pull` flag is ignored when using dry-run modes:
 
 ### CI Usage Recommendations
 
-1. **Use `--pull=externals` in CI** to fail fast on missing external images
+1. **Use `--pull=externals` in CI** to fail fast on missing
+   external images. Transient registry failures (HTTP 5xx, 429,
+   timeouts, connection errors) are retried; `manifest unknown`
+   and `unauthorized` still fail the job without retry.
 2. **Use `--pull=deps` for cache warming** when you know images exist remotely
 3. **Combine modes** (`--pull=deps,externals`) for comprehensive preflight checks
 
