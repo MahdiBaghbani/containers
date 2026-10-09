@@ -178,6 +178,8 @@ def both-received [cfg: record, domain: string, net: record] {
   (
     (received-ok $storage $domain $net)
     and (received-ok $data $domain $net)
+    and ($storage.mount_id == "ocm-received")
+    and ($data.mount_id == "ocm-received")
     and ($storage.data_server_url == "{{placeholder:data-server-url-internal.sciencemesh}}")
   )
 }
@@ -196,6 +198,7 @@ def localhome-unchanged [cfg: record] {
     and (not ("provider_domain" in (sorted-cols $storage_driver)))
     and (not ("ocm_timeout" in (sorted-cols $storage_driver)))
     and ($data.driver == "localhome")
+    and ($data.mount_id == "localhome")
     and ($data_driver.root == "/revalocalstorage")
     and (not ("allow_loopback_federation" in (sorted-cols $data_driver)))
   )
@@ -209,6 +212,7 @@ def outgoing-unchanged [cfg: record] {
     and ($storage.drivers.ocmoutcoming.machine_secret == "{{ vars.machine_api_key }}")
     and (not ("provider_domain" in (sorted-cols $storage.drivers.ocmoutcoming)))
     and ($data.driver == "ocmoutcoming")
+    and ($data.mount_id == "ocm")
     and ($data.drivers.ocmoutcoming.machine_secret == "{{ vars.machine_api_key }}")
     and (not ("ocm_use_env_proxy" in (sorted-cols $data.drivers.ocmoutcoming)))
   )

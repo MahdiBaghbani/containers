@@ -36,8 +36,11 @@ share_folder = "MyShares"
 
 ### HTTP DATAPROVIDER ###
 
+# The mount_id lets storageproviders resolve this data server through the
+# service registry. Required since reva v3.13 replaced data_server_url.
 [[http.services.dataprovider]]
 driver = "localhome"
+mount_id = "localhome"
 
 [http.services.dataprovider.drivers.localhome]
 user_layout = "{{.Username}}"
