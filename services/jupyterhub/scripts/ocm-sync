@@ -93,10 +93,13 @@ def sync_collection(
     verify: str | bool,
 ) -> int:
     downloaded = 0
+    listed_path = unquote(urlparse(url).path).rstrip("/")
     for entry in propfind(session, url, verify):
         href = entry["href"]
         href_path = urlparse(href).path
-        # Skip the collection itself (PROPFIND Depth:1 lists it first).
+        # Skip the collection being listed (PROPFIND Depth:1 lists it first).
+        if unquote(href_path).rstrip("/") == listed_path:
+            continue
         rel = unquote(href_path[len(base_path):]).strip("/")
         if rel == "":
             continue
