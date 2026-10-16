@@ -102,6 +102,22 @@ resolves and validates the final cert/key paths. The hub binds `https://:443`.
 Because the image runs as UID `1000`, runtime stacks must grant
 `NET_BIND_SERVICE` when they want in-container HTTPS on port `443`.
 
+### Spawn wait on launch
+
+`POST /services/ocm/open` starts the user's named server through the hub API
+before it hands the browser to `/hub/ocm-login`. The hub waits
+`slow_spawn_timeout` seconds for the server. When the spawn takes longer, the
+hub answers `202` and the browser lands on `/hub/spawn-pending`, which only
+moves on to `/lab` through the page's JavaScript.
+
+| Variable | Purpose |
+| --- | --- |
+| `JUPYTERHUB_SLOW_SPAWN_TIMEOUT_SEC` | Seconds the hub waits for a spawn before answering `202` (default `10`, the JupyterHub default). Must be a positive whole number; anything else stops the hub at startup |
+
+Keep the value below 30. The upstream `ocm` service calls the hub API with a
+30 s timeout, so a longer wait turns a slow spawn into a `502` from
+`/services/ocm/open` instead of a spawn-pending page.
+
 ### `JUPYTER_HOST` URL shape (HTTPS on 443 only)
 
 `JUPYTER_HOST` is the **public** hostname clients and OAuth use. The hub binds

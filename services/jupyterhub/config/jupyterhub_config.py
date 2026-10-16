@@ -31,6 +31,7 @@ from jupyterhub_helpers import (  # noqa: E402
     public_url_from_jupyter_host,
     require_env,
     resolve_oauth_client,
+    resolve_slow_spawn_timeout,
     resolve_tls_paths,
 )
 
@@ -140,9 +141,17 @@ c.JupyterHub.public_url = public_url_from_jupyter_host(_jupyter_host_bare)  # no
 
 # The hub is iframed / cross-site during the OCM handoff; SameSite=None cookies
 # survive the cross-site OAuth callback redirect.
+# The OCM service starts the named server through the hub API before handing
+# the browser to /hub/ocm-login. A spawn slower than slow_spawn_timeout gets a
+# 202 and the browser lands on /hub/spawn-pending instead of /lab. Keep
+# JUPYTERHUB_SLOW_SPAWN_TIMEOUT_SEC below the OCM service's 30 s hub API
+# timeout, or a slow spawn turns into a 502 from /services/ocm/open.
 c.JupyterHub.tornado_settings = {  # noqa: F821
     "headers": {"Content-Security-Policy": "frame-ancestors *;"},
     "cookie_options": {"samesite": "None", "secure": True},
+    "slow_spawn_timeout": resolve_slow_spawn_timeout(
+        os.environ.get("JUPYTERHUB_SLOW_SPAWN_TIMEOUT_SEC", "")
+    ),
 }
 
 c.CryptKeeper.keys = [require_env("JUPYTERHUB_CRYPT_KEY")]  # noqa: F821
