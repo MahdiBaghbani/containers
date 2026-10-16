@@ -21,6 +21,7 @@
 # Configures nginx templates and frontend config.json based on environment variables
 
 use ./lib/tls.nu [resolve-revad-tls-enabled resolve-web-tls-enabled]
+use ./lib/csp.nu [resolve-web-csp]
 
 def main [] {
     let cernbox_web_hostname = (try { $env.CERNBOX_WEB_HOSTNAME } catch {
@@ -67,6 +68,7 @@ def main [] {
     $env.TLS_KEY = (try { $env.TLS_KEY } catch { "/tls/server.key" })
     
     let web_tls_enabled = (resolve-web-tls-enabled)
+    let web_csp = (resolve-web-csp)
     
     let templates_dir = "/etc/nginx/templates-available"
     let nginx_conf = "/etc/nginx/conf.d/cernbox.conf"
@@ -87,6 +89,7 @@ def main [] {
         | str replace -a '$IDP_URL' (try { $env.IDP_URL } catch { "https://idp.docker" })
         | str replace -a '$TLS_CRT' (try { $env.TLS_CRT } catch { "/tls/server.crt" })
         | str replace -a '$TLS_KEY' (try { $env.TLS_KEY } catch { "/tls/server.key" })
+        | str replace -a '$WEB_CSP' $web_csp
     )
     $processed_content | save -f $nginx_conf
     

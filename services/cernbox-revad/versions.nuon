@@ -63,7 +63,7 @@
       "overrides": {
         "sources": {
           "revad": {
-            "ref": "ocm-token-client-id-claim"
+            "ref": "remove-sciencemesh-open-in-app"
           }
         },
         "platforms": {

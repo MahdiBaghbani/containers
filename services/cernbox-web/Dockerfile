@@ -228,6 +228,7 @@ COPY --chown=nginx:nginx ./configs/nginx-https.conf.template /etc/nginx/template
 COPY --chmod=755 --chown=nginx:nginx ./scripts/cernbox.sh /docker-entrypoint.d/cernbox.sh
 COPY --chmod=755 ./scripts/cernbox.nu /usr/bin/cernbox.nu
 COPY --chmod=755 ./scripts/lib/tls.nu /usr/bin/lib/tls.nu
+COPY --chmod=755 ./scripts/lib/csp.nu /usr/bin/lib/csp.nu
 COPY --chmod=755 ./scripts/healthcheck.nu /usr/bin/healthcheck.nu
 
 COPY --chmod=755 ./scripts/entrypoint.sh /usr/bin/entrypoint.sh

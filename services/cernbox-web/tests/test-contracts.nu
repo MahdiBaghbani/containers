@@ -2,13 +2,21 @@
 
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # DockyPody: container build scripts and images
-# Behavioral contracts for cernbox-web TLS resolution and baked HEALTHCHECK wiring.
+# Behavioral contracts for cernbox-web TLS resolution, web CSP placement, and
+# baked HEALTHCHECK wiring.
 
 const CERNBOX_WEB_DIR = ((path self) | path dirname | path join "..")
 const DOCKERFILE = ($CERNBOX_WEB_DIR | path join "Dockerfile")
 const HEALTHCHECK_SCRIPT = ($CERNBOX_WEB_DIR | path join "scripts/healthcheck.nu")
+const CERNBOX_SCRIPT = ($CERNBOX_WEB_DIR | path join "scripts/cernbox.nu")
+const NGINX_TEMPLATES = [
+    ($CERNBOX_WEB_DIR | path join "configs/nginx-http.conf.template")
+    ($CERNBOX_WEB_DIR | path join "configs/nginx-https.conf.template")
+]
+const CSP_HEADER = 'add_header Content-Security-Policy "$WEB_CSP" always;'
 
 use ../scripts/lib/tls.nu [resolve-revad-tls-enabled resolve-web-tls-enabled]
+use ../scripts/lib/csp.nu [DEFAULT_WEB_CSP resolve-web-csp]
 
 def read-src [path: string] {
     open --raw $path
@@ -102,6 +110,99 @@ def test-web-tls-resolution [] {
         print "  [PASS] resolve-web-tls-enabled: PASSED"
     }
     {passed: $passed, failed: $failed}
+}
+
+def web-csp-rejected [value: string] {
+    try {
+        with-env {WEB_CSP: $value} { resolve-web-csp }
+        false
+    } catch {
+        true
+    }
+}
+
+def test-web-csp-resolution [] {
+    print "Testing resolve-web-csp..."
+    let unset = (do {
+        hide-env -i WEB_CSP
+        resolve-web-csp
+    })
+    let checks = [
+        (assert-truthy ($unset == "form-action 'self'") "unset WEB_CSP defaults to form-action 'self'")
+        (assert-truthy ($DEFAULT_WEB_CSP == $unset) "default matches DEFAULT_WEB_CSP")
+        (assert-truthy ((with-env {WEB_CSP: "form-action 'self' https://idp.docker"} { resolve-web-csp })
+            == "form-action 'self' https://idp.docker") "explicit WEB_CSP is used verbatim")
+        (assert-truthy ((with-env {WEB_CSP: ""} { resolve-web-csp }) == "") "empty WEB_CSP disables the header")
+        (assert-truthy (web-csp-rejected 'form-action "self"') "double quote is rejected")
+        (assert-truthy (web-csp-rejected 'form-action \x') "backslash is rejected")
+        (assert-truthy (web-csp-rejected 'form-action $host') "dollar sign is rejected")
+        (assert-truthy (web-csp-rejected "form-action 'self'\nX-Injected: 1") "line feed is rejected")
+        (assert-truthy (web-csp-rejected "form-action 'self'\r") "carriage return is rejected")
+    ]
+
+    let result = (run-checks $checks)
+    if $result.failed == 0 {
+        print "  [PASS] resolve-web-csp: PASSED"
+    }
+    $result
+}
+
+# Location blocks in the templates hold no nested braces, so a line-based
+# split is enough. Lines outside any location count as server level.
+def nginx-locations [template: string] {
+    mut locations = []
+    mut server_level = []
+    mut name = ""
+    mut body = []
+    for line in ($template | lines | each {|l| $l | str trim }) {
+        if ($line | str starts-with "location ") {
+            $name = $line
+            $body = []
+        } else if ($name | is-not-empty) {
+            if $line == "}" {
+                $locations = ($locations | append {name: $name, body: ($body | str join "\n")})
+                $name = ""
+            } else {
+                $body = ($body | append $line)
+            }
+        } else {
+            $server_level = ($server_level | append $line)
+        }
+    }
+    {locations: $locations, server_level: ($server_level | str join "\n")}
+}
+
+def test-nginx-csp-placement [] {
+    print "Testing nginx CSP placement..."
+    mut checks = [
+        (assert-string-contains (read-src $CERNBOX_SCRIPT) "str replace -a '$WEB_CSP' $web_csp"
+            "cernbox.nu renders $WEB_CSP from resolve-web-csp")
+    ]
+
+    for template in $NGINX_TEMPLATES {
+        let file = ($template | path basename)
+        let parsed = (nginx-locations (read-src $template))
+        let static = ($parsed.locations | where {|l| $l.body | str contains "root " })
+        let other = ($parsed.locations | where {|l| not ($l.body | str contains "root ") })
+        let sciencemesh = ($other | where {|l| $l.name | str contains "/sciencemesh" })
+        $checks = ($checks | append [
+            (assert-truthy (not ($parsed.server_level | str contains "Content-Security-Policy"))
+                $"($file): no server-level CSP")
+            (assert-truthy (($static | length) == 3) $"($file): three static root locations")
+            (assert-truthy ($static | all {|l| $l.body | str contains $CSP_HEADER })
+                $"($file): every static root location sets the web CSP")
+            (assert-truthy ($other | all {|l| not ($l.body | str contains "Content-Security-Policy") })
+                $"($file): proxied and return-only locations set no CSP")
+            (assert-truthy (($sciencemesh | length) == 1 and ($sciencemesh | first | get body | str contains "proxy_pass"))
+                $"($file): /sciencemesh is proxied and keeps the backend CSP")
+        ])
+    }
+
+    let result = (run-checks $checks)
+    if $result.failed == 0 {
+        print "  [PASS] nginx CSP placement: PASSED"
+    }
+    $result
 }
 
 def expect-probe-args [
@@ -323,6 +424,8 @@ def test-dockerfile-baked-healthcheck-wiring [] {
     let checks = [
         (assert-string-contains $dockerfile "./scripts/lib/tls.nu /usr/bin/lib/tls.nu"
             "Dockerfile copies tls.nu into /usr/bin/lib")
+        (assert-string-contains $dockerfile "./scripts/lib/csp.nu /usr/bin/lib/csp.nu"
+            "Dockerfile copies csp.nu into /usr/bin/lib")
         (assert-string-contains $dockerfile "./scripts/healthcheck.nu /usr/bin/healthcheck.nu"
             "Dockerfile copies healthcheck.nu into /usr/bin")
         (assert-string-contains $dockerfile "./scripts/cernbox.nu /usr/bin/cernbox.nu"
@@ -358,6 +461,8 @@ def main [--verbose] {
     for result in [
         (test-revad-tls-resolution)
         (test-web-tls-resolution)
+        (test-web-csp-resolution)
+        (test-nginx-csp-placement)
         (test-tls-protocol-semantics)
         (test-healthcheck-execution)
         (test-dockerfile-baked-healthcheck-wiring)
