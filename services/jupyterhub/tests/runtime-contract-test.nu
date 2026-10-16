@@ -374,6 +374,8 @@ def py_exec_jupyterhub_config [cert_path: string, key_path: string] {
         "    \"oauth_callback_url\": c.NextcloudOAuthenticator.oauth_callback_url,"
         "    \"services_env\": {s[\"name\"]: s.get(\"environment\", {}) for s in c.JupyterHub.services},"
         "    \"spawner_env_keep\": c.Spawner.env_keep,"
+        "    \"slow_spawn_timeout\": c.JupyterHub.tornado_settings[\"slow_spawn_timeout\"],"
+        "    \"csp\": c.JupyterHub.tornado_settings[\"headers\"][\"Content-Security-Policy\"],"
         "}))"
     ] | str join (char newline))
     (py_run $code $argv)
@@ -382,7 +384,9 @@ def py_exec_jupyterhub_config [cert_path: string, key_path: string] {
 def test_jupyterhub_config_imports_local_helpers [] {
     let fixture = (make_tls_fixture "jupyterhub")
     let result = try {
-        let out = (py_exec_jupyterhub_config $fixture.cert $fixture.key)
+        let out = (with-env {JUPYTERHUB_SLOW_SPAWN_TIMEOUT_SEC: ""} {
+            py_exec_jupyterhub_config $fixture.cert $fixture.key
+        })
         if $out.exit_code != 0 {
             error make {
                 msg: $"jupyterhub_config exec failed: ($out.stderr | str trim)"
@@ -402,6 +406,8 @@ def test_jupyterhub_config_imports_local_helpers [] {
         assert_eq "env_keep forwards SSL_CERT_FILE" ("SSL_CERT_FILE" in $cfg.spawner_env_keep) true
         assert_eq "env_keep forwards SSL_CERT_DIR" ("SSL_CERT_DIR" in $cfg.spawner_env_keep) true
         assert_eq "env_keep forwards REQUESTS_CA_BUNDLE" ("REQUESTS_CA_BUNDLE" in $cfg.spawner_env_keep) true
+        assert_eq "slow_spawn_timeout default" $cfg.slow_spawn_timeout 10
+        assert_eq "CSP header kept" $cfg.csp "frame-ancestors *;"
         null
     } catch {|e| $e}
 
@@ -410,6 +416,59 @@ def test_jupyterhub_config_imports_local_helpers [] {
     if $result != null {
         error make {msg: $result.msg}
     }
+}
+
+def test_jupyterhub_config_slow_spawn_timeout_from_env [] {
+    let fixture = (make_tls_fixture "jupyterhub")
+    let result = try {
+        let out = (with-env {JUPYTERHUB_SLOW_SPAWN_TIMEOUT_SEC: "25"} {
+            py_exec_jupyterhub_config $fixture.cert $fixture.key
+        })
+        if $out.exit_code != 0 {
+            error make {
+                msg: $"jupyterhub_config exec failed: ($out.stderr | str trim)"
+            }
+        }
+        let cfg = ($out.stdout | str trim | from json)
+        assert_eq "slow_spawn_timeout from env" $cfg.slow_spawn_timeout 25
+        assert_eq "CSP header kept with override" $cfg.csp "frame-ancestors *;"
+        null
+    } catch {|e| $e}
+
+    ^rm -rf $fixture.tmp
+
+    if $result != null {
+        error make {msg: $result.msg}
+    }
+}
+
+# --- jupyterhub_helpers: resolve_slow_spawn_timeout ---
+
+def test_resolve_slow_spawn_timeout_default_and_override [] {
+    assert_eq "slow spawn unset" (py_helper_stdout "resolve_slow_spawn_timeout" [""]) "10"
+    assert_eq "slow spawn blank" (py_helper_stdout "resolve_slow_spawn_timeout" ["  "]) "10"
+    assert_eq "slow spawn override" (py_helper_stdout "resolve_slow_spawn_timeout" [" 25 "]) "25"
+}
+
+def test_resolve_slow_spawn_timeout_rejects_non_integer [] {
+    (py_helper_raises
+        "slow spawn unit suffix"
+        "resolve_slow_spawn_timeout"
+        "whole number of seconds"
+        ["25s"])
+}
+
+def test_resolve_slow_spawn_timeout_rejects_non_positive [] {
+    (py_helper_raises
+        "slow spawn zero"
+        "resolve_slow_spawn_timeout"
+        "at least 1"
+        ["0"])
+    (py_helper_raises
+        "slow spawn negative"
+        "resolve_slow_spawn_timeout"
+        "at least 1"
+        ["-5"])
 }
 
 # --- jupyterhub_helpers: require_tls_file ---
@@ -1042,6 +1101,10 @@ def main [] {
     test_host_http_rejected
     test_host_non_443_port_rejected
     test_jupyterhub_config_imports_local_helpers
+    test_jupyterhub_config_slow_spawn_timeout_from_env
+    test_resolve_slow_spawn_timeout_default_and_override
+    test_resolve_slow_spawn_timeout_rejects_non_integer
+    test_resolve_slow_spawn_timeout_rejects_non_positive
     test_require_tls_file_existing
     test_require_tls_file_unset
     test_require_tls_file_missing

@@ -4,6 +4,9 @@
 import os
 from urllib.parse import urlparse
 
+# JupyterHub's own default for tornado_settings["slow_spawn_timeout"].
+DEFAULT_SLOW_SPAWN_TIMEOUT_SEC = 10
+
 
 def require_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
@@ -96,6 +99,30 @@ def require_tls_file(path: str, label: str) -> None:
         raise RuntimeError(f"TLS is required: {label} is unset")
     if not os.path.isfile(path):
         raise RuntimeError(f"TLS is required: {label} not found at {path}")
+
+
+def resolve_slow_spawn_timeout(raw: str) -> int:
+    """Seconds the hub waits for a spawn before answering 202.
+
+    Blank keeps the JupyterHub default. Anything else must be a positive whole
+    number; a typo fails the hub at startup instead of silently falling back
+    to the short default.
+    """
+    value = (raw or "").strip()
+    if not value:
+        return DEFAULT_SLOW_SPAWN_TIMEOUT_SEC
+    try:
+        seconds = int(value)
+    except ValueError:
+        raise ValueError(
+            "JUPYTERHUB_SLOW_SPAWN_TIMEOUT_SEC must be a whole number of seconds "
+            f"(got {value!r})"
+        ) from None
+    if seconds < 1:
+        raise ValueError(
+            f"JUPYTERHUB_SLOW_SPAWN_TIMEOUT_SEC must be at least 1 (got {seconds})"
+        )
+    return seconds
 
 
 def parse_env_file(path: str) -> dict:
