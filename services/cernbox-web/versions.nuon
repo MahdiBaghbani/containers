@@ -79,7 +79,7 @@
       "overrides": {
         "sources": {
           "web": {
-            "ref": "protocol-gated-remote-webapp-actions"
+            "ref": "served-webapp-launch"
           },
           "web_extensions": {
             "ref": "dffaad6cecf755782c7ce4289f21b4f155c35e7c"
